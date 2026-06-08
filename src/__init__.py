@@ -1,0 +1,2 @@
+"""Fall detection research project."""
+
