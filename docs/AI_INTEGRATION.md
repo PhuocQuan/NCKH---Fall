@@ -41,6 +41,8 @@ CSV se gom cac dac trung nhu goc than, toc do roi cua hong, do cao dau so voi ho
 python -m src.train_ai_model --csv data/features.csv --output models/fall_classifier.joblib
 ```
 
+Mac dinh script train se luu them bao cao metric tai `models/fall_classifier.report.txt`. Nen dua cac chi so trong file nay vao bao cao thuc nghiem, kem confusion matrix.
+
 Sau khi train, bat AI trong `configs/default.yaml`:
 
 ```yaml
@@ -49,12 +51,28 @@ ai:
   model_path: models/fall_classifier.joblib
   alert_probability: 0.70
   smoothing_frames: 5
+  decision_mode: display
+  assist_min_frames: 5
 ```
 
 Roi chay:
 
 ```powershell
 python -m src.app --source 0
+```
+
+`decision_mode: display` chi hien xac suat AI, khong thay doi quyet dinh rule-based. Sau khi model da dat metric chap nhan duoc tren video test, co the thu `decision_mode: assist`; che do nay chi ho tro nang muc canh bao khi rule-based da thay nguoi nam/co dau hieu bat thuong, khong tu bien trang thai `normal` thanh te nga.
+
+## Danh gia tren video
+
+```powershell
+python -m src.evaluate_videos --input data/videos --output data/evaluation/video_results.csv
+```
+
+Mac dinh cac trang thai `fallen` va `alert` duoc tinh la du doan te nga. Co the doi nguong danh gia:
+
+```powershell
+python -m src.evaluate_videos --positive-states possible_fall,fallen,alert
 ```
 
 ## Bao cao NCKH nen trinh bay

@@ -8,10 +8,12 @@ import cv2
 
 from src.ai_classifier import FallAIClassifier
 from src.config import load_config
+from src.decision_fusion import fuse_detection_with_ai
 from src.event_logger import EventLogger
 from src.feature_extractor import LandmarkFeatureBuffer
 from src.fall_detector import FallDetector, FallState
 from src.pose_estimator import PoseEstimator
+from src.runtime_metrics import FPSCounter
 from src.video_source import VideoSource
 
 try:
@@ -65,6 +67,7 @@ def main() -> None:
     ai_classifier = FallAIClassifier(config.ai)
     estimator = PoseEstimator()
     logger = EventLogger(config.app.event_log_path)
+    fps_counter = FPSCounter(window_size=round(detector_config.assumed_fps))
 
     source = args.video if args.video else args.camera if args.camera is not None else args.source
     video = VideoSource(
@@ -78,11 +81,15 @@ def main() -> None:
     frames_since_alert_beep = alert_beep_interval_frames
     prev_fall_state = FallState.NORMAL
 
+    print(f"Running demo from source={source}. Look for the '{window_name}' window.")
+    print("Press q/Esc in the video window, r to reset, or Ctrl+C in this terminal to stop.")
+
     try:
         while True:
             ok, frame = video.read()
             if not ok:
                 break
+            current_fps = fps_counter.tick()
 
             points, pose_results = estimator.estimate(frame)
             result = None
@@ -90,8 +97,9 @@ def main() -> None:
                 features = feature_buffer.append(points)
                 ai_prediction = ai_classifier.predict(features)
                 result = detector.update(points)
+                result = fuse_detection_with_ai(result, ai_prediction, config.ai)
                 if result.event_started:
-                    logger.write(result)
+                    logger.write(result, source=source, fps=current_fps)
                 frames_since_alert_beep, prev_fall_state = _update_fall_alarm(
                     result.state,
                     prev_fall_state,
@@ -100,21 +108,29 @@ def main() -> None:
                 )
                 if config.app.draw_landmarks:
                     estimator.draw(frame, pose_results)
-                _draw_status(frame, result, ai_prediction)
+                _draw_status(frame, result, ai_prediction, config.ai.decision_mode, current_fps)
             else:
                 feature_buffer.reset()
+                detector.reset()
+                ai_classifier.reset()
                 prev_fall_state = FallState.NORMAL
                 frames_since_alert_beep = alert_beep_interval_frames
                 _draw_text(frame, "No pose detected", (20, 40), (180, 180, 180))
+                _draw_text(frame, f"FPS: {current_fps:.1f}", (20, 80), (180, 180, 180))
 
+            _draw_controls(frame)
             cv2.imshow(window_name, frame)
             key = cv2.waitKey(1) & 0xFF
             if key in (27, ord("q")):
                 break
             if key == ord("r"):
+                feature_buffer.reset()
                 detector.reset()
+                ai_classifier.reset()
                 prev_fall_state = FallState.NORMAL
                 frames_since_alert_beep = alert_beep_interval_frames
+    except KeyboardInterrupt:
+        print("\nDemo stopped by user.")
     finally:
         estimator.close()
         video.release()
@@ -162,15 +178,18 @@ def _play_alert_sound() -> None:
     threading.Thread(target=_beep, daemon=True).start()
 
 
-def _draw_status(frame, result, ai_prediction) -> None:
+def _draw_status(frame, result, ai_prediction, ai_decision_mode: str, fps: float) -> None:
     color = STATE_COLORS[result.state]
     label = (
         f"{result.state.value.upper()} | angle={result.torso_angle_deg:.1f} "
-        f"| lie={result.lying_seconds:.1f}s | profile={result.profile}"
+        f"| lie={result.lying_seconds:.1f}s | fps={fps:.1f} | profile={result.profile}"
     )
     _draw_text(frame, label, (20, 40), color)
     if ai_prediction.enabled:
-        ai_label = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
+        ai_label = (
+            f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f}) "
+            f"| mode={ai_decision_mode}"
+        )
         ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
         _draw_text(frame, ai_label, (20, 80), ai_color)
     else:
@@ -178,6 +197,25 @@ def _draw_status(frame, result, ai_prediction) -> None:
     if result.state in FALL_ALARM_STATES:
         height, width = frame.shape[:2]
         cv2.rectangle(frame, (0, 0), (width - 1, height - 1), color, 6)
+
+
+def _draw_controls(frame) -> None:
+    height, width = frame.shape[:2]
+    text = "q/Esc: thoat | r: reset | Ctrl+C: dung trong terminal"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.65
+    thickness = 2
+    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+    padding = 10
+    x = 16
+    y = height - 18
+    box_right = min(width - 12, x + text_width + padding * 2)
+    box_top = max(0, y - text_height - baseline - padding)
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x - padding, box_top), (box_right, height - 8), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+    cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
 
 def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int, int]) -> None:

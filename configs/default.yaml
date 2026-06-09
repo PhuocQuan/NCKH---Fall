@@ -23,3 +23,5 @@ ai:
   model_path: models/fall_classifier.joblib
   alert_probability: 0.70
   smoothing_frames: 5
+  decision_mode: display
+  assist_min_frames: 5

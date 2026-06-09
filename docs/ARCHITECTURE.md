@@ -16,6 +16,8 @@ PoseEstimator
         v
 FallDetector
         |
+        +--> DecisionFusion + optional AI classifier
+        |
         +--> App overlay
         +--> EventLogger
 ```
@@ -25,8 +27,13 @@ FallDetector
 - `src/video_source.py`: mo va doc frame tu webcam, video file, HTTP stream, RTSP stream.
 - `src/pose_estimator.py`: chuyen frame thanh cac diem moc co the nguoi.
 - `src/fall_detector.py`: xu ly chuoi diem moc va tra ve trang thai `normal`, `warning`, `fallen`.
+- `src/decision_fusion.py`: tuy chon hop nhat rule-based result voi xac suat AI theo che do an toan.
+- `src/feature_extractor.py`: trich dac trung cua cua so landmark de train/predict AI.
+- `src/ai_classifier.py`: doc model joblib va tra ve xac suat `fall`.
 - `src/event_logger.py`: ghi su kien de phuc vu bao cao va danh gia.
 - `src/app.py`: ghep cac module thanh demo realtime.
+- `src/evaluate_videos.py`: chay danh gia tren video gan nhan va in Accuracy, Precision, Recall, F1-score.
+- `src/check_environment.py`: kiem tra nhanh package, thu muc va camera.
 
 ## Lo trinh tich hop camera thuc te
 

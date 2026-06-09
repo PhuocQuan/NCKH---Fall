@@ -38,6 +38,18 @@ pip install -r requirements.txt
 python -m src.app --source 0
 ```
 
+Chạy app desktop có nút Start/Stop/Reset:
+
+```powershell
+python -m src.desktop_app
+```
+
+Kiểm tra môi trường trước khi demo:
+
+```powershell
+python -m src.check_environment
+```
+
 Chạy với video:
 
 ```powershell
@@ -50,11 +62,25 @@ Chạy với IP camera/RTSP trong tương lai:
 python -m src.app --source rtsp://user:password@192.168.1.10:554/stream
 ```
 
+## Runbook demo
+
+Xem checklist chạy demo, quay video mẫu, tạo feature và train AI trong `docs/DEMO_RUNBOOK.md`.
+
 ## Chạy test
 
 ```powershell
 python -m pytest
 ```
+
+## Đánh giá trên bộ video
+
+Sau khi đặt video theo nhãn trong `data/videos/`, chạy:
+
+```powershell
+python -m src.evaluate_videos --input data/videos --output data/evaluation/video_results.csv
+```
+
+Kết quả gồm dự đoán từng video và các chỉ số Accuracy, Precision, Recall, F1-score.
 
 ## Ý tưởng thuật toán
 

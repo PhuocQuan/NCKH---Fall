@@ -35,6 +35,8 @@ class AIConfig:
     model_path: str = "models/fall_classifier.joblib"
     alert_probability: float = 0.70
     smoothing_frames: int = 5
+    decision_mode: str = "display"
+    assist_min_frames: int = 5
 
 
 @dataclass(frozen=True)
