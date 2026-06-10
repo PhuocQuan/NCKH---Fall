@@ -1,0 +1,4 @@
+profile: default
+alert_after_seconds: 10.0
+draw_landmarks: true
+snapshot_on_alert: true

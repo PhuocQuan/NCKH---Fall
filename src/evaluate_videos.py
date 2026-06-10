@@ -59,7 +59,7 @@ def main() -> None:
     if args.alert_on_long_lying:
         detector_config = replace(detector_config, alert_on_long_lying_without_fall=True)
 
-    estimator = PoseEstimator(static_image_mode=False)
+    estimator = PoseEstimator(config.pose)
     ai_classifier = FallAIClassifier(config.ai)
     rows: list[dict[str, str | int | float]] = []
     try:
@@ -110,7 +110,8 @@ def _evaluate_video(
             if not ok:
                 break
 
-            points, _ = estimator.estimate(frame)
+            pose_estimate = estimator.estimate(frame)
+            points = pose_estimate.points
             if points is None:
                 feature_buffer.reset()
                 detector.reset()

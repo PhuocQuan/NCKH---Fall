@@ -17,6 +17,14 @@ app:
   camera_height: 720
   draw_landmarks: true
   event_log_path: data/events.csv
+  max_pose_lost_frames: 15
+
+pose:
+  input_width: 640
+  input_height: 360
+  model_complexity: 0
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
 
 ai:
   enabled: false

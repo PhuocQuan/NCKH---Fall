@@ -1,8 +1,10 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.tmp/
 repo-push-temp/
 data/events.csv
+data/snapshots/
 data/evaluation/*.csv
 data/features/*.csv
 data/videos/fall/

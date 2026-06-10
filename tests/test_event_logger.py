@@ -41,3 +41,29 @@ def test_event_logger_preserves_existing_header(tmp_path):
     rows = list(csv.DictReader(path.open(encoding="utf-8")))
     assert rows[0]["state"] == "alert"
     assert "source" not in rows[0]
+
+
+def test_event_logger_read_recent_returns_last_rows(tmp_path):
+    path = tmp_path / "events.csv"
+    logger = EventLogger(path)
+    logger.write(_alert_result(), source="camera-0", fps=20.0)
+    logger.write(_alert_result(), source="camera-1", fps=21.0)
+
+    rows = logger.read_recent(limit=1)
+
+    assert len(rows) == 1
+    assert rows[0]["source"] == "camera-1"
+
+
+def test_event_logger_session_mode_avoids_reopen(tmp_path):
+    path = tmp_path / "events.csv"
+    logger = EventLogger(path)
+    logger.open_session()
+    logger.write(_alert_result(), source="s1", fps=20.0)
+    logger.write(_alert_result(), source="s2", fps=21.0)
+    logger.close_session()
+
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert len(rows) == 2
+    assert rows[0]["source"] == "s1"
+    assert rows[1]["source"] == "s2"
