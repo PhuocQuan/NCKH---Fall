@@ -1,0 +1,12 @@
+{
+  "appId": "vn.st23b.falldetection",
+  "appName": "NCKH Fall Detection",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

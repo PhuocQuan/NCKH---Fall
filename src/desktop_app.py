@@ -37,29 +37,7 @@ FALLEN_PROGRESS_STATES = frozenset(
 )
 DISPLAY_MIN_INTERVAL_SEC = 1.0 / 30.0
 
-STATE_HELP = {
-    FallState.NORMAL: "Khong co dau hieu te nga.",
-    FallState.LYING: "Dang nam — khong canh bao neu khong co chuyen dong nga.",
-    FallState.WARNING: "Co dau hieu bat thuong ngan.",
-    FallState.POSSIBLE_FALL: "Nghi nga — he thong dang theo doi.",
-    FallState.FALLEN: "Da phat hien nga — dang dem thoi gian nam.",
-    FallState.ALERT: "CANH BAO: da nga va nam qua nguong.",
-}
-
-STATUS_THEME = {
-    "READY": ("#e8eef7", "#16345f"),
-    "RUNNING": ("#e8f5e9", "#1b5e20"),
-    "STOPPED": ("#eeeeee", "#222222"),
-    "CHO POSE": ("#e3f2fd", "#0d47a1"),
-    "NO POSE": ("#fff8e1", "#7a4f00"),
-    "TRACKING": ("#fff3e0", "#e65100"),
-    FallState.NORMAL.value.upper(): ("#e8f5e9", "#1b5e20"),
-    FallState.LYING.value.upper(): ("#eeeeee", "#333333"),
-    FallState.WARNING.value.upper(): ("#fff3e0", "#8a4b00"),
-    FallState.POSSIBLE_FALL.value.upper(): ("#fff3e0", "#a13b00"),
-    FallState.FALLEN.value.upper(): ("#ffebee", "#b71c1c"),
-    FallState.ALERT.value.upper(): ("#b71c1c", "#ffffff"),
-}
+from src.ui_theme import STATE_HELP, STATUS_THEME
 
 
 class FallDetectionDesktopApp:

@@ -1,0 +1,16 @@
+cameras:
+- id: CAM-01
+  name: Phòng khách
+  room: Tầng 1
+  source: '0'
+  enabled: true
+- id: CAM-02
+  name: Phòng khách1
+  room: Tầng 2
+  source: rtsp://admin:hd543211@192.168.0.64:554/video.h264
+  enabled: true
+- id: CAM-03
+  name: Phòng khách
+  room: Tầng 2
+  source: '0'
+  enabled: true

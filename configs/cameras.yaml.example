@@ -1,0 +1,11 @@
+cameras:
+  - id: CAM-01
+    name: Phòng ngủ
+    room: Phòng 101
+    source: "0"
+    enabled: true
+  - id: CAM-02
+    name: Phòng khách
+    room: Tầng 1
+    source: "1"
+    enabled: false

@@ -29,7 +29,7 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 - Model AI tắt mặc định (`ai.enabled: false`); bật sau khi train xong.
 
 ### Chất lượng
-- **37** unit test (`pytest`), bao gồm detector, pipeline, event log, settings, snapshot.
+- **48** unit test (`pytest`), bao gồm detector, pipeline, API mobile, event log, settings, snapshot.
 - Kiểm tra môi trường: `check_environment`, `check_camera`.
 
 ## Cấu trúc thư mục
@@ -60,7 +60,10 @@ NCKH---Fall/
 │   ├── alert_sound.py    # Cảnh báo âm thanh
 │   ├── user_settings.py  # Load/save user.yaml
 │   ├── snapshot.py       # Lưu ảnh alert
+│   ├── api_server.py     # API + web mobile
+│   ├── mobile_service.py # Pipeline chạy nền cho API
 │   └── ...               # AI, evaluate, train scripts
+├── mobile/web/           # Giao diện điện thoại (HTML/CSS/JS)
 └── tests/
 ```
 
@@ -97,6 +100,27 @@ python -m src.check_environment
 ```powershell
 python -m src.desktop_app
 ```
+
+### Mobile (trình duyệt điện thoại — cùng WiFi với laptop)
+
+```powershell
+python -m src.api_server --host 0.0.0.0 --port 8000
+```
+
+Trên điện thoại mở `http://<IP-laptop>:8000` (ví dụ `http://192.168.1.5:8000`).
+
+Chi tiết: [`docs/MOBILE_APP.md`](docs/MOBILE_APP.md)
+
+### APK Android (Capacitor)
+
+```powershell
+cd mobile\android-app
+npm install
+npm run cap:sync
+npm run cap:open
+```
+
+Build APK trong Android Studio. Chi tiết: [`docs/BUILD_APK.md`](docs/BUILD_APK.md)
 
 ### CLI (OpenCV)
 
@@ -136,7 +160,7 @@ Profile có sẵn: `default`, `elderly` (ngưỡng nhạy hơn cho người già
 python -m pytest
 ```
 
-Kết quả mong đợi: **37 test pass**.
+Kết quả mong đợi: **48 test pass**.
 
 ## Đánh giá & huấn luyện AI
 

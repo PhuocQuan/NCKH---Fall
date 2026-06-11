@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Guardian Watch — NCKH</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <!-- Emergency full-screen (mockup screen 3 cameras) -->
+  <section id="emergencyOverlay" class="emergency-overlay hidden" role="alertdialog">
+    <div class="emergency-icon">⚠</div>
+    <h2 class="emergency-title">PHÁT HIỆN TÉ NGÃ</h2>
+    <p class="emergency-loc" id="emergencyLoc">Phòng khách · CAM-01</p>
+    <p class="emergency-person" id="emergencyPerson">Người được giám sát</p>
+    <p class="emergency-time" id="emergencyTime">Hôm nay, —</p>
+    <div class="emergency-stats">
+      <div class="emergency-stat"><span id="emergencyAi">—%</span><label>Xác suất AI</label></div>
+      <div class="emergency-stat"><span id="emergencyLying">00:00</span><label>Thời gian nằm</label></div>
+    </div>
+    <button type="button" class="btn btn-white btn-full" id="emergencyViewCam">📹 Xem camera trực tiếp</button>
+    <button type="button" class="btn btn-outline-white btn-full" id="emergencyCallBtn">📞 Gọi liên hệ khẩn cấp</button>
+    <button type="button" class="emergency-dismiss" id="emergencyDismiss">Tôi đang xử lý — bỏ qua</button>
+  </section>
+
+  <!-- Splash -->
+  <section id="splashScreen" class="splash-screen">
+    <div class="splash-logo">
+      <svg class="shield-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <rect width="64" height="64" rx="16" fill="rgba(255,255,255,.15)"/>
+        <path d="M32 8L14 16v14c0 11 7.5 21.3 18 24 10.5-2.7 18-13 18-24V16L32 8z" fill="#fff"/>
+        <path d="M26 32l4 4 8-8" stroke="#1d4ed8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1 class="splash-title">Guardian Watch</h1>
+    <p class="splash-tagline">AI phát hiện té ngã &amp; giám sát người cao tuổi</p>
+    <div class="splash-dots"><span class="on"></span><span></span><span></span></div>
+    <p class="splash-version">NCKH ST23B · v1.0</p>
+  </section>
+
+  <!-- Login -->
+  <section id="loginScreen" class="login-screen hidden">
+    <div class="login-wrap">
+      <div class="login-logo">
+        <svg viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="#dbeafe"/><path d="M24 6L10 12v11c0 9 6 17 14 19 8-2 14-10 14-19V12L24 6z" fill="#1d4ed8"/><path d="M19 24l3 3 7-7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h2 class="login-heading">Chào mừng trở lại</h2>
+      <p class="login-sub">Đăng nhập để bảo vệ người thân</p>
+
+      <div class="conn-card" id="loginConnCard">
+        <div class="conn-card-head">
+          <span class="conn-card-title">Kết nối máy chủ</span>
+          <span class="conn-status-pill" id="loginConnStatus">Chưa kiểm tra</span>
+        </div>
+        <label class="field-label" id="serverField">
+          <span class="field-caption">Địa chỉ server (laptop chạy AI)</span>
+          <span class="input-group">
+            <svg class="input-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+            <input id="loginServerInput" type="url" placeholder="http://192.168.2.101:8000" />
+          </span>
+        </label>
+        <p class="field-hint" id="loginConnHint">Điện thoại và laptop phải cùng WiFi. Không dùng 127.0.0.1 trên APK.</p>
+        <button type="button" class="btn btn-outline btn-full btn-sm" id="testConnBtn">Kiểm tra kết nối</button>
+        <p class="conn-detail hidden" id="loginConnDetail"></p>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <label class="field-label">
+          <span class="field-caption">Tài khoản</span>
+          <span class="input-group">
+            <svg class="input-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+            <input id="loginUserInput" type="text" placeholder="admin@nckh.vn" autocomplete="username" required />
+          </span>
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Mật khẩu</span>
+          <span class="input-group">
+            <svg class="input-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <input id="loginPassInput" type="password" placeholder="••••••••" autocomplete="current-password" required />
+            <button type="button" class="toggle-pass" id="togglePass" aria-label="Hiện mật khẩu">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </span>
+        </label>
+        <div class="login-row">
+          <label class="remember"><input type="checkbox" id="rememberMe" checked /> Ghi nhớ</label>
+          <button type="button" class="text-link" id="forgotPassBtn">Quên mật khẩu?</button>
+        </div>
+        <p id="loginError" class="form-error hidden"></p>
+        <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Đăng nhập</button>
+        <button type="button" class="btn btn-outline btn-full" id="faceIdBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+          Đăng nhập sinh trắc học
+        </button>
+      </form>
+      <p class="login-footer">Người chăm sóc mới? <button type="button" class="text-link" id="requestAccessBtn">Yêu cầu truy cập</button></p>
+      <p class="login-note">Tài khoản do admin cấp — không tự đăng ký.</p>
+    </div>
+  </section>
+
+  <!-- REQUEST ACCESS (full screen over login) -->
+  <section id="requestAccessScreen" class="login-screen hidden">
+    <div class="login-wrap">
+      <header class="sub-header" style="padding-top:0">
+        <button type="button" class="back-btn" id="requestAccessBack" aria-label="Quay lại">←</button>
+        <h2>Yêu cầu truy cập</h2>
+      </header>
+      <p class="login-sub" style="text-align:left;margin-bottom:16px">Điền form — admin NCKH duyệt và cấp tài khoản qua email/SĐT.</p>
+      <form id="accessRequestForm" class="camera-form">
+        <label class="field-label">
+          <span class="field-caption">Họ và tên</span>
+          <input id="reqFullName" class="full-select" required placeholder="Nguyễn Văn A" />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Email</span>
+          <input id="reqEmail" class="full-select" type="email" placeholder="email@example.com" />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Số điện thoại</span>
+          <input id="reqPhone" class="full-select" type="tel" placeholder="0901 234 567" />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Vai trò</span>
+          <select id="reqRole" class="full-select">
+            <option value="caregiver">Người chăm sóc</option>
+            <option value="family">Người thân</option>
+            <option value="staff">Nhân viên y tế</option>
+          </select>
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Lời nhắn (tùy chọn)</span>
+          <input id="reqMessage" class="full-select" placeholder="Chăm sóc bà ở phòng 101..." />
+        </label>
+        <p id="accessRequestError" class="form-error hidden"></p>
+        <button type="submit" class="btn btn-primary btn-full" id="accessRequestSubmit">Gửi yêu cầu</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- App -->
+  <div id="appShell" class="app-shell hidden">
+
+    <!-- HOME -->
+    <section class="page active" id="tab-home">
+      <header class="page-header">
+        <div>
+          <p class="greeting" id="greetingText">Chào buổi sáng</p>
+          <h1 class="user-name" id="headerUser">Admin</h1>
+        </div>
+        <button type="button" class="notif-btn" id="notifBtn" aria-label="Thông báo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <span class="notif-badge hidden" id="notifBadge">0</span>
+        </button>
+      </header>
+
+      <div class="alert-banner hidden" id="alertBanner">
+        <div class="alert-banner-icon">⚠</div>
+        <div class="alert-banner-body">
+          <p class="alert-banner-title" id="alertBannerTitle">Phát hiện té ngã — Phòng khách</p>
+          <p class="alert-banner-sub" id="alertBannerSub">Đang nằm 02:41 · Rule 94%</p>
+        </div>
+        <span class="alert-banner-arrow">›</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-tile">
+          <span class="stat-icon">💚</span>
+          <span class="stat-value" id="statProtected">1</span>
+          <span class="stat-label">Người giám sát</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-icon">📹</span>
+          <span class="stat-value" id="statCameras">0</span>
+          <span class="stat-label">Camera hoạt động</span>
+        </div>
+        <div class="stat-tile stat-red">
+          <span class="stat-icon">⚠️</span>
+          <span class="stat-value" id="statFallsToday">0</span>
+          <span class="stat-label">Té ngã hôm nay</span>
+        </div>
+        <div class="stat-tile stat-red">
+          <span class="stat-icon">🔔</span>
+          <span class="stat-value" id="statActiveAlerts">0</span>
+          <span class="stat-label">Cảnh báo đang bật</span>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h3>Hoạt động gần đây</h3>
+        <button type="button" class="link-btn" id="viewAllActivity">Xem tất cả</button>
+      </div>
+      <div class="activity-list" id="activityList"></div>
+    </section>
+
+    <!-- CAMERAS LIST -->
+    <section class="page" id="tab-cameras">
+      <header class="page-header cam-header">
+        <h1>Camera</h1>
+        <button type="button" class="btn btn-outline btn-sm" id="addCameraBtn">+ Thêm</button>
+      </header>
+      <p class="cam-hint" id="camListHint">Chạm camera để xem live · bấm ✏️ để chỉnh sửa hoặc xóa</p>
+      <div class="cam-list" id="camList"></div>
+    </section>
+
+    <!-- CAMERA DETAIL (sub) -->
+    <section class="page sub-page" id="sub-camera">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="cameras" aria-label="Quay lại">←</button>
+        <div>
+          <h2 id="camDetailTitle">CAM-01 · Phòng khách</h2>
+          <p class="sub-sub" id="camDetailMeta">Đang tải...</p>
+        </div>
+      </header>
+      <div class="cam-card">
+        <div class="cam-thumb">
+          <img id="streamImage" alt="Live" class="hidden" />
+          <div id="cameraPlaceholder" class="cam-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7zM14 5H3a2 2 0 00-2 2v10a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2z"/></svg>
+            <p>Nhấn Bắt đầu để xem live</p>
+          </div>
+          <span class="cam-live-tag hidden" id="liveTag">LIVE</span>
+          <span class="cam-status-tag" id="camStatusTag">Bình thường</span>
+        </div>
+      </div>
+      <div class="detail-metrics">
+        <div class="metric-row"><span>Trạng thái</span><strong id="metricStatus">Sẵn sàng</strong></div>
+        <div class="metric-row"><span>Độ tin cậy AI</span><strong id="metricAi">—</strong></div>
+        <div class="metric-row"><span>Thời gian nằm</span><strong id="metricLying">—</strong></div>
+        <div class="metric-row"><span>Góc thân</span><strong id="metricTorso">—</strong></div>
+        <div class="metric-row"><span>Vận tốc hông</span><strong id="metricHip">—</strong></div>
+        <div class="metric-row"><span>FPS / Pose</span><strong id="metricsText">—</strong></div>
+      </div>
+      <div class="progress-wrap hidden" id="progressWrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <p class="progress-text" id="progressText"></p>
+      </div>
+      <div class="control-row"><button type="button" class="btn btn-primary btn-full" id="startBtn">▶ Bắt đầu giám sát</button></div>
+      <div class="info-block cam-source-box">
+        <div class="info-row"><span>Nguồn</span><strong id="camSourceDisplay">0</strong></div>
+        <div class="info-row"><span>Mã camera</span><strong id="camIdDisplay">—</strong></div>
+      </div>
+      <input type="hidden" id="sourceInput" value="0" />
+      <div class="control-row dual">
+        <button type="button" class="btn btn-outline" id="editCameraBtn">✏️ Chỉnh sửa</button>
+        <button type="button" class="btn btn-outline" id="stopBtn" disabled>■ Dừng</button>
+      </div>
+      <div class="control-row">
+        <button type="button" class="btn btn-outline btn-full" id="resetBtn" disabled>↺ Reset</button>
+      </div>
+      <div class="hidden" id="statusBox"><span id="statusLabel"></span><span id="stateHelp"></span><span id="statusDetail"></span></div>
+    </section>
+
+    <!-- CAMERA FORM -->
+    <section class="page sub-page" id="sub-camera-form">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="cameras" aria-label="Quay lại">←</button>
+        <h2 id="cameraFormTitle">Thêm camera</h2>
+      </header>
+      <form id="cameraForm" class="camera-form">
+        <label class="field-label">
+          <span class="field-caption">Mã camera</span>
+          <input id="camFormId" class="full-select" type="text" placeholder="CAM-03" required />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Tên vị trí</span>
+          <input id="camFormName" class="full-select" type="text" placeholder="Phòng ngủ" required />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Phòng / khu vực</span>
+          <input id="camFormRoom" class="full-select" type="text" placeholder="Phòng 101" required />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Nguồn kết nối</span>
+          <input id="camFormSource" class="full-select" type="text" placeholder="0 hoặc rtsp://..." required />
+          <span class="field-hint">0 = webcam laptop · 1,2 = webcam khác · rtsp:// = camera IP</span>
+        </label>
+        <label class="toggle-item cam-enabled-row">
+          <span>Bật camera này</span>
+          <input type="checkbox" class="switch" id="camFormEnabled" checked />
+        </label>
+        <button type="submit" class="btn btn-primary btn-full" id="saveCameraBtn">Lưu camera</button>
+        <button type="button" class="btn btn-danger btn-full hidden" id="deleteCameraBtn">Xóa camera</button>
+      </form>
+    </section>
+
+    <!-- ALERTS -->
+    <section class="page" id="tab-alerts">
+      <header class="page-header simple"><h1>Thông báo</h1></header>
+      <div class="filter-pills">
+        <button type="button" class="pill active" data-filter="all">Tất cả</button>
+        <button type="button" class="pill" data-filter="alert">Cảnh báo</button>
+        <button type="button" class="pill" data-filter="warning">Cảnh báo nhẹ</button>
+        <button type="button" class="pill" data-filter="system">Hệ thống</button>
+      </div>
+      <div class="notif-list" id="eventLog"></div>
+      <div class="alerts-footer">
+        <button type="button" class="btn btn-outline btn-sm" id="refreshEventsBtn">Tải lại</button>
+        <a class="btn btn-outline btn-sm" id="csvLink" href="#">Xuất CSV</a>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="page" id="tab-profile">
+      <header class="page-header simple"><h1>Hồ sơ</h1></header>
+
+      <div class="patient-card" id="patientCard">
+        <div class="patient-avatar" id="patientAvatar">NT</div>
+        <div class="patient-info">
+          <p class="patient-name" id="patientName">Người được giám sát</p>
+          <p class="patient-meta" id="patientMeta">72 tuổi · Phòng 101</p>
+          <span class="patient-status" id="patientStatus">● Bình thường</span>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <h3 class="block-title">Thông tin cá nhân</h3>
+        <div class="info-row"><span>Ngày sinh</span><strong id="patientDob">15/03/1954</strong></div>
+        <div class="info-row"><span>Nhóm máu</span><strong id="patientBlood">O+</strong></div>
+        <div class="info-row"><span>Bệnh lý</span><strong id="patientConditions">Loãng xương, cao huyết áp</strong></div>
+        <div class="info-row"><span>Liên hệ chính</span><strong id="patientContact">Anh Tuấn (con trai)</strong></div>
+      </div>
+
+      <div class="info-block">
+        <h3 class="block-title">Camera được gán</h3>
+        <div class="assigned-cam" id="assignedCamList"></div>
+      </div>
+
+      <div class="health-grid">
+        <div class="health-tile"><span class="health-num red" id="healthFalls30">0</span><span class="health-lbl">Té ngã / 30 ngày</span></div>
+        <div class="health-tile"><span class="health-num" id="healthMobility">85</span><span class="health-lbl">Điểm vận động</span></div>
+        <div class="health-tile"><span class="health-num green" id="healthActive">6.2</span><span class="health-lbl">Giờ hoạt động TB</span></div>
+      </div>
+
+      <div class="menu-list">
+        <button type="button" class="menu-item" id="gotoCamerasBtn">📹 Quản lý camera</button>
+        <button type="button" class="menu-item hidden" id="gotoAccessRequestsBtn">📋 Duyệt yêu cầu truy cập</button>
+        <button type="button" class="menu-item" data-goto="sub-settings">⚙️ Cài đặt</button>
+        <button type="button" class="menu-item" data-goto="sub-contacts">📞 Liên hệ khẩn cấp</button>
+        <button type="button" class="menu-item danger" id="logoutBtn">⎋ Đăng xuất</button>
+      </div>
+      <span class="conn-pill profile-conn" id="connectionState">Offline</span>
+    </section>
+
+    <!-- ADMIN: ACCESS REQUESTS -->
+    <section class="page sub-page" id="sub-access-requests">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="profile">←</button>
+        <h2>Yêu cầu truy cập</h2>
+      </header>
+      <p class="cam-hint">Admin duyệt và thêm user vào <code>configs/auth.yaml</code></p>
+      <div id="accessRequestList" class="notif-list"></div>
+    </section>
+
+    <!-- SETTINGS sub -->
+    <section class="page sub-page" id="sub-settings">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="profile">←</button>
+        <h2>Cài đặt</h2>
+      </header>
+      <div class="settings-block">
+        <h3 class="block-title">Thông báo</h3>
+        <label class="toggle-item"><span>Cảnh báo té ngã</span><input type="checkbox" class="switch" id="toggleFallAlerts" checked /></label>
+        <label class="toggle-item"><span>Cảnh báo tư thế</span><input type="checkbox" class="switch" id="togglePosture" checked /></label>
+        <label class="toggle-item"><span>Trạng thái hệ thống</span><input type="checkbox" class="switch" id="toggleSystemStatus" checked /></label>
+        <label class="toggle-item"><span>Âm thanh &amp; rung</span><input type="checkbox" class="switch" id="toggleSound" checked /></label>
+        <button type="button" class="btn btn-outline btn-full settings-test-btn" id="testSoundBtn">🔔 Thử cảnh báo âm thanh</button>
+        <label class="toggle-item"><span>Lưu ảnh khi cảnh báo</span><input type="checkbox" class="switch" id="snapshotCheckbox" checked /></label>
+        <label class="toggle-item"><span>Hiện khung xương</span><input type="checkbox" class="switch" id="landmarksCheckbox" checked /></label>
+      </div>
+      <div class="settings-block">
+        <h3 class="block-title">Độ nhạy cảnh báo</h3>
+        <input type="range" class="slider" id="sensitivitySlider" min="5" max="30" value="10" />
+        <div class="slider-labels"><span>Thấp</span><span id="sliderValue">Cân bằng (10s)</span><span>Cao</span></div>
+        <p class="slider-hint">Kích hoạt cảnh báo khi nằm quá thời gian đã đặt (≥ 75% xác suất AI).</p>
+        <input type="hidden" id="alertSecondsInput" value="10" />
+      </div>
+      <div class="settings-block">
+        <h3 class="block-title">Đối tượng giám sát</h3>
+        <select id="profileSelect" class="full-select"></select>
+      </div>
+      <div class="settings-block">
+        <h3 class="block-title">Kết nối máy chủ</h3>
+        <input id="serverUrlInput" type="url" class="full-select" placeholder="http://192.168.2.101:8000" />
+        <button type="button" class="btn btn-primary btn-full" id="saveServerBtn" style="margin-top:10px">Lưu & kết nối</button>
+      </div>
+      <div class="settings-block">
+        <h3 class="block-title">Giao diện</h3>
+        <div class="segmented">
+          <button type="button" class="seg active" data-theme="light">Sáng</button>
+          <button type="button" class="seg" data-theme="dark">Tối</button>
+          <button type="button" class="seg" data-theme="auto">Tự động</button>
+        </div>
+        <div class="info-row" style="margin-top:12px"><span>Ngôn ngữ</span><strong>Tiếng Việt</strong></div>
+        <div class="info-row"><span>Giờ yên lặng</span><strong>22:00 – 07:00</strong></div>
+      </div>
+      <button type="button" class="btn btn-outline btn-full" id="saveSettingsBtn">Lưu cài đặt</button>
+    </section>
+
+    <!-- CONTACTS sub -->
+    <section class="page sub-page" id="sub-contacts">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="profile">←</button>
+        <h2>Liên hệ khẩn cấp</h2>
+      </header>
+      <div class="emergency-card">
+        <div class="emergency-card-icon">📞</div>
+        <div>
+          <p class="emergency-card-title">Cấp cứu</p>
+          <p class="emergency-card-sub">Nhấn để gọi 115 ngay</p>
+        </div>
+        <a href="tel:115" class="btn btn-white-sm">GỌI</a>
+      </div>
+      <div class="contact-list" id="contactList">
+        <div class="contact-item">
+          <div class="contact-avatar">BS</div>
+          <div class="contact-body"><p class="contact-name">BS. Nguyễn Văn B</p><p class="contact-role">Bác sĩ · Bệnh viện</p></div>
+          <a href="tel:0901234567" class="contact-action call">📞</a>
+          <a href="sms:0901234567" class="contact-action msg">💬</a>
+        </div>
+        <div class="contact-item">
+          <div class="contact-avatar">MR</div>
+          <div class="contact-body"><p class="contact-name">Maria Reyes</p><p class="contact-role">Y tá trực · Tầng 1</p></div>
+          <a href="tel:0907654321" class="contact-action call">📞</a>
+          <a href="sms:0907654321" class="contact-action msg">💬</a>
+        </div>
+        <div class="contact-item">
+          <div class="contact-avatar">AT</div>
+          <div class="contact-body"><p class="contact-name">Anh Tuấn</p><p class="contact-role">Người thân · Con trai</p></div>
+          <a href="tel:0912345678" class="contact-action call">📞</a>
+          <a href="sms:0912345678" class="contact-action msg">💬</a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <nav class="tabbar hidden" id="mainTabbar">
+    <button type="button" class="tabbar-btn active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span>Trang chủ</span>
+    </button>
+    <button type="button" class="tabbar-btn" data-tab="cameras">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7zM14 5H3a2 2 0 00-2 2v10a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2z"/></svg>
+      <span>Camera</span>
+    </button>
+    <button type="button" class="tabbar-btn" data-tab="alerts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span>Cảnh báo</span>
+      <span class="tab-badge hidden" id="tabAlertBadge">0</span>
+    </button>
+    <button type="button" class="tabbar-btn" data-tab="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Hồ sơ</span>
+    </button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

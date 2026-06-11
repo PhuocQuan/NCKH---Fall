@@ -4,6 +4,7 @@ __pycache__/
 .tmp/
 repo-push-temp/
 data/events.csv
+data/access_requests.json
 data/snapshots/
 data/evaluation/*.csv
 data/features/*.csv
@@ -12,3 +13,4 @@ data/videos/non_fall/
 data/videos/sleeping/
 models/*.joblib
 models/*.report.txt
+configs/auth.yaml

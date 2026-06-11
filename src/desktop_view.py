@@ -6,42 +6,13 @@ from typing import Any
 import cv2
 from PIL import Image, ImageTk
 
-PROFILE_DISPLAY = {
-    "default": "Mac dinh",
-    "elderly": "Nguoi gia",
-    "child": "Tre nho",
-    "pregnant": "Phu nu mang thai",
-    "disabled": "Nguoi khuyet tat",
-}
-
-STATUS_DISPLAY = {
-    "READY": "San sang",
-    "RUNNING": "Dang chay",
-    "STOPPED": "Da dung",
-    "CHO POSE": "Cho nhan dien",
-    "NO POSE": "Khong thay nguoi",
-    "TRACKING": "Dang theo doi",
-    "NORMAL": "Binh thuong",
-    "LYING": "Dang nam",
-    "WARNING": "Canh bao nhe",
-    "POSSIBLE_FALL": "Nghi nga",
-    "FALLEN": "Da nga",
-    "ALERT": "CANH BAO",
-}
-
-
-def profile_combo_values() -> list[str]:
-    return [f"{key} - {PROFILE_DISPLAY[key]}" for key in PROFILE_DISPLAY]
-
-
-def profile_from_combo(selection: str) -> str:
-    token = selection.strip().split(" - ", 1)[0].strip().lower()
-    return token if token in PROFILE_DISPLAY else "default"
-
-
-def profile_to_combo(profile: str) -> str:
-    key = profile if profile in PROFILE_DISPLAY else "default"
-    return f"{key} - {PROFILE_DISPLAY[key]}"
+from src.ui_theme import (
+    PROFILE_DISPLAY,
+    STATUS_DISPLAY,
+    profile_combo_values,
+    profile_from_combo,
+    profile_to_combo,
+)
 
 
 class UiRefreshGate:
