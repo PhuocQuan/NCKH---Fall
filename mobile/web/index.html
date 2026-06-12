@@ -286,7 +286,7 @@
           <span>Bật camera này</span>
           <input type="checkbox" class="switch" id="camFormEnabled" checked />
         </label>
-        <button type="submit" class="btn btn-primary btn-full" id="saveCameraBtn">Lưu camera</button>
+        <button type="button" class="btn btn-primary btn-full" id="saveCameraBtn">Lưu camera</button>
         <button type="button" class="btn btn-danger btn-full hidden" id="deleteCameraBtn">Xóa camera</button>
       </form>
     </section>
@@ -341,6 +341,7 @@
 
       <div class="menu-list">
         <button type="button" class="menu-item" id="gotoCamerasBtn">📹 Quản lý camera</button>
+        <button type="button" class="menu-item hidden" id="gotoUsersBtn">👥 Quản lý người dùng</button>
         <button type="button" class="menu-item hidden" id="gotoAccessRequestsBtn">📋 Duyệt yêu cầu truy cập</button>
         <button type="button" class="menu-item" data-goto="sub-settings">⚙️ Cài đặt</button>
         <button type="button" class="menu-item" data-goto="sub-contacts">📞 Liên hệ khẩn cấp</button>
@@ -355,8 +356,55 @@
         <button type="button" class="back-btn" data-back="profile">←</button>
         <h2>Yêu cầu truy cập</h2>
       </header>
-      <p class="cam-hint">Admin duyệt và thêm user vào <code>configs/auth.yaml</code></p>
+      <p class="cam-hint">Sau khi duyệt: tạo tài khoản tại <strong>Quản lý người dùng</strong></p>
       <div id="accessRequestList" class="notif-list"></div>
+    </section>
+
+    <!-- ADMIN: USERS -->
+    <section class="page sub-page" id="sub-users">
+      <header class="sub-header user-header">
+        <button type="button" class="back-btn" data-back="profile">←</button>
+        <h2>Người dùng</h2>
+        <button type="button" class="btn btn-outline btn-sm" id="addUserBtn">+ Thêm</button>
+      </header>
+      <p class="cam-hint">Tài khoản do admin cấp — người dùng không tự đăng ký</p>
+      <div id="userList" class="notif-list"></div>
+    </section>
+
+    <section class="page sub-page" id="sub-user-form">
+      <header class="sub-header">
+        <button type="button" class="back-btn" data-back="users">←</button>
+        <h2 id="userFormTitle">Thêm người dùng</h2>
+      </header>
+      <form id="userForm" class="camera-form">
+        <label class="field-label">
+          <span class="field-caption">Tên đăng nhập</span>
+          <input id="userFormUsername" class="full-select" type="text" placeholder="caregiver.lan" required />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Họ tên</span>
+          <input id="userFormFullName" class="full-select" type="text" placeholder="Nguyễn Thị Lan" />
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Mật khẩu</span>
+          <input id="userFormPassword" class="full-select" type="password" placeholder="••••••••" required />
+          <span class="field-hint" id="userFormPasswordHint">Bắt buộc khi tạo mới</span>
+        </label>
+        <label class="field-label">
+          <span class="field-caption">Vai trò</span>
+          <select id="userFormRole" class="full-select">
+            <option value="caregiver">Người chăm sóc</option>
+            <option value="family">Người thân</option>
+            <option value="staff">Nhân viên y tế</option>
+          </select>
+        </label>
+        <label class="toggle-item cam-enabled-row">
+          <span>Cho phép đăng nhập</span>
+          <input type="checkbox" class="switch" id="userFormEnabled" checked />
+        </label>
+        <button type="button" class="btn btn-primary btn-full" id="saveUserBtn">Lưu tài khoản</button>
+        <button type="button" class="btn btn-danger btn-full hidden" id="deleteUserBtn">Xóa tài khoản</button>
+      </form>
     </section>
 
     <!-- SETTINGS sub -->
@@ -371,7 +419,7 @@
         <label class="toggle-item"><span>Cảnh báo tư thế</span><input type="checkbox" class="switch" id="togglePosture" checked /></label>
         <label class="toggle-item"><span>Trạng thái hệ thống</span><input type="checkbox" class="switch" id="toggleSystemStatus" checked /></label>
         <label class="toggle-item"><span>Âm thanh &amp; rung</span><input type="checkbox" class="switch" id="toggleSound" checked /></label>
-        <button type="button" class="btn btn-outline btn-full settings-test-btn" id="testSoundBtn">🔔 Thử cảnh báo âm thanh</button>
+        <button type="button" class="btn btn-outline btn-full settings-test-btn" id="testSoundBtn">🔔 Thử chuông cảnh báo</button>
         <label class="toggle-item"><span>Lưu ảnh khi cảnh báo</span><input type="checkbox" class="switch" id="snapshotCheckbox" checked /></label>
         <label class="toggle-item"><span>Hiện khung xương</span><input type="checkbox" class="switch" id="landmarksCheckbox" checked /></label>
       </div>

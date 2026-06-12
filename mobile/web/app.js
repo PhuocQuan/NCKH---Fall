@@ -4,6 +4,7 @@ const USER_STORAGE_KEY = "nckh_auth_user";
 const REMEMBER_KEY = "nckh_remember_user";
 const SOUND_STORAGE_KEY = "nckh_sound_enabled";
 const USER_META_KEY = "nckh_user_meta";
+const ALERT_SOUND_URL = "sounds/fall_alert.wav";
 
 const PATIENT_PROFILES = {
   default: { name: "Nguyễn Thị Lan", initials: "NL", age: "72 tuổi", room: "Phòng 101", condition: "Cao tuổi", dob: "15/03/1954", blood: "O+", conditions: "Loãng xương, cao huyết áp", contact: "Anh Tuấn (con trai)" },
@@ -40,7 +41,8 @@ let toastTimer = null, allEvents = [], historyFilter = "all", splashDone = false
 let currentStatus = {}, lastEvent = null, emergencyDismissed = false;
 let currentTab = "home", cameras = [], selectedCam = null;
 let cameraFormMode = "add", cameraFormEditId = null, cameraFormSaving = false;
-let audioCtx = null, lastAlarmState = "", alarmTicksSinceBeep = 3;
+let managedUsers = [], userFormMode = "add", userFormEditUsername = null, userFormSaving = false;
+let audioCtx = null, alertAudio = null, lastAlarmState = "", alarmTicksSinceBeep = 3;
 
 const $ = (id) => document.getElementById(id);
 
@@ -55,6 +57,15 @@ function val(id, value) {
   if (!el) return "";
   if (value !== undefined) el.value = value;
   return el.value;
+}
+
+function setHidden(id, hidden) {
+  $(id)?.classList.toggle("hidden", hidden);
+}
+
+function setDisabled(id, disabled) {
+  const el = $(id);
+  if (el) el.disabled = disabled;
 }
 
 function loadSoundPreference() {
@@ -79,8 +90,35 @@ function ensureAudioContext() {
   if (audioCtx?.state === "suspended") audioCtx.resume().catch(() => {});
 }
 
-function playFallAlertSound() {
-  if (!isSoundEnabled()) return;
+function ensureAlertAudio() {
+  if (!alertAudio) {
+    alertAudio = new Audio(ALERT_SOUND_URL);
+    alertAudio.preload = "auto";
+  }
+  return alertAudio;
+}
+
+function unlockAlertAudio() {
+  ensureAudioContext();
+  const audio = ensureAlertAudio();
+  audio.load();
+  const prevVolume = audio.volume;
+  audio.volume = 0.001;
+  const p = audio.play();
+  if (p && typeof p.then === "function") {
+    p.then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = prevVolume;
+    }).catch(() => {
+      audio.volume = prevVolume;
+    });
+  } else {
+    audio.volume = prevVolume;
+  }
+}
+
+function playFallAlertSoundFallback() {
   ensureAudioContext();
   if (!audioCtx) return;
   try {
@@ -97,8 +135,22 @@ function playFallAlertSound() {
       osc.start(start);
       osc.stop(start + 0.2);
     });
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 350]);
   } catch { /* trình duyệt chặn autoplay */ }
+}
+
+function playFallAlertSound() {
+  if (!isSoundEnabled()) return;
+  try {
+    const audio = ensureAlertAudio();
+    audio.currentTime = 0;
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => playFallAlertSoundFallback());
+    }
+  } catch {
+    playFallAlertSoundFallback();
+  }
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 350]);
 }
 
 function updateFallAlarm(state) {
@@ -285,7 +337,7 @@ function renderAccessRequests(requests) {
       <p class="notif-desc">${req.message || "Không có lời nhắn"}</p>
       <p class="notif-time">${STATUS_LABELS[req.status] || req.status} · ${formatDateTime(req.created_at)}</p>
       ${actions}
-      ${pending ? '<p class="field-hint">Sau khi duyệt: thêm user vào configs/auth.yaml rồi gửi tài khoản cho người dùng.</p>' : ""}
+      ${pending ? '<p class="field-hint">Sau khi duyệt: vào Quản lý người dùng để tạo tài khoản.</p>' : ""}
     </article>`;
   }).join("");
   el.querySelectorAll("[data-approve]").forEach((btn) => {
@@ -311,6 +363,7 @@ async function reviewAccessRequest(id, status) {
 function updateRoleUi() {
   const admin = isAdminUser();
   $("gotoAccessRequestsBtn")?.classList.toggle("hidden", !admin);
+  $("gotoUsersBtn")?.classList.toggle("hidden", !admin);
   $("addCameraBtn")?.classList.toggle("hidden", !admin);
   $("editCameraBtn")?.classList.toggle("hidden", !admin);
   if ($("gotoCamerasBtn")) {
@@ -372,7 +425,7 @@ function showApp() {
 
 function switchTab(tab) {
   currentTab = tab;
-  if (!["sub-camera", "sub-settings", "sub-contacts", "sub-camera-form", "sub-access-requests"].includes(tab)) {
+  if (!["sub-camera", "sub-settings", "sub-contacts", "sub-camera-form", "sub-access-requests", "sub-users", "sub-user-form"].includes(tab)) {
     document.querySelectorAll(".tabbar-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   }
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
@@ -381,6 +434,7 @@ function switchTab(tab) {
   if (tab === "alerts") refreshEvents().catch(() => {});
   if (tab === "cameras") renderCamList();
   if (tab === "sub-access-requests") loadAccessRequests().catch((e) => showToast(e.message, "error"));
+  if (tab === "sub-users") loadUsers().catch((e) => showToast(e.message, "error"));
 }
 
 function openSub(subId, hideTabbar = true) {
@@ -391,6 +445,11 @@ function openSub(subId, hideTabbar = true) {
 
 function closeSub(backTab) {
   $("mainTabbar").classList.remove("hidden");
+  if (backTab === "users") {
+    openSub("sub-users");
+    loadUsers().catch((e) => showToast(e.message, "error"));
+    return;
+  }
   switchTab(backTab);
 }
 
@@ -512,38 +571,41 @@ async function openCameraForm(mode, cam = null) {
   }
   cameraFormMode = mode;
   cameraFormEditId = cam?.id || null;
-  $("cameraFormTitle").textContent = mode === "add" ? "Thêm camera" : "Chỉnh sửa camera";
-  $("deleteCameraBtn").classList.toggle("hidden", mode !== "edit");
-  $("camFormId").readOnly = mode === "edit";
+  txt("cameraFormTitle", mode === "add" ? "Thêm camera" : "Chỉnh sửa camera");
+  $("deleteCameraBtn")?.classList.toggle("hidden", mode !== "edit");
+  const idInput = $("camFormId");
+  if (idInput) idInput.readOnly = mode === "edit";
   if (mode === "add") {
     const suggested = await api("/api/cameras/suggest-id");
-    $("camFormId").value = suggested.id;
-    $("camFormName").value = "";
-    $("camFormRoom").value = "";
-    $("camFormSource").value = "0";
-    $("camFormEnabled").checked = true;
+    val("camFormId", suggested.id);
+    val("camFormName", "");
+    val("camFormRoom", "");
+    val("camFormSource", "0");
+    if ($("camFormEnabled")) $("camFormEnabled").checked = true;
   } else if (cam) {
-    $("camFormId").value = cam.id;
-    $("camFormName").value = cam.name;
-    $("camFormRoom").value = cam.room;
-    $("camFormSource").value = cam.source;
-    $("camFormEnabled").checked = Boolean(cam.enabled);
+    val("camFormId", cam.id);
+    val("camFormName", cam.name);
+    val("camFormRoom", cam.room);
+    val("camFormSource", cam.source);
+    if ($("camFormEnabled")) $("camFormEnabled").checked = Boolean(cam.enabled);
   }
   openSub("sub-camera-form");
 }
 
 async function saveCameraFromForm(e) {
-  e.preventDefault();
+  e?.preventDefault?.();
   if (cameraFormSaving) return;
   cameraFormSaving = true;
-  $("saveCameraBtn").disabled = true;
+  setDisabled("saveCameraBtn", true);
+  setDisabled("deleteCameraBtn", true);
+  $("cameraForm")?.setAttribute("aria-busy", "true");
   try {
     const body = {
-      id: $("camFormId").value.trim().toUpperCase(),
-      name: $("camFormName").value.trim(),
-      room: $("camFormRoom").value.trim(),
-      source: $("camFormSource").value.trim(),
-      enabled: $("camFormEnabled").checked,
+      id: val("camFormId").trim().toUpperCase(),
+      name: val("camFormName").trim(),
+      room: val("camFormRoom").trim(),
+      source: val("camFormSource").trim(),
+      enabled: Boolean($("camFormEnabled")?.checked),
     };
     if (!body.name || !body.room || !body.source) throw new Error("Điền đủ thông tin camera.");
     if (cameraFormMode === "add") {
@@ -561,8 +623,134 @@ async function saveCameraFromForm(e) {
     closeSub("cameras");
   } finally {
     cameraFormSaving = false;
-    $("saveCameraBtn").disabled = false;
+    setDisabled("saveCameraBtn", false);
+    setDisabled("deleteCameraBtn", false);
+    $("cameraForm")?.removeAttribute("aria-busy");
   }
+}
+
+async function loadUsers() {
+  const payload = await api("/api/users");
+  managedUsers = payload.users || [];
+  renderUserList();
+}
+
+function renderUserList() {
+  const el = $("userList");
+  if (!el) return;
+  if (!managedUsers.length) {
+    el.innerHTML = '<div class="activity-empty">Chưa có người dùng · nhấn + Thêm</div>';
+    return;
+  }
+  el.innerHTML = managedUsers.map((user) => {
+    const role = user.is_admin ? "Quản trị viên" : (ROLE_LABELS[user.role] || user.role);
+    const status = user.enabled ? "Đang bật" : "Đã khóa";
+    const actions = user.is_admin
+      ? `<button type="button" class="btn btn-outline btn-sm" data-edit-user="${user.username}">✏️ Sửa</button>`
+      : `<div class="user-row-actions">
+          <button type="button" class="btn btn-outline btn-sm" data-edit-user="${user.username}">✏️ Sửa</button>
+          <button type="button" class="btn btn-danger btn-sm" data-delete-user="${user.username}">Xóa</button>
+        </div>`;
+    return `<article class="access-req-card">
+      <p class="notif-title">${user.full_name || user.username}${user.is_admin ? " · Admin" : ""}</p>
+      <p class="notif-desc">${user.username} · ${role} · ${status}</p>
+      ${actions}
+    </article>`;
+  }).join("");
+  el.querySelectorAll("[data-edit-user]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const user = managedUsers.find((u) => u.username === btn.dataset.editUser);
+      if (user) openUserForm("edit", user);
+    });
+  });
+  el.querySelectorAll("[data-delete-user]").forEach((btn) => {
+    btn.addEventListener("click", () => deleteUser(btn.dataset.deleteUser).catch((e) => showToast(e.message, "error")));
+  });
+}
+
+function openUserForm(mode, user = null) {
+  if (!isAdminUser()) {
+    showToast("Chỉ admin mới quản lý người dùng.", "error");
+    return;
+  }
+  userFormMode = mode;
+  userFormEditUsername = user?.username || null;
+  txt("userFormTitle", mode === "add" ? "Thêm người dùng" : "Chỉnh sửa tài khoản");
+  $("deleteUserBtn")?.classList.toggle("hidden", mode !== "edit" || Boolean(user?.is_admin));
+  const usernameInput = $("userFormUsername");
+  if (usernameInput) usernameInput.readOnly = mode === "edit";
+  if (mode === "add") {
+    val("userFormUsername", "");
+    val("userFormFullName", "");
+    val("userFormPassword", "");
+    val("userFormRole", "caregiver");
+    if ($("userFormEnabled")) $("userFormEnabled").checked = true;
+    txt("userFormPasswordHint", "Bắt buộc khi tạo mới");
+    if ($("userFormPassword")) $("userFormPassword").required = true;
+    if ($("userFormRole")) $("userFormRole").disabled = false;
+  } else if (user) {
+    val("userFormUsername", user.username);
+    val("userFormFullName", user.full_name || "");
+    val("userFormPassword", "");
+    val("userFormRole", user.role || "caregiver");
+    if ($("userFormEnabled")) $("userFormEnabled").checked = Boolean(user.enabled);
+    txt("userFormPasswordHint", user.is_admin ? "Để trống nếu không đổi mật khẩu admin" : "Để trống nếu không đổi mật khẩu");
+    if ($("userFormPassword")) $("userFormPassword").required = false;
+    if ($("userFormRole")) $("userFormRole").disabled = Boolean(user.is_admin);
+  }
+  openSub("sub-user-form");
+}
+
+async function saveUserFromForm() {
+  if (userFormSaving) return;
+  userFormSaving = true;
+  setDisabled("saveUserBtn", true);
+  setDisabled("deleteUserBtn", true);
+  try {
+    const username = val("userFormUsername").trim();
+    const fullName = val("userFormFullName").trim();
+    const password = val("userFormPassword");
+    const role = val("userFormRole");
+    const enabled = Boolean($("userFormEnabled")?.checked);
+    if (!username) throw new Error("Nhập tên đăng nhập.");
+    if (userFormMode === "add") {
+      if (!password) throw new Error("Nhập mật khẩu cho tài khoản mới.");
+      await api("/api/users", {
+        method: "POST",
+        body: JSON.stringify({ username, password, full_name: fullName, role, enabled }),
+      });
+      showToast("Đã tạo tài khoản", "success");
+    } else {
+      const body = { full_name: fullName, enabled };
+      if (password) body.password = password;
+      if (!managedUsers.find((u) => u.username === userFormEditUsername)?.is_admin) body.role = role;
+      await api(`/api/users/${encodeURIComponent(userFormEditUsername)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      showToast("Đã cập nhật tài khoản", "success");
+    }
+    await loadUsers();
+    closeSub("users");
+  } finally {
+    userFormSaving = false;
+    setDisabled("saveUserBtn", false);
+    setDisabled("deleteUserBtn", false);
+  }
+}
+
+async function deleteUser(username) {
+  if (!username || !confirm(`Xóa tài khoản ${username}?`)) return;
+  await api(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+  showToast("Đã xóa tài khoản");
+  userFormEditUsername = null;
+  await loadUsers();
+  closeSub("users");
+}
+
+async function deleteUserFromForm() {
+  if (!userFormEditUsername) return;
+  await deleteUser(userFormEditUsername);
 }
 
 async function deleteCameraFromForm() {
@@ -582,15 +770,14 @@ async function deleteCameraFromForm() {
 
 function updatePatientCard(profileId) {
   const p = getPatient(profileId);
-  $("patientAvatar").textContent = p.initials;
-  $("patientName").textContent = p.name;
-  $("patientMeta").textContent = `${p.age} · ${p.room}`;
-  $("patientCondition").textContent = p.condition;
-  $("patientDob").textContent = p.dob || "—";
-  $("patientBlood").textContent = p.blood || "—";
-  $("patientConditions").textContent = p.conditions || "—";
-  $("patientContact").textContent = p.contact || "—";
-  $("emergencyPerson").textContent = p.name;
+  txt("patientAvatar", p.initials);
+  txt("patientName", p.name);
+  txt("patientMeta", `${p.age} · ${p.room}`);
+  txt("patientDob", p.dob || "—");
+  txt("patientBlood", p.blood || "—");
+  txt("patientConditions", p.conditions || "—");
+  txt("patientContact", p.contact || "—");
+  txt("emergencyPerson", p.name);
 }
 
 function updateEmergencyOverlay(data) {
@@ -616,21 +803,21 @@ function updateBadges(events) {
   const fallsToday = events.filter((e) => FALL_STATES.has((e.state || "").toLowerCase()) && isToday(e.timestamp)).length;
   const falls30 = events.filter((e) => (e.state || "").toLowerCase() === "alert" && isLast30Days(e.timestamp)).length;
 
-  $("statFallsToday").textContent = String(fallsToday);
-  $("statActiveAlerts").textContent = String(alerts);
-  $("statProtected").textContent = "1";
+  txt("statFallsToday", String(fallsToday));
+  txt("statActiveAlerts", String(alerts));
+  txt("statProtected", "1");
   const enabledCount = cameras.filter((c) => c.enabled).length;
-  $("statCameras").textContent = currentStatus.running ? "1" : String(enabledCount);
-  $("healthFalls30").textContent = String(falls30);
+  txt("statCameras", currentStatus.running ? "1" : String(enabledCount));
+  txt("healthFalls30", String(falls30));
 
   if (alerts > 0) {
-    $("notifBadge").textContent = String(alerts);
-    $("notifBadge").classList.remove("hidden");
-    $("tabAlertBadge").textContent = String(alerts);
-    $("tabAlertBadge").classList.remove("hidden");
+    txt("notifBadge", String(alerts));
+    $("notifBadge")?.classList.remove("hidden");
+    txt("tabAlertBadge", String(alerts));
+    $("tabAlertBadge")?.classList.remove("hidden");
   } else {
-    $("notifBadge").classList.add("hidden");
-    $("tabAlertBadge").classList.add("hidden");
+    $("notifBadge")?.classList.add("hidden");
+    $("tabAlertBadge")?.classList.add("hidden");
   }
 }
 
@@ -753,11 +940,11 @@ function renderAssignedCams() {
 }
 
 function updateButtons(running) {
-  $("startBtn").disabled = running;
-  $("stopBtn").disabled = !running;
-  $("resetBtn").disabled = !running;
-  $("startBtn").textContent = running ? "● Đang giám sát..." : "▶ Bắt đầu giám sát";
-  $("liveTag").classList.toggle("hidden", !running);
+  setDisabled("startBtn", running);
+  setDisabled("stopBtn", !running);
+  setDisabled("resetBtn", !running);
+  txt("startBtn", running ? "● Đang giám sát..." : "▶ Bắt đầu giám sát");
+  setHidden("liveTag", !running);
 }
 
 function startCameraStream() {
@@ -822,11 +1009,11 @@ function renderStatus(data) {
   }
 
   const isCritical = ALERT_STATES.has(state);
-  $("alertBanner").classList.toggle("hidden", !isCritical);
+  setHidden("alertBanner", !isCritical);
   if (isCritical) {
     const lying = data.lying_seconds != null ? formatLyingTime(data.lying_seconds) : "—";
-    $("alertBannerTitle").textContent = `${meta.title} — ${selectedCam?.room || "—"}`;
-    $("alertBannerSub").textContent = `${getPatient(data.profile).name} · nằm ${lying} · AI ${calcAiConfidence(lastEvent || { state })}`;
+    txt("alertBannerTitle", `${meta.title} — ${selectedCam?.room || "—"}`);
+    txt("alertBannerSub", `${getPatient(data.profile).name} · nằm ${lying} · AI ${calcAiConfidence(lastEvent || { state })}`);
   }
 
   updateButtons(Boolean(data.running) && data.camera_id === selectedCam?.id);
@@ -834,7 +1021,7 @@ function renderStatus(data) {
   else stopCameraStream();
   updateEmergencyOverlay(data);
   renderAssignedCams();
-  $("statCameras").textContent = data.running ? "1" : String(cameras.filter((c) => c.enabled).length);
+  txt("statCameras", data.running ? "1" : String(cameras.filter((c) => c.enabled).length));
   if (data.camera_id) {
     const active = findCamera(data.camera_id);
     if (active) selectedCam = active;
@@ -844,11 +1031,12 @@ function renderStatus(data) {
 
   alertAfterSeconds = Number(data.alert_after_seconds) || alertAfterSeconds;
   const showProg = data.lying_seconds != null && PROGRESS_STATES.has(state);
-  $("progressWrap").classList.toggle("hidden", !showProg);
+  setHidden("progressWrap", !showProg);
   if (showProg) {
     const sec = Number(data.lying_seconds) || 0;
-    $("progressFill").style.width = `${Math.min(100, (sec / alertAfterSeconds) * 100)}%`;
-    $("progressText").textContent = `Thời gian nằm: ${sec.toFixed(1)}s / ${alertAfterSeconds}s`;
+    const fill = $("progressFill");
+    if (fill) fill.style.width = `${Math.min(100, (sec / alertAfterSeconds) * 100)}%`;
+    txt("progressText", `Thời gian nằm: ${sec.toFixed(1)}s / ${alertAfterSeconds}s`);
   }
   updatePatientCard(data.profile || $("profileSelect").value);
   if (data.running) updateFallAlarm(state);
@@ -996,6 +1184,7 @@ async function login(user, pass, server) {
     is_admin: Boolean(p.is_admin),
   });
   updateRoleUi();
+  unlockAlertAudio();
   if ($("rememberMe").checked) localStorage.setItem(REMEMBER_KEY, user);
   else localStorage.removeItem(REMEMBER_KEY);
 }
@@ -1011,6 +1200,7 @@ async function logout() {
 async function bootstrapApp() {
   showApp();
   updateCsvLink();
+  unlockAlertAudio();
   await refreshAuthMeta();
   await Promise.all([loadUiConfig(), loadSettings(), loadCameras()]);
   await refreshStatus();
@@ -1071,6 +1261,11 @@ $("accessRequestForm")?.addEventListener("submit", (e) => {
 });
 $("testConnBtn")?.addEventListener("click", () => testServerConnection().catch((e) => showToast(e.message, "error")));
 $("gotoAccessRequestsBtn")?.addEventListener("click", () => openSub("sub-access-requests"));
+$("gotoUsersBtn")?.addEventListener("click", () => openSub("sub-users"));
+$("addUserBtn")?.addEventListener("click", () => openUserForm("add"));
+$("saveUserBtn")?.addEventListener("click", () => saveUserFromForm().catch((e) => showToast(e.message, "error")));
+$("deleteUserBtn")?.addEventListener("click", () => deleteUserFromForm().catch((e) => showToast(e.message, "error")));
+$("userForm")?.addEventListener("submit", (e) => e.preventDefault());
 $("faceIdBtn")?.addEventListener("click", () => showToast("Sinh trắc học chưa hỗ trợ trên bản demo"));
 
 $("loginForm").addEventListener("submit", async (e) => {
@@ -1123,9 +1318,9 @@ $("testSoundBtn")?.addEventListener("click", () => {
     if ($("toggleSound")) $("toggleSound").checked = true;
     saveSoundPreference();
   }
-  ensureAudioContext();
+  unlockAlertAudio();
   playFallAlertSound();
-  showToast(wasOff ? "Đã bật âm thanh và phát thử" : "Đang phát thử cảnh báo");
+  showToast(wasOff ? "Đã bật chuông và phát thử" : "Đang phát chuông cảnh báo");
 });
 
 $("addCameraBtn")?.addEventListener("click", () => openCameraForm("add").catch((e) => showToast(e.message, "error")));
@@ -1134,7 +1329,8 @@ $("editCameraBtn")?.addEventListener("click", () => {
   openCameraForm("edit", selectedCam).catch((e) => showToast(e.message, "error"));
 });
 $("gotoCamerasBtn")?.addEventListener("click", () => switchTab("cameras"));
-$("cameraForm")?.addEventListener("submit", (e) => saveCameraFromForm(e).catch((err) => showToast(err.message, "error")));
+$("saveCameraBtn")?.addEventListener("click", () => saveCameraFromForm().catch((err) => showToast(err.message, "error")));
+$("cameraForm")?.addEventListener("submit", (e) => e.preventDefault());
 $("deleteCameraBtn")?.addEventListener("click", () => deleteCameraFromForm().catch((e) => showToast(e.message, "error")));
 
 document.querySelectorAll(".seg").forEach((seg) => {

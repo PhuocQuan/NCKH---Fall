@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import os
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+_auth_lock = threading.Lock()
+PROVISIONED_ROLES = frozenset({"caregiver", "family", "staff"})
 
 DEFAULT_AUTH_PATH = Path("configs/auth.yaml")
 TOKEN_TTL_SECONDS = 24 * 60 * 60
@@ -42,8 +46,8 @@ class AuthConfig:
         return (self.admin,) + self.users
 
 
-def load_auth_config(path: str | Path = DEFAULT_AUTH_PATH) -> AuthConfig:
-    auth_path = Path(path)
+def load_auth_config(path: str | Path | None = None) -> AuthConfig:
+    auth_path = _resolve_auth_path(path)
     if auth_path.exists():
         import yaml
 
@@ -82,8 +86,146 @@ def load_auth_config(path: str | Path = DEFAULT_AUTH_PATH) -> AuthConfig:
     )
 
 
-def load_credentials(path: str | Path = DEFAULT_AUTH_PATH) -> AuthUser:
+def _resolve_auth_path(path: str | Path | None) -> Path:
+    return Path(path) if path is not None else DEFAULT_AUTH_PATH
+
+
+def load_credentials(path: str | Path | None = None) -> AuthUser:
     return load_auth_config(path).admin
+
+
+def _config_to_yaml_dict(config: AuthConfig) -> dict[str, Any]:
+    return {
+        "username": config.admin.username,
+        "password": config.admin.password,
+        "admin_name": config.admin.full_name,
+        "users": [
+            {
+                "username": user.username,
+                "password": user.password,
+                "full_name": user.full_name,
+                "role": user.role,
+                "enabled": user.enabled,
+            }
+            for user in config.users
+        ],
+    }
+
+
+def save_auth_config(config: AuthConfig, path: str | Path | None = None) -> Path:
+    import yaml
+
+    auth_path = _resolve_auth_path(path)
+    auth_path.parent.mkdir(parents=True, exist_ok=True)
+    text = yaml.safe_dump(_config_to_yaml_dict(config), sort_keys=False, allow_unicode=True)
+    tmp_path = auth_path.with_suffix(".yaml.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    tmp_path.replace(auth_path)
+    return auth_path
+
+
+def list_users_public(path: str | Path | None = None) -> list[dict[str, Any]]:
+    config = load_auth_config(path)
+    admin = config.admin
+    return [
+        {**admin.to_public_dict(), "is_admin": True},
+        *[{**user.to_public_dict(), "is_admin": False} for user in config.users],
+    ]
+
+
+def _validate_provisioned_role(role: str) -> str:
+    role_key = role.strip().lower()
+    if role_key not in PROVISIONED_ROLES:
+        raise ValueError("Vai tro khong hop le (caregiver, family, staff).")
+    return role_key
+
+
+def create_provisioned_user(
+    *,
+    username: str,
+    password: str,
+    full_name: str = "",
+    role: str = "caregiver",
+    enabled: bool = True,
+    path: str | Path | None = None,
+) -> AuthUser:
+    name = username.strip()
+    if not name:
+        raise ValueError("Thieu ten dang nhap.")
+    if not password:
+        raise ValueError("Thieu mat khau.")
+    if is_admin_username(name):
+        raise ValueError("Khong the tao tai khoan trung ten admin.")
+    role_key = _validate_provisioned_role(role)
+    with _auth_lock:
+        config = load_auth_config(path)
+        if find_user(name, config) is not None:
+            raise ValueError(f"Ten dang nhap da ton tai: {name}")
+        user = AuthUser(
+            username=name,
+            password=password,
+            role=role_key,
+            full_name=full_name.strip() or name,
+            enabled=enabled,
+        )
+        save_auth_config(AuthConfig(admin=config.admin, users=config.users + (user,)), path)
+        return user
+
+
+def update_provisioned_user(
+    username: str,
+    *,
+    password: str | None = None,
+    full_name: str | None = None,
+    role: str | None = None,
+    enabled: bool | None = None,
+    path: str | Path | None = None,
+) -> AuthUser:
+    target = username.strip()
+    with _auth_lock:
+        config = load_auth_config(path)
+        if is_admin_username(target):
+            admin = config.admin
+            updated_admin = AuthUser(
+                username=admin.username,
+                password=password if password else admin.password,
+                role="admin",
+                full_name=(full_name.strip() if full_name is not None else admin.full_name) or admin.username,
+                enabled=True,
+            )
+            save_auth_config(AuthConfig(admin=updated_admin, users=config.users), path)
+            return updated_admin
+
+        updated_users: list[AuthUser] = []
+        found: AuthUser | None = None
+        for user in config.users:
+            if user.username != target:
+                updated_users.append(user)
+                continue
+            found = AuthUser(
+                username=user.username,
+                password=password if password else user.password,
+                role=_validate_provisioned_role(role) if role is not None else user.role,
+                full_name=(full_name.strip() if full_name is not None else user.full_name) or user.username,
+                enabled=user.enabled if enabled is None else enabled,
+            )
+            updated_users.append(found)
+        if found is None:
+            raise ValueError(f"Khong tim thay nguoi dung: {target}")
+        save_auth_config(AuthConfig(admin=config.admin, users=tuple(updated_users)), path)
+        return found
+
+
+def delete_provisioned_user(username: str, path: str | Path | None = None) -> None:
+    target = username.strip()
+    if is_admin_username(target):
+        raise ValueError("Khong the xoa tai khoan admin.")
+    with _auth_lock:
+        config = load_auth_config(path)
+        remaining = tuple(user for user in config.users if user.username != target)
+        if len(remaining) == len(config.users):
+            raise ValueError(f"Khong tim thay nguoi dung: {target}")
+        save_auth_config(AuthConfig(admin=config.admin, users=remaining), path)
 
 
 def find_user(username: str, config: AuthConfig | None = None) -> AuthUser | None:

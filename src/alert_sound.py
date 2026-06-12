@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from pathlib import Path
 
 from src.fall_detector import FallState
 from src.ui_overlay import FALL_ALARM_STATES
@@ -11,6 +12,23 @@ try:
 except Exception:  # pragma: no cover
     winsound = None  # type: ignore
 
+ALERT_SOUND_FILE = (
+    Path(__file__).resolve().parent.parent / "mobile" / "web" / "sounds" / "fall_alert.wav"
+)
+
+
+def _play_beep_fallback() -> None:
+    if winsound is None:
+        return
+    try:
+        for _ in range(3):
+            winsound.Beep(880, 300)
+    except Exception:
+        try:
+            winsound.MessageBeep(winsound.MB_ICONHAND)
+        except Exception:
+            return
+
 
 def play_alert_sound() -> None:
     """Play a fall alert sound without blocking the video loop."""
@@ -18,17 +36,19 @@ def play_alert_sound() -> None:
     if winsound is None:
         return
 
-    def _beep() -> None:
-        try:
-            for _ in range(3):
-                winsound.Beep(880, 300)
-        except Exception:
+    def _play() -> None:
+        if ALERT_SOUND_FILE.is_file():
             try:
-                winsound.MessageBeep(winsound.MB_ICONHAND)
-            except Exception:
+                winsound.PlaySound(
+                    str(ALERT_SOUND_FILE),
+                    winsound.SND_FILENAME | winsound.SND_ASYNC,
+                )
                 return
+            except Exception:
+                pass
+        _play_beep_fallback()
 
-    threading.Thread(target=_beep, daemon=True).start()
+    threading.Thread(target=_play, daemon=True).start()
 
 
 class FallAlarmTracker:

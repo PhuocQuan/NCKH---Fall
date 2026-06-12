@@ -92,6 +92,9 @@ body.theme-dark { --bg: #0f172a; --surface: #1e293b; --text: #f1f5f9; --text-2: 
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 0 12px; }
 .page-header.simple h1, .page-header.cam-header h1 { font-size: 1.5rem; font-weight: 800; }
 .page-header.cam-header { align-items: center; }
+.sub-header.user-header { display: flex; align-items: center; gap: 10px; }
+.sub-header.user-header h2 { flex: 1; margin: 0; }
+.user-row-actions { display: flex; gap: 8px; margin-top: 8px; }
 .cam-hint { font-size: .78rem; color: var(--text-2); margin: -4px 0 12px; }
 .cam-source-box { margin-bottom: 14px; }
 .camera-form { display: flex; flex-direction: column; gap: 14px; }

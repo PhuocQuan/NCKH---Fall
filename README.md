@@ -16,11 +16,14 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 ### Ứng dụng
 - **CLI** (`app.py`): overlay OpenCV, phím `q` thoát, `r` reset.
 - **Desktop** (`desktop_app.py`): giao diện Tkinter 3 tab — **Giám sát / Cài đặt / Nhật ký**.
-- Pipeline chung (`pipeline.py`) cho cả CLI và desktop.
-- Quét và chọn webcam, chọn file video/config.
-- Cảnh báo âm thanh (beep Windows), lưu **snapshot** khi alert (`data/snapshots/`).
+- **Mobile / Web** (`mobile/web/` + `api_server.py`): app **Guardian Watch** — login, giám sát, cảnh báo, quản lý camera (admin).
+- **APK Android** (Capacitor): xem [`docs/BUILD_APK.md`](docs/BUILD_APK.md).
+- Pipeline chung (`pipeline.py`) cho CLI, desktop và API mobile.
+- Quét và chọn webcam, chọn file video/config; hỗ trợ RTSP.
+- Cảnh báo âm thanh (chuông WAV + beep Windows), lưu **snapshot** khi alert (`data/snapshots/`).
 - Thanh tiến trình đếm thời gian nằm; event log CSV với session mode.
 - Cài đặt người dùng lưu trong `configs/user.yaml` (profile, thời gian cảnh báo, skeleton, snapshot).
+- Tài khoản do **admin cấp**; quản lý user + yêu cầu truy cập trên app.
 - Phím tắt desktop: **Space** Start/Stop, **R** Reset.
 
 ### Đánh giá & AI (sẵn sàng code, chờ dữ liệu)
@@ -29,8 +32,9 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 - Model AI tắt mặc định (`ai.enabled: false`); bật sau khi train xong.
 
 ### Chất lượng
-- **48** unit test (`pytest`), bao gồm detector, pipeline, API mobile, event log, settings, snapshot.
+- **75** unit test (`pytest`), bao gồm detector, pipeline, API mobile, auth, camera, event log, settings, snapshot.
 - Kiểm tra môi trường: `check_environment`, `check_camera`.
+- Tiến độ công việc chi tiết: [`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md).
 
 ## Cấu trúc thư mục
 
@@ -38,7 +42,11 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 NCKH---Fall/
 ├── configs/
 │   ├── default.yaml      # Ngưỡng detector, pose, AI
-│   └── user.yaml         # Cài đặt desktop (tự lưu từ app)
+│   ├── user.yaml         # Cài đặt desktop (tự lưu từ app)
+│   ├── cameras.yaml      # Danh sách camera (mặc định trống; admin thêm qua app)
+│   ├── auth.yaml         # Tài khoản admin + users (không commit — dùng .example)
+│   ├── cameras.yaml.example
+│   └── auth.yaml.example
 ├── data/
 │   ├── events.csv        # Log sự kiện
 │   ├── snapshots/        # Ảnh khi cảnh báo
@@ -62,8 +70,13 @@ NCKH---Fall/
 │   ├── snapshot.py       # Lưu ảnh alert
 │   ├── api_server.py     # API + web mobile
 │   ├── mobile_service.py # Pipeline chạy nền cho API
+│   ├── auth.py           # Đăng nhập, quản lý user
+│   ├── camera_registry.py
+│   ├── access_requests.py
 │   └── ...               # AI, evaluate, train scripts
-├── mobile/web/           # Giao diện điện thoại (HTML/CSS/JS)
+├── mobile/
+│   ├── web/              # Giao diện Guardian Watch (HTML/CSS/JS)
+│   └── android-app/      # Capacitor — build APK
 └── tests/
 ```
 
@@ -107,7 +120,7 @@ python -m src.desktop_app
 python -m src.api_server --host 0.0.0.0 --port 8000
 ```
 
-Trên điện thoại mở `http://<IP-laptop>:8000` (ví dụ `http://192.168.1.5:8000`).
+Terminal sẽ in link `http://127.0.0.1:8000` và IP WiFi/LAN (ví dụ `http://192.168.1.10:8000`) — nhập link đó vào app mobile.
 
 Chi tiết: [`docs/MOBILE_APP.md`](docs/MOBILE_APP.md)
 
@@ -160,7 +173,7 @@ Profile có sẵn: `default`, `elderly` (ngưỡng nhạy hơn cho người già
 python -m pytest
 ```
 
-Kết quả mong đợi: **48 test pass**.
+Kết quả mong đợi: **75 test pass**.
 
 ## Đánh giá & huấn luyện AI
 
@@ -201,18 +214,35 @@ Camera / Video / RTSP
  DecisionFusion + AI (tùy chọn)
         ↓
   Overlay + EventLogger + Snapshot + AlertSound
+        ↓
+  Desktop (Tkinter)  |  Mobile API (FastAPI) → Web/APK
 ```
 
 Chi tiết module: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
+### Luồng mobile (Guardian Watch)
+
+```text
+Điện thoại/APK → HTTP/WS → api_server.py
+        ↓
+  Đăng nhập (auth.yaml) → Chọn camera → Start giám sát
+        ↓
+  mobile_service.py (pipeline) → MJPEG stream + JSON status
+        ↓
+  Cảnh báo: banner + chuông WAV + màn hình khẩn cấp
+```
+
 ## Tiến độ dự án
 
-| Giai đoạn | Nội dung | Trạng thái |
-|-----------|----------|------------|
-| G1–G2 | Khảo sát, core pipeline, detector | Hoàn thành |
-| G3–G4 | Desktop app, tối ưu, settings, test | Hoàn thành |
-| G5 | Thu video, metric, train AI | Chưa có dữ liệu |
-| G6 | Báo cáo, slide, demo bảo vệ | Chưa làm |
+Bảng chi tiết đầy đủ (35 hạng mục, luồng hoạt động, ngôn ngữ lập trình): **[`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md)**
+
+| Giai đoạn | Nội dung | STT | Trạng thái |
+|-----------|----------|-----|------------|
+| G1–G2 | Core pipeline, detector, CLI | 1–5 | Hoàn thành |
+| G3–G4 | Desktop app, tối ưu, settings, pytest | 6–19 | Hoàn thành |
+| G5-mobile | API, Guardian Watch, APK, auth, camera, user | 20–32 | Hoàn thành |
+| G5-AI | Thu video, metric, train AI | 34 | Chưa có dữ liệu |
+| G6 | Báo cáo, slide, demo bảo vệ | 33, 35 | Chưa làm |
 
 ## Tài liệu tham khảo trong repo
 
@@ -223,6 +253,9 @@ Chi tiết module: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Kiến trúc hệ thống |
 | [`docs/FALL_DETECTION_LOGIC.md`](docs/FALL_DETECTION_LOGIC.md) | Logic phát hiện té ngã |
 | [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) | Tích hợp & train AI |
+| [`docs/MOBILE_APP.md`](docs/MOBILE_APP.md) | Hướng dẫn app mobile / API |
+| [`docs/BUILD_APK.md`](docs/BUILD_APK.md) | Build APK Android |
+| [`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md) | Bảng tiến độ công việc NCKH |
 
 ## Hướng phát triển
 

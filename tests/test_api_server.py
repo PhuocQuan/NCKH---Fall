@@ -100,6 +100,17 @@ def test_mobile_web_index():
     assert "Thông báo" in response.text
 
 
+def test_mobile_alert_sound_asset():
+    from pathlib import Path
+
+    sound = Path("mobile/web/sounds/fall_alert.wav")
+    assert sound.is_file()
+    assert sound.stat().st_size > 1000
+    response = client.get("/sounds/fall_alert.wav")
+    assert response.status_code == 200
+    assert response.headers.get("content-type", "").startswith("audio/")
+
+
 def test_auth_me():
     headers = auth_headers()
     response = client.get("/api/auth/me", headers=headers)
@@ -144,6 +155,18 @@ def test_cameras_crud(tmp_path, monkeypatch):
     )
     assert updated.status_code == 200
     assert updated.json()["camera"]["enabled"] is False
+
+
+def test_cameras_empty_by_default(tmp_path, monkeypatch):
+    from src import camera_registry
+
+    cameras_file = tmp_path / "cameras.yaml"
+    cameras_file.write_text("cameras: []\n", encoding="utf-8")
+    monkeypatch.setattr(camera_registry, "DEFAULT_CAMERAS_PATH", cameras_file)
+    headers = auth_headers()
+    listed = client.get("/api/cameras", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()["cameras"] == []
 
 
 def test_non_admin_cannot_modify_cameras(tmp_path, monkeypatch):

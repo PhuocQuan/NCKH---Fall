@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import socket
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -15,12 +16,15 @@ from pydantic import BaseModel
 
 from src.access_requests import create_request, list_requests, update_request_status
 from src.auth import (
+    create_provisioned_user,
     create_token,
+    delete_provisioned_user,
     find_user,
     get_token_username,
     is_admin_username,
-    load_auth_config,
+    list_users_public,
     revoke_token,
+    update_provisioned_user,
     verify_login,
     verify_token,
 )
@@ -109,6 +113,21 @@ class AccessRequestCreate(BaseModel):
 class AccessRequestReview(BaseModel):
     status: str
     review_note: str = ""
+
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    full_name: str = ""
+    role: str = "caregiver"
+    enabled: bool = True
+
+
+class UserUpdateRequest(BaseModel):
+    password: str | None = None
+    full_name: str | None = None
+    role: str | None = None
+    enabled: bool | None = None
 
 
 def _extract_token(
@@ -292,6 +311,63 @@ def download_events_csv(_token: Annotated[str, Depends(require_auth)]) -> FileRe
     return FileResponse(path, media_type="text/csv", filename=path.name)
 
 
+@app.get("/api/users")
+def get_users(_admin: Annotated[str, Depends(require_admin)]) -> dict[str, Any]:
+    return {"users": list_users_public()}
+
+
+@app.post("/api/users")
+def add_user(
+    body: UserCreateRequest,
+    _admin: Annotated[str, Depends(require_admin)],
+) -> dict[str, Any]:
+    try:
+        user = create_provisioned_user(
+            username=body.username,
+            password=body.password,
+            full_name=body.full_name,
+            role=body.role,
+            enabled=body.enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "user": {**user.to_public_dict(), "is_admin": False}}
+
+
+@app.patch("/api/users/{username}")
+def patch_user(
+    username: str,
+    body: UserUpdateRequest,
+    _admin: Annotated[str, Depends(require_admin)],
+) -> dict[str, Any]:
+    try:
+        user = update_provisioned_user(
+            username,
+            password=body.password,
+            full_name=body.full_name,
+            role=body.role,
+            enabled=body.enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "user": {**user.to_public_dict(), "is_admin": is_admin_username(user.username)},
+    }
+
+
+@app.delete("/api/users/{username}")
+def remove_user(
+    username: str,
+    _admin: Annotated[str, Depends(require_admin)],
+) -> dict[str, bool]:
+    try:
+        delete_provisioned_user(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @app.get("/api/cameras")
 def list_cameras(_token: Annotated[str, Depends(require_auth)]) -> dict[str, Any]:
     return list_cameras_payload()
@@ -442,6 +518,53 @@ if MOBILE_WEB_DIR.exists():
     app.mount("/", StaticFiles(directory=str(MOBILE_WEB_DIR), html=True), name="mobile-web")
 
 
+def _is_private_lan_ip(ip: str) -> bool:
+    if ip.startswith("10.") or ip.startswith("192.168."):
+        return True
+    parts = ip.split(".")
+    if len(parts) == 4 and parts[0] == "172":
+        try:
+            return 16 <= int(parts[1]) <= 31
+        except ValueError:
+            return False
+    return False
+
+
+def _local_ipv4_addresses() -> list[str]:
+    found: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            found.append(sock.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip.startswith("127.") or ip in found or not _is_private_lan_ip(ip):
+                continue
+            found.append(ip)
+    except OSError:
+        pass
+    return found
+
+
+def _print_server_urls(host: str, port: int) -> None:
+    print("\n=== NCKH Fall Detection Server ===")
+    print(f"  May nay:     http://127.0.0.1:{port}")
+    if host in {"0.0.0.0", "::"}:
+        ips = _local_ipv4_addresses()
+        if ips:
+            print("  Dien thoai / may khac (cung WiFi):")
+            for ip in ips:
+                print(f"               http://{ip}:{port}")
+        else:
+            print(f"  Mang LAN:    http://<IP-may>:{port}  (xem ipconfig)")
+    else:
+        print(f"  Dang lang nghe: http://{host}:{port}")
+    print("  Nhap link tren vao app APK o muc Cai dat > Ket noi may chu\n")
+
+
 def main() -> None:
     import uvicorn
 
@@ -449,6 +572,7 @@ def main() -> None:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args()
+    _print_server_urls(args.host, args.port)
     uvicorn.run(app, host=args.host, port=args.port)
 
 

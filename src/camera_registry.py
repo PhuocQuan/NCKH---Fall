@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+_registry_lock = threading.Lock()
 
 DEFAULT_CAMERAS_PATH = Path("configs/cameras.yaml")
 _CAMERA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
@@ -73,10 +76,10 @@ def save_cameras(cameras: list[CameraEntry], path: str | Path | None = None) -> 
     settings_path = _resolve_path(path)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"cameras": [camera.to_dict() for camera in cameras]}
-    settings_path.write_text(
-        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+    tmp_path = settings_path.with_suffix(".yaml.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    tmp_path.replace(settings_path)
     return settings_path
 
 
@@ -112,16 +115,17 @@ def create_camera(
     camera_id: str | None = None,
     path: str | Path | None = None,
 ) -> CameraEntry:
-    cameras = load_cameras(path)
-    new_id = _normalize_id(camera_id) if camera_id else suggest_camera_id(cameras)
-    if any(camera.id == new_id for camera in cameras):
-        raise ValueError(f"Ma camera da ton tai: {new_id}")
-    entry = _parse_entry(
-        {"id": new_id, "name": name, "room": room, "source": source, "enabled": enabled}
-    )
-    cameras.append(entry)
-    save_cameras(cameras, path)
-    return entry
+    with _registry_lock:
+        cameras = load_cameras(path)
+        new_id = _normalize_id(camera_id) if camera_id else suggest_camera_id(cameras)
+        if any(camera.id == new_id for camera in cameras):
+            raise ValueError(f"Ma camera da ton tai: {new_id}")
+        entry = _parse_entry(
+            {"id": new_id, "name": name, "room": room, "source": source, "enabled": enabled}
+        )
+        cameras.append(entry)
+        save_cameras(cameras, path)
+        return entry
 
 
 def update_camera(
@@ -133,37 +137,39 @@ def update_camera(
     enabled: bool,
     path: str | Path | None = None,
 ) -> CameraEntry:
-    target = _normalize_id(camera_id)
-    cameras = load_cameras(path)
-    updated: list[CameraEntry] = []
-    found: CameraEntry | None = None
-    for camera in cameras:
-        if camera.id != target:
-            updated.append(camera)
-            continue
-        found = _parse_entry(
-            {
-                "id": target,
-                "name": name,
-                "room": room,
-                "source": source,
-                "enabled": enabled,
-            }
-        )
-        updated.append(found)
-    if found is None:
-        raise ValueError(f"Khong tim thay camera: {target}")
-    save_cameras(updated, path)
-    return found
+    with _registry_lock:
+        target = _normalize_id(camera_id)
+        cameras = load_cameras(path)
+        updated: list[CameraEntry] = []
+        found: CameraEntry | None = None
+        for camera in cameras:
+            if camera.id != target:
+                updated.append(camera)
+                continue
+            found = _parse_entry(
+                {
+                    "id": target,
+                    "name": name,
+                    "room": room,
+                    "source": source,
+                    "enabled": enabled,
+                }
+            )
+            updated.append(found)
+        if found is None:
+            raise ValueError(f"Khong tim thay camera: {target}")
+        save_cameras(updated, path)
+        return found
 
 
 def delete_camera(camera_id: str, path: str | Path | None = None) -> None:
-    target = _normalize_id(camera_id)
-    cameras = load_cameras(path)
-    remaining = [camera for camera in cameras if camera.id != target]
-    if len(remaining) == len(cameras):
-        raise ValueError(f"Khong tim thay camera: {target}")
-    save_cameras(remaining, path)
+    with _registry_lock:
+        target = _normalize_id(camera_id)
+        cameras = load_cameras(path)
+        remaining = [camera for camera in cameras if camera.id != target]
+        if len(remaining) == len(cameras):
+            raise ValueError(f"Khong tim thay camera: {target}")
+        save_cameras(remaining, path)
 
 
 def resolve_start_source(

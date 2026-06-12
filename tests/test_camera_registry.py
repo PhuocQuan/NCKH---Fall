@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -75,3 +76,22 @@ def test_suggest_camera_id(cameras_path: Path) -> None:
         cameras_path,
     )
     assert suggest_camera_id(load_cameras(cameras_path)) == "CAM-02"
+
+
+def test_concurrent_create_assigns_unique_ids(cameras_path: Path) -> None:
+    def add_camera(index: int) -> str:
+        entry = create_camera(
+            camera_id=f"CAM-{index:02d}",
+            name=f"Phong {index}",
+            room="Tang 1",
+            source="0",
+            enabled=True,
+            path=cameras_path,
+        )
+        return entry.id
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        ids = list(pool.map(add_camera, range(1, 6)))
+
+    assert len(set(ids)) == 5
+    assert len(load_cameras(cameras_path)) == 5
