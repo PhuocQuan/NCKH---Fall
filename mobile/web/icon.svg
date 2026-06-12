@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#16345f"/>
+  <circle cx="96" cy="70" r="24" fill="#e8eef7"/>
+  <rect x="72" y="98" width="48" height="56" rx="12" fill="#1b5e20"/>
+  <text x="96" y="170" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="18" fill="#ffffff">NCKH</text>
+</svg>

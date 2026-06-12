@@ -1,0 +1,12 @@
+# Sao chep thanh configs/auth.yaml va doi mat khau truoc khi trien khai.
+username: admin
+password: nckh2025
+admin_name: Quản trị viên NCKH
+
+# Tai khoan do admin cap (khong tu dang ky). Them user sau khi duyet yeu cau truy cap.
+users:
+  - username: caregiver.a
+    password: caregiver2025
+    full_name: Người chăm sóc A
+    role: caregiver
+    enabled: true

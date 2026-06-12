@@ -130,10 +130,10 @@ class FallDetector:
             state = FallState.FALLEN
         elif self._abnormal_frames >= self.config.warning_frames:
             state = FallState.POSSIBLE_FALL
+        elif self._abnormal_frames > 0:
+            state = FallState.WARNING
         elif lying:
             state = FallState.LYING
-        elif self._abnormal_frames >= self.config.warning_frames:
-            state = FallState.WARNING
         else:
             state = FallState.NORMAL
 

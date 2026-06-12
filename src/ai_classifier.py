@@ -33,6 +33,9 @@ class FallAIClassifier:
     def ready(self) -> bool:
         return self.config.enabled and self.model is not None
 
+    def reset(self) -> None:
+        self._recent_probabilities.clear()
+
     def predict(self, features: PoseFeatures) -> AIPrediction:
         if not self.ready:
             return AIPrediction(label="disabled", probability=0.0, enabled=False)

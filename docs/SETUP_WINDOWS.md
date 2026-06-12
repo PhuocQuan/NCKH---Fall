@@ -18,7 +18,7 @@ Sau khi cai xong, dong PowerShell hien tai va mo lai PowerShell moi.
 ## 2. Tao moi truong ao
 
 ```powershell
-cd D:\NCKH
+cd D:\NCKH\NCKH---Fall
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -41,6 +41,7 @@ python -m src.check_camera --camera 1
 
 ```powershell
 pip install -r requirements.txt
+python -m src.check_environment
 python -m src.app --source 0
 ```
 

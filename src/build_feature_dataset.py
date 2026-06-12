@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 
+from src.config import load_config
 from src.feature_extractor import FEATURE_NAMES, LandmarkFeatureBuffer
 from src.pose_estimator import PoseEstimator
 
@@ -16,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default="data/features.csv", help="Output CSV path.")
     parser.add_argument("--window-size", type=int, default=30, help="Frames per feature window.")
     parser.add_argument("--stride", type=int, default=10, help="Write one sample every N frames.")
+    parser.add_argument("--config", default="configs/default.yaml", help="YAML config path.")
     return parser.parse_args()
 
 
@@ -33,7 +35,8 @@ def main() -> None:
     if not video_paths:
         raise ValueError(f"Khong tim thay video trong {input_root}")
 
-    estimator = PoseEstimator(static_image_mode=False)
+    config = load_config(args.config)
+    estimator = PoseEstimator(config.pose)
     rows_written = 0
     try:
         with output.open("w", newline="", encoding="utf-8") as file:
@@ -75,13 +78,13 @@ def _process_video(
             ok, frame = capture.read()
             if not ok:
                 break
-            points, _ = estimator.estimate(frame)
-            if points is None:
+            pose_estimate = estimator.estimate(frame)
+            if pose_estimate.points is None:
                 buffer.reset()
                 frame_index += 1
                 continue
 
-            features = buffer.append(points)
+            features = buffer.append(pose_estimate.points)
             if frame_index >= window_size and frame_index % stride == 0:
                 writer.writerow([str(video_path), label, *features.values.tolist()])
                 rows += 1

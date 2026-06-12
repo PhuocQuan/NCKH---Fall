@@ -78,6 +78,25 @@ def _normalize_source(source: int | str) -> int | str:
     return text
 
 
+def scan_cameras(
+    max_index: int = 4,
+    width: int = 640,
+    height: int = 480,
+) -> list[SourceInfo]:
+    """Probe webcam indices from 0 to max_index - 1."""
+
+    found: list[SourceInfo] = []
+    for index in range(max(0, max_index)):
+        info = probe_camera(index, width=width, height=height)
+        if info is not None:
+            found.append(info)
+    return found
+
+
+def format_camera_label(info: SourceInfo) -> str:
+    return f"{info.source} ({info.width}x{info.height} @ {info.fps:.0f}fps)"
+
+
 def probe_camera(index: int, width: int = 640, height: int = 480) -> SourceInfo | None:
     capture = cv2.VideoCapture(index)
     capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)

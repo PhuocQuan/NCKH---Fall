@@ -27,6 +27,16 @@ class AppConfig:
     camera_height: int = 720
     draw_landmarks: bool = True
     event_log_path: str = "data/events.csv"
+    max_pose_lost_frames: int = 15
+
+
+@dataclass(frozen=True)
+class PoseConfig:
+    input_width: int = 640
+    input_height: int = 360
+    model_complexity: int = 0
+    min_detection_confidence: float = 0.5
+    min_tracking_confidence: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -35,12 +45,15 @@ class AIConfig:
     model_path: str = "models/fall_classifier.joblib"
     alert_probability: float = 0.70
     smoothing_frames: int = 5
+    decision_mode: str = "display"
+    assist_min_frames: int = 5
 
 
 @dataclass(frozen=True)
 class ProjectConfig:
     detector: DetectorConfig = DetectorConfig()
     app: AppConfig = AppConfig()
+    pose: PoseConfig = PoseConfig()
     ai: AIConfig = AIConfig()
 
 
@@ -59,5 +72,6 @@ def load_config(path: str | Path = "configs/default.yaml") -> ProjectConfig:
     data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     detector = DetectorConfig(**_section(data, "detector"))
     app = AppConfig(**_section(data, "app"))
+    pose = PoseConfig(**_section(data, "pose"))
     ai = AIConfig(**_section(data, "ai"))
-    return ProjectConfig(detector=detector, app=app, ai=ai)
+    return ProjectConfig(detector=detector, app=app, pose=pose, ai=ai)

@@ -17,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv", required=True, help="Training CSV path.")
     parser.add_argument("--output", default="models/fall_classifier.joblib", help="Output model path.")
     parser.add_argument("--label-column", default="label", help="Label column name.")
+    parser.add_argument("--report", help="Optional text report path. Defaults to <output>.report.txt.")
     return parser.parse_args()
 
 
@@ -46,13 +47,34 @@ def main() -> None:
     model.fit(x_train, y_train)
 
     predictions = model.predict(x_test)
-    print(classification_report(y_test, predictions))
-    print(confusion_matrix(y_test, predictions))
+    report_text = classification_report(y_test, predictions)
+    matrix_text = str(confusion_matrix(y_test, predictions))
+    print(report_text)
+    print(matrix_text)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, output)
     print(f"Saved model to {output}")
+
+    report_path = Path(args.report) if args.report else output.with_suffix(".report.txt")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        "\n".join(
+            [
+                f"csv: {args.csv}",
+                f"model: {output}",
+                "",
+                "classification_report:",
+                report_text,
+                "confusion_matrix:",
+                matrix_text,
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    print(f"Saved report to {report_path}")
 
 
 if __name__ == "__main__":
