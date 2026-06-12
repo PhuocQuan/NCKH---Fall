@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.cloud_db import use_cloud_storage
+
 DEFAULT_REQUESTS_PATH = Path("data/access_requests.json")
 VALID_ROLES = frozenset({"caregiver", "family", "staff"})
 VALID_STATUS = frozenset({"pending", "approved", "rejected"})
@@ -61,6 +63,10 @@ def list_requests(
     status: str | None = None,
     path: Path | None = None,
 ) -> list[AccessRequest]:
+    if path is None and use_cloud_storage():
+        from src.cloud_sync import list_access_requests_cloud
+
+        return [_parse_request(item) for item in list_access_requests_cloud(status=status)]
     items = _load_raw(_resolve_path(path))
     requests = [_parse_request(item) for item in items]
     if status:
@@ -94,6 +100,18 @@ def create_request(
         if existing.status == "pending" and existing.email == mail and mail:
             raise ValueError("Email nay da co yeu cau dang cho duyet.")
 
+    if path is None and use_cloud_storage():
+        from src.cloud_sync import create_access_request_cloud
+
+        raw = create_access_request_cloud(
+            full_name=name,
+            email=mail,
+            phone=tel,
+            role=role_key,
+            message=message.strip(),
+        )
+        return _parse_request(raw)
+
     entry = AccessRequest(
         id=uuid.uuid4().hex[:12],
         full_name=name,
@@ -117,10 +135,20 @@ def update_request_status(
     review_note: str = "",
     path: Path | None = None,
 ) -> AccessRequest:
-    store = _resolve_path(path)
     target_status = status.strip().lower()
     if target_status not in VALID_STATUS:
         raise ValueError("Trang thai khong hop le.")
+    if path is None and use_cloud_storage():
+        from src.cloud_sync import update_access_request_cloud
+
+        raw = update_access_request_cloud(
+            request_id,
+            status=target_status,
+            review_note=review_note,
+        )
+        return _parse_request(raw)
+
+    store = _resolve_path(path)
     items = _load_raw(store)
     updated: AccessRequest | None = None
     for index, item in enumerate(items):
@@ -140,15 +168,17 @@ def update_request_status(
 
 
 def _parse_request(raw: dict[str, Any]) -> AccessRequest:
+    created_at = raw.get("created_at", "")
+    reviewed_at = raw.get("reviewed_at")
     return AccessRequest(
         id=str(raw.get("id", "")),
         full_name=str(raw.get("full_name", "")),
-        email=str(raw.get("email", "")),
-        phone=str(raw.get("phone", "")),
+        email=str(raw.get("email", "") or ""),
+        phone=str(raw.get("phone", "") or ""),
         role=str(raw.get("role", "caregiver")),
-        message=str(raw.get("message", "")),
+        message=str(raw.get("message", "") or ""),
         status=str(raw.get("status", "pending")),
-        created_at=str(raw.get("created_at", "")),
-        reviewed_at=raw.get("reviewed_at"),
+        created_at=str(created_at),
+        reviewed_at=str(reviewed_at) if reviewed_at is not None else None,
         review_note=raw.get("review_note"),
     )

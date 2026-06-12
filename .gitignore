@@ -5,6 +5,7 @@ __pycache__/
 repo-push-temp/
 data/events.csv
 data/access_requests.json
+data/patient_profiles.json
 data/snapshots/
 data/evaluation/*.csv
 data/features/*.csv
@@ -14,3 +15,5 @@ data/videos/sleeping/
 models/*.joblib
 models/*.report.txt
 configs/auth.yaml
+.env
+.env.local

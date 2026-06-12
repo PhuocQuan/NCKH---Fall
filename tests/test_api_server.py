@@ -138,6 +138,7 @@ def test_cameras_crud(tmp_path, monkeypatch):
             "room": "Tang 2",
             "source": "0",
             "enabled": True,
+            "assigned_users": ["admin"],
         },
     )
     assert created.status_code == 200
@@ -210,3 +211,114 @@ def test_non_admin_cannot_modify_cameras(tmp_path, monkeypatch):
     assert client.post("/api/cameras", headers=headers, json=body).status_code == 403
     assert client.put("/api/cameras/CAM-88", headers=headers, json=body).status_code == 403
     assert client.delete("/api/cameras/CAM-88", headers=headers).status_code == 403
+
+
+def test_user_only_sees_assigned_cameras(tmp_path, monkeypatch):
+    from src import auth, camera_registry
+    from src.auth import AuthConfig, AuthUser
+
+    cfg = AuthConfig(
+        admin=AuthUser(username="admin", password="nckh2025", role="admin", full_name="Admin"),
+        users=(
+            AuthUser(
+                username="caregiver",
+                password="pass123",
+                role="caregiver",
+                full_name="Caregiver",
+            ),
+        ),
+    )
+    monkeypatch.setattr(auth, "load_auth_config", lambda path=None: cfg)
+
+    cameras_file = tmp_path / "cameras.yaml"
+    monkeypatch.setattr(camera_registry, "DEFAULT_CAMERAS_PATH", cameras_file)
+    camera_registry.create_camera(
+        camera_id="CAM-01",
+        name="A",
+        room="R1",
+        source="0",
+        assigned_users=["caregiver"],
+        path=cameras_file,
+    )
+    camera_registry.create_camera(
+        camera_id="CAM-02",
+        name="B",
+        room="R2",
+        source="1",
+        assigned_users=[],
+        path=cameras_file,
+    )
+
+    admin_headers = auth_headers()
+    admin_list = client.get("/api/cameras", headers=admin_headers).json()["cameras"]
+    assert len(admin_list) == 2
+
+    user_login = client.post(
+        "/api/auth/login",
+        json={"username": "caregiver", "password": "pass123"},
+    )
+    user_headers = {"Authorization": f"Bearer {user_login.json()['token']}"}
+    user_list = client.get("/api/cameras", headers=user_headers).json()["cameras"]
+    assert len(user_list) == 1
+    assert user_list[0]["id"] == "CAM-01"
+
+
+def test_patient_profile_endpoint(tmp_path, monkeypatch):
+    from src import profile_service
+
+    monkeypatch.setattr(profile_service, "DEFAULT_PATIENT_PROFILES_PATH", tmp_path / "profiles.json")
+    response = client.get("/api/patient-profile?profile=default", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["profile"]["full_name"] == "Quản trị viên"
+    assert "falls_30_days" in payload["stats"]
+    assert "cameras" in payload
+
+
+def test_patient_profile_roundtrip_is_per_user(tmp_path, monkeypatch):
+    from src import auth, profile_service
+    from src.auth import AuthConfig, AuthUser
+
+    cfg = AuthConfig(
+        admin=AuthUser(username="admin", password="nckh2025", role="admin", full_name="Admin"),
+        users=(
+            AuthUser(
+                username="caregiver",
+                password="pass123",
+                role="caregiver",
+                full_name="Caregiver",
+            ),
+        ),
+    )
+    monkeypatch.setattr(auth, "load_auth_config", lambda path=None: cfg)
+    monkeypatch.setattr(profile_service, "DEFAULT_PATIENT_PROFILES_PATH", tmp_path / "profiles.json")
+
+    user_login = client.post(
+        "/api/auth/login",
+        json={"username": "caregiver", "password": "pass123"},
+    )
+    assert user_login.status_code == 200
+    user_headers = {"Authorization": f"Bearer {user_login.json()['token']}"}
+
+    saved = client.put(
+        "/api/patient-profile?profile=elderly",
+        headers=user_headers,
+        json={
+            "full_name": "Bà Mai",
+            "age_label": "80 tuổi",
+            "room_label": "Phòng 202",
+            "date_of_birth": "01/01/1946",
+            "blood_type": "A+",
+            "medical_conditions": "Tiểu đường",
+            "emergency_contact": "Con trai 0901234567",
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["profile"]["full_name"] == "Bà Mai"
+
+    user_profile = client.get("/api/patient-profile?profile=elderly", headers=user_headers)
+    assert user_profile.json()["profile"]["room_label"] == "Phòng 202"
+
+    admin_profile = client.get("/api/patient-profile?profile=elderly", headers=auth_headers())
+    assert admin_profile.json()["profile"]["full_name"] == "Admin"

@@ -5,8 +5,8 @@ admin_name: Quản trị viên NCKH
 
 # Tai khoan do admin cap (khong tu dang ky). Them user sau khi duyet yeu cau truy cap.
 users:
-  - username: caregiver.lan
-    password: lan2025
-    full_name: Nguyễn Thị Lan
+  - username: caregiver.a
+    password: caregiver2025
+    full_name: Người chăm sóc A
     role: caregiver
     enabled: true

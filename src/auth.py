@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.cloud_db import use_cloud_storage
+
 _auth_lock = threading.Lock()
 PROVISIONED_ROLES = frozenset({"caregiver", "family", "staff"})
 
@@ -46,7 +48,34 @@ class AuthConfig:
         return (self.admin,) + self.users
 
 
+def _hash_password(plain: str) -> str:
+    import bcrypt
+
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+
+
+def _check_password(plain: str, stored: str) -> bool:
+    if stored.startswith("$2"):
+        try:
+            import bcrypt
+
+            return bcrypt.checkpw(plain.encode(), stored.encode())
+        except Exception:
+            return False
+    return secrets.compare_digest(plain, stored)
+
+
+def _use_yaml_storage(path: str | Path | None) -> bool:
+    return path is not None or not use_cloud_storage()
+
+
 def load_auth_config(path: str | Path | None = None) -> AuthConfig:
+    if _use_yaml_storage(path):
+        return _load_auth_config_yaml(path)
+    return _load_auth_config_cloud()
+
+
+def _load_auth_config_yaml(path: str | Path | None = None) -> AuthConfig:
     auth_path = _resolve_auth_path(path)
     if auth_path.exists():
         import yaml
@@ -86,6 +115,43 @@ def load_auth_config(path: str | Path | None = None) -> AuthConfig:
     )
 
 
+def _row_to_user(row: Any, *, is_admin: bool) -> AuthUser:
+    return AuthUser(
+        username=str(row["username"]).strip(),
+        password=str(row["password_hash"]),
+        role="admin" if is_admin else str(row["role"]),
+        full_name=str(row["full_name"] or row["username"]).strip(),
+        enabled=bool(row["enabled"]),
+    )
+
+
+def _load_auth_config_cloud() -> AuthConfig:
+    from sqlalchemy import text
+
+    from src.cloud_db import get_engine
+
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT username, password_hash, full_name, role, is_admin, enabled
+                FROM users
+                ORDER BY is_admin DESC, id ASC
+                """
+            )
+        ).mappings().all()
+    if not rows:
+        raise RuntimeError("Bang users tren cloud trong. Chay scripts/create_admin_user.py.")
+    admin_row = next((row for row in rows if row["is_admin"]), rows[0])
+    admin = _row_to_user(admin_row, is_admin=True)
+    users = tuple(
+        _row_to_user(row, is_admin=False)
+        for row in rows
+        if not row["is_admin"]
+    )
+    return AuthConfig(admin=admin, users=users)
+
+
 def _resolve_auth_path(path: str | Path | None) -> Path:
     return Path(path) if path is not None else DEFAULT_AUTH_PATH
 
@@ -113,6 +179,8 @@ def _config_to_yaml_dict(config: AuthConfig) -> dict[str, Any]:
 
 
 def save_auth_config(config: AuthConfig, path: str | Path | None = None) -> Path:
+    if not _use_yaml_storage(path):
+        raise RuntimeError("save_auth_config chi dung cho auth.yaml local.")
     import yaml
 
     auth_path = _resolve_auth_path(path)
@@ -154,22 +222,70 @@ def create_provisioned_user(
         raise ValueError("Thieu ten dang nhap.")
     if not password:
         raise ValueError("Thieu mat khau.")
-    if is_admin_username(name):
+    if is_admin_username(name, path=path):
         raise ValueError("Khong the tao tai khoan trung ten admin.")
     role_key = _validate_provisioned_role(role)
     with _auth_lock:
-        config = load_auth_config(path)
-        if find_user(name, config) is not None:
-            raise ValueError(f"Ten dang nhap da ton tai: {name}")
-        user = AuthUser(
+        if _use_yaml_storage(path):
+            config = load_auth_config(path)
+            if find_user(name, config) is not None:
+                raise ValueError(f"Ten dang nhap da ton tai: {name}")
+            user = AuthUser(
+                username=name,
+                password=password,
+                role=role_key,
+                full_name=full_name.strip() or name,
+                enabled=enabled,
+            )
+            save_auth_config(AuthConfig(admin=config.admin, users=config.users + (user,)), path)
+            return user
+        return _create_provisioned_user_cloud(
             username=name,
             password=password,
-            role=role_key,
             full_name=full_name.strip() or name,
+            role=role_key,
             enabled=enabled,
         )
-        save_auth_config(AuthConfig(admin=config.admin, users=config.users + (user,)), path)
-        return user
+
+
+def _create_provisioned_user_cloud(
+    *,
+    username: str,
+    password: str,
+    full_name: str,
+    role: str,
+    enabled: bool,
+) -> AuthUser:
+    from sqlalchemy import text
+
+    from src.cloud_db import get_engine
+
+    if find_user(username) is not None:
+        raise ValueError(f"Ten dang nhap da ton tai: {username}")
+    password_hash = _hash_password(password)
+    with get_engine().begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO users (username, password_hash, full_name, role, is_admin, enabled)
+                VALUES (:username, :password_hash, :full_name, :role, FALSE, :enabled)
+                """
+            ),
+            {
+                "username": username,
+                "password_hash": password_hash,
+                "full_name": full_name,
+                "role": role,
+                "enabled": enabled,
+            },
+        )
+    return AuthUser(
+        username=username,
+        password=password_hash,
+        role=role,
+        full_name=full_name,
+        enabled=enabled,
+    )
 
 
 def update_provisioned_user(
@@ -183,49 +299,126 @@ def update_provisioned_user(
 ) -> AuthUser:
     target = username.strip()
     with _auth_lock:
-        config = load_auth_config(path)
-        if is_admin_username(target):
-            admin = config.admin
-            updated_admin = AuthUser(
-                username=admin.username,
-                password=password if password else admin.password,
-                role="admin",
-                full_name=(full_name.strip() if full_name is not None else admin.full_name) or admin.username,
-                enabled=True,
-            )
-            save_auth_config(AuthConfig(admin=updated_admin, users=config.users), path)
-            return updated_admin
+        if _use_yaml_storage(path):
+            config = load_auth_config(path)
+            if is_admin_username(target, config=config):
+                admin = config.admin
+                updated_admin = AuthUser(
+                    username=admin.username,
+                    password=password if password else admin.password,
+                    role="admin",
+                    full_name=(full_name.strip() if full_name is not None else admin.full_name) or admin.username,
+                    enabled=True,
+                )
+                save_auth_config(AuthConfig(admin=updated_admin, users=config.users), path)
+                return updated_admin
 
-        updated_users: list[AuthUser] = []
-        found: AuthUser | None = None
-        for user in config.users:
-            if user.username != target:
-                updated_users.append(user)
-                continue
-            found = AuthUser(
-                username=user.username,
-                password=password if password else user.password,
-                role=_validate_provisioned_role(role) if role is not None else user.role,
-                full_name=(full_name.strip() if full_name is not None else user.full_name) or user.username,
-                enabled=user.enabled if enabled is None else enabled,
-            )
-            updated_users.append(found)
-        if found is None:
-            raise ValueError(f"Khong tim thay nguoi dung: {target}")
-        save_auth_config(AuthConfig(admin=config.admin, users=tuple(updated_users)), path)
-        return found
+            updated_users: list[AuthUser] = []
+            found: AuthUser | None = None
+            for user in config.users:
+                if user.username != target:
+                    updated_users.append(user)
+                    continue
+                found = AuthUser(
+                    username=user.username,
+                    password=password if password else user.password,
+                    role=_validate_provisioned_role(role) if role is not None else user.role,
+                    full_name=(full_name.strip() if full_name is not None else user.full_name) or user.username,
+                    enabled=user.enabled if enabled is None else enabled,
+                )
+                updated_users.append(found)
+            if found is None:
+                raise ValueError(f"Khong tim thay nguoi dung: {target}")
+            save_auth_config(AuthConfig(admin=config.admin, users=tuple(updated_users)), path)
+            return found
+        return _update_provisioned_user_cloud(
+            target,
+            password=password,
+            full_name=full_name,
+            role=role,
+            enabled=enabled,
+        )
+
+
+def _update_provisioned_user_cloud(
+    username: str,
+    *,
+    password: str | None,
+    full_name: str | None,
+    role: str | None,
+    enabled: bool | None,
+) -> AuthUser:
+    from sqlalchemy import text
+
+    from src.cloud_db import get_engine
+
+    config = load_auth_config()
+    user = find_user(username, config)
+    if user is None:
+        raise ValueError(f"Khong tim thay nguoi dung: {username}")
+
+    new_password = _hash_password(password) if password else user.password
+    new_full_name = (full_name.strip() if full_name is not None else user.full_name) or user.username
+    new_role = _validate_provisioned_role(role) if role is not None else user.role
+    new_enabled = user.enabled if enabled is None else enabled
+    is_admin = is_admin_username(username, config=config)
+
+    with get_engine().begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET password_hash = :password_hash,
+                    full_name = :full_name,
+                    role = :role,
+                    enabled = :enabled
+                WHERE username = :username
+                """
+            ),
+            {
+                "username": username,
+                "password_hash": new_password,
+                "full_name": new_full_name,
+                "role": "admin" if is_admin else new_role,
+                "enabled": True if is_admin else new_enabled,
+            },
+        )
+    return AuthUser(
+        username=username,
+        password=new_password,
+        role="admin" if is_admin else new_role,
+        full_name=new_full_name,
+        enabled=True if is_admin else new_enabled,
+    )
 
 
 def delete_provisioned_user(username: str, path: str | Path | None = None) -> None:
     target = username.strip()
-    if is_admin_username(target):
+    if is_admin_username(target, path=path):
         raise ValueError("Khong the xoa tai khoan admin.")
     with _auth_lock:
-        config = load_auth_config(path)
-        remaining = tuple(user for user in config.users if user.username != target)
-        if len(remaining) == len(config.users):
-            raise ValueError(f"Khong tim thay nguoi dung: {target}")
-        save_auth_config(AuthConfig(admin=config.admin, users=remaining), path)
+        if _use_yaml_storage(path):
+            config = load_auth_config(path)
+            remaining = tuple(user for user in config.users if user.username != target)
+            if len(remaining) == len(config.users):
+                raise ValueError(f"Khong tim thay nguoi dung: {target}")
+            save_auth_config(AuthConfig(admin=config.admin, users=remaining), path)
+            return
+        _delete_provisioned_user_cloud(target)
+
+
+def _delete_provisioned_user_cloud(username: str) -> None:
+    from sqlalchemy import text
+
+    from src.cloud_db import get_engine
+
+    with get_engine().begin() as conn:
+        result = conn.execute(
+            text("DELETE FROM users WHERE username = :username AND is_admin = FALSE"),
+            {"username": username},
+        )
+    if result.rowcount == 0:
+        raise ValueError(f"Khong tim thay nguoi dung: {username}")
 
 
 def find_user(username: str, config: AuthConfig | None = None) -> AuthUser | None:
@@ -241,16 +434,27 @@ def verify_login(username: str, password: str, config: AuthConfig | None = None)
     user = find_user(username, config)
     if user is None or not user.enabled:
         return None
-    if secrets.compare_digest(password, user.password):
-        return user
+    if _check_password(password, user.password):
+        return AuthUser(
+            username=user.username,
+            password=user.password,
+            role=user.role,
+            full_name=user.full_name,
+            enabled=user.enabled,
+        )
     return None
 
 
-def is_admin_username(username: str | None) -> bool:
+def is_admin_username(
+    username: str | None,
+    *,
+    config: AuthConfig | None = None,
+    path: str | Path | None = None,
+) -> bool:
     if not username:
         return False
-    admin = load_auth_config().admin
-    return secrets.compare_digest(username.strip(), admin.username)
+    cfg = config or load_auth_config(path)
+    return secrets.compare_digest(username.strip(), cfg.admin.username)
 
 
 def create_token(username: str) -> str:

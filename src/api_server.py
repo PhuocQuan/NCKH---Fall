@@ -35,8 +35,10 @@ from src.camera_registry import (
     resolve_start_source,
     suggest_camera_id,
     update_camera,
+    user_can_access_camera,
 )
 from src.mobile_service import MobileMonitorService
+from src.profile_service import get_patient_profile_dashboard, update_patient_profile
 from src.ui_theme import ui_config_payload
 from src.user_settings import UserSettings, load_user_settings, save_user_settings
 
@@ -73,6 +75,7 @@ class CameraRequest(BaseModel):
     room: str
     source: str
     enabled: bool = True
+    assigned_users: list[str] = []
 
 
 class ControlResponse(BaseModel):
@@ -130,6 +133,16 @@ class UserUpdateRequest(BaseModel):
     enabled: bool | None = None
 
 
+class PatientProfileRequest(BaseModel):
+    full_name: str = ""
+    age_label: str = ""
+    room_label: str = ""
+    date_of_birth: str = ""
+    blood_type: str = ""
+    medical_conditions: str = ""
+    emergency_contact: str = ""
+
+
 def _extract_token(
     credentials: HTTPAuthorizationCredentials | None,
     token_query: str | None,
@@ -165,12 +178,17 @@ def _status_payload() -> dict[str, Any]:
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, Any]:
+    from src.cloud_db import auth_storage_mode, cloud_health
+
+    cloud = cloud_health()
     return {
         "status": "ok",
         "service": "NCKH Fall Detection",
         "version": app.version,
         "auth_mode": "admin_provisioned",
+        "storage": auth_storage_mode(),
+        "cloud": cloud,
     }
 
 
@@ -258,6 +276,46 @@ def logout(token: Annotated[str, Depends(require_auth)]) -> dict[str, bool]:
 @app.get("/api/status")
 def get_status(_token: Annotated[str, Depends(require_auth)]) -> dict[str, Any]:
     return _status_payload()
+
+
+@app.get("/api/patient-profile")
+def patient_profile(
+    token: Annotated[str, Depends(require_auth)],
+    profile: str = "default",
+) -> dict[str, Any]:
+    """Ho so nguoi duoc giam sat + thong ke tu cloud/local."""
+    username = get_token_username(token) or ""
+    data = get_patient_profile_dashboard(
+        profile.strip() or "default",
+        username=username,
+        is_admin=is_admin_username(username),
+    )
+    return {"ok": True, **data}
+
+
+@app.put("/api/patient-profile")
+def save_patient_profile(
+    body: PatientProfileRequest,
+    token: Annotated[str, Depends(require_auth)],
+    profile: str = "default",
+) -> dict[str, Any]:
+    """Cap nhat ho so ca nhan cua tai khoan dang dang nhap."""
+    username = get_token_username(token) or ""
+    payload = body.model_dump() if hasattr(body, "model_dump") else body.dict()
+    try:
+        saved = update_patient_profile(
+            username,
+            payload,
+            profile_key=profile.strip() or "default",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    data = get_patient_profile_dashboard(
+        profile.strip() or "default",
+        username=username,
+        is_admin=is_admin_username(username),
+    )
+    return {"ok": True, "profile": saved, "stats": data["stats"], "cameras": data["cameras"], "storage": data["storage"]}
 
 
 @app.get("/api/ui-config")
@@ -369,8 +427,12 @@ def remove_user(
 
 
 @app.get("/api/cameras")
-def list_cameras(_token: Annotated[str, Depends(require_auth)]) -> dict[str, Any]:
-    return list_cameras_payload()
+def list_cameras(token: Annotated[str, Depends(require_auth)]) -> dict[str, Any]:
+    username = get_token_username(token) or ""
+    return list_cameras_payload(
+        username=username,
+        is_admin=is_admin_username(username),
+    )
 
 
 @app.get("/api/cameras/suggest-id")
@@ -390,6 +452,7 @@ def add_camera(
             room=body.room.strip(),
             source=body.source.strip(),
             enabled=body.enabled,
+            assigned_users=body.assigned_users,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -409,6 +472,7 @@ def put_camera(
             room=body.room.strip(),
             source=body.source.strip(),
             enabled=body.enabled,
+            assigned_users=body.assigned_users,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -430,14 +494,27 @@ def remove_camera(
 @app.post("/api/control/start", response_model=ControlResponse)
 def start_monitor(
     body: StartRequest,
-    _token: Annotated[str, Depends(require_auth)],
+    token: Annotated[str, Depends(require_auth)],
 ) -> ControlResponse:
+    username = get_token_username(token) or ""
+    admin = is_admin_username(username)
     try:
         source, camera_id = resolve_start_source(
             camera_id=body.camera_id,
             source=body.source,
         )
+        if camera_id and not user_can_access_camera(
+            camera_id,
+            username=username,
+            is_admin=admin,
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Tai khoan khong duoc gan camera nay.",
+            )
         status = monitor.start(source, config_path=body.config, camera_id=camera_id)
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

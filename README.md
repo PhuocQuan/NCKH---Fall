@@ -22,7 +22,8 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 - Quét và chọn webcam, chọn file video/config; hỗ trợ RTSP.
 - Cảnh báo âm thanh (chuông WAV + beep Windows), lưu **snapshot** khi alert (`data/snapshots/`).
 - Thanh tiến trình đếm thời gian nằm; event log CSV với session mode.
-- Cài đặt người dùng lưu trong `configs/user.yaml` (profile, thời gian cảnh báo, skeleton, snapshot).
+- Cài đặt phát hiện lưu trong `configs/user.yaml` (profile, thời gian cảnh báo, skeleton, snapshot).
+- Hồ sơ cá nhân trong app lưu theo từng tài khoản; người dùng tự nhập tại tab **Hồ sơ**.
 - Tài khoản do **admin cấp**; quản lý user + yêu cầu truy cập trên app.
 - Phím tắt desktop: **Space** Start/Stop, **R** Reset.
 
@@ -34,7 +35,6 @@ Hệ thống phát hiện té ngã realtime từ webcam hoặc file video. Dự 
 ### Chất lượng
 - **75** unit test (`pytest`), bao gồm detector, pipeline, API mobile, auth, camera, event log, settings, snapshot.
 - Kiểm tra môi trường: `check_environment`, `check_camera`.
-- Tiến độ công việc chi tiết: [`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md).
 
 ## Cấu trúc thư mục
 
@@ -163,7 +163,7 @@ Chi tiết logic: [`docs/FALL_DETECTION_LOGIC.md`](docs/FALL_DETECTION_LOGIC.md)
 | File | Nội dung |
 |------|----------|
 | `configs/default.yaml` | Ngưỡng detector, kích thước camera, pose, AI |
-| `configs/user.yaml` | Profile, thời gian cảnh báo, skeleton, snapshot — chỉnh từ tab **Cài đặt** trong desktop |
+| `configs/user.yaml` | Profile phát hiện, thời gian cảnh báo, skeleton, snapshot — chỉnh từ tab **Cài đặt** trong desktop |
 
 Profile có sẵn: `default`, `elderly` (ngưỡng nhạy hơn cho người già).
 
@@ -234,8 +234,6 @@ Chi tiết module: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ## Tiến độ dự án
 
-Bảng chi tiết đầy đủ (35 hạng mục, luồng hoạt động, ngôn ngữ lập trình): **[`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md)**
-
 | Giai đoạn | Nội dung | STT | Trạng thái |
 |-----------|----------|-----|------------|
 | G1–G2 | Core pipeline, detector, CLI | 1–5 | Hoàn thành |
@@ -255,7 +253,6 @@ Bảng chi tiết đầy đủ (35 hạng mục, luồng hoạt động, ngôn n
 | [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) | Tích hợp & train AI |
 | [`docs/MOBILE_APP.md`](docs/MOBILE_APP.md) | Hướng dẫn app mobile / API |
 | [`docs/BUILD_APK.md`](docs/BUILD_APK.md) | Build APK Android |
-| [`docs/TIEN_DO_CONG_VIEC.md`](docs/TIEN_DO_CONG_VIEC.md) | Bảng tiến độ công việc NCKH |
 
 ## Hướng phát triển
 

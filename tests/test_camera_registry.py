@@ -4,14 +4,16 @@ from pathlib import Path
 import pytest
 
 from src.camera_registry import (
+    CameraEntry,
     create_camera,
     delete_camera,
+    filter_cameras_for_user,
     load_cameras,
     resolve_start_source,
     save_cameras,
     suggest_camera_id,
     update_camera,
-    CameraEntry,
+    user_can_access_camera,
 )
 
 
@@ -95,3 +97,29 @@ def test_concurrent_create_assigns_unique_ids(cameras_path: Path) -> None:
 
     assert len(set(ids)) == 5
     assert len(load_cameras(cameras_path)) == 5
+
+
+def test_filter_cameras_by_assigned_user(cameras_path: Path) -> None:
+    create_camera(
+        camera_id="CAM-01",
+        name="Phong ngu",
+        room="101",
+        source="0",
+        assigned_users=["caregiver.lan"],
+        path=cameras_path,
+    )
+    create_camera(
+        camera_id="CAM-02",
+        name="Phong khach",
+        room="102",
+        source="1",
+        assigned_users=["family.tuan"],
+        path=cameras_path,
+    )
+    all_cameras = load_cameras(cameras_path)
+    lan_cameras = filter_cameras_for_user(all_cameras, username="caregiver.lan", is_admin=False)
+    assert [camera.id for camera in lan_cameras] == ["CAM-01"]
+    assert user_can_access_camera("CAM-01", username="caregiver.lan", is_admin=False, path=cameras_path)
+    assert not user_can_access_camera("CAM-02", username="caregiver.lan", is_admin=False, path=cameras_path)
+    admin_cameras = filter_cameras_for_user(all_cameras, username="admin", is_admin=True)
+    assert len(admin_cameras) == 2

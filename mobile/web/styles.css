@@ -208,12 +208,19 @@ body.theme-dark { --bg: #0f172a; --surface: #1e293b; --text: #f1f5f9; --text-2: 
 .patient-status.danger { background: var(--red-soft); color: var(--red); }
 .patient-status.warn { background: var(--orange-soft); color: var(--orange); }
 
+.user-check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.check-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: .88rem; }
+.check-row input { width: 18px; height: 18px; accent-color: var(--blue); }
+
 .info-block, .settings-block { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
 .settings-test-btn { margin-top: 10px; }
 .block-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin-bottom: 12px; }
+.block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.block-head .block-title { margin-bottom: 0; }
 .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
 .info-row:last-child { border-bottom: none; }
 .info-row span { color: var(--text-2); }
+.info-row strong { text-align: right; max-width: 58%; overflow-wrap: anywhere; }
 
 .assigned-cam { display: flex; flex-direction: column; gap: 8px; }
 .assigned-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); font-size: .85rem; font-weight: 600; }
@@ -245,9 +252,16 @@ body.theme-dark { --bg: #0f172a; --surface: #1e293b; --text: #f1f5f9; --text-2: 
 .slider-labels { display: flex; justify-content: space-between; font-size: .75rem; color: var(--text-2); }
 .slider-hint { font-size: .75rem; color: var(--text-2); margin-top: 8px; line-height: 1.4; }
 .full-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: inherit; font-size: .95rem; background: var(--bg); }
+.text-area { min-height: 90px; resize: vertical; line-height: 1.4; }
 .segmented { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
 .seg { padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); font-family: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
 .seg.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+.guide-list { display: flex; flex-direction: column; gap: 10px; }
+.guide-card { display: flex; gap: 12px; padding: 14px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); }
+.guide-num { width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue); display: grid; place-items: center; flex-shrink: 0; font-weight: 800; font-size: .8rem; }
+.guide-card h3 { font-size: .92rem; font-weight: 800; margin-bottom: 4px; }
+.guide-card p { font-size: .8rem; line-height: 1.45; color: var(--text-2); }
 
 .emergency-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--red); border-radius: var(--radius); color: #fff; margin-bottom: 16px; }
 .emergency-card-icon { font-size: 1.5rem; }
@@ -264,6 +278,7 @@ body.theme-dark { --bg: #0f172a; --surface: #1e293b; --text: #f1f5f9; --text-2: 
 .contact-action { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; text-decoration: none; font-size: 1rem; }
 .contact-action.call { background: var(--green-soft); }
 .contact-action.msg { background: var(--blue-light); }
+.contact-action.disabled { opacity: .35; pointer-events: none; filter: grayscale(1); }
 
 .tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; height: calc(var(--tabbar-h) + var(--safe-b)); padding-bottom: var(--safe-b); display: grid; grid-template-columns: repeat(4,1fr); background: var(--surface); border-top: 1.5px solid var(--border); z-index: 200; }
 .tabbar-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: none; background: transparent; font-family: inherit; font-size: .62rem; font-weight: 600; color: var(--text-2); cursor: pointer; position: relative; }

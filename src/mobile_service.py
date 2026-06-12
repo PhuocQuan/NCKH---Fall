@@ -200,8 +200,15 @@ class MobileMonitorService:
                 load_config(self._config_path),
                 load_user_settings(self._user_settings_path),
             )
+        from src.cloud_db import use_cloud_storage
         from src.event_logger import EventLogger
 
+        if use_cloud_storage():
+            from src.cloud_sync import read_fall_events_recent
+
+            cloud_events = read_fall_events_recent(limit=limit)
+            if cloud_events:
+                return cloud_events
         return EventLogger(config.app.event_log_path).read_recent(limit=limit)
 
     def snapshot_path(self, name: str) -> Path:

@@ -19,9 +19,12 @@ class CameraEntry:
     room: str
     source: str
     enabled: bool = True
+    assigned_users: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["assigned_users"] = list(self.assigned_users)
+        return data
 
 
 def _normalize_id(camera_id: str) -> str:
@@ -42,12 +45,23 @@ def _parse_entry(raw: dict[str, Any]) -> CameraEntry:
         raise ValueError(f"Camera {camera_id}: thieu phong/khu vuc.")
     if not source:
         raise ValueError(f"Camera {camera_id}: thieu nguon (source).")
+    assigned_raw = raw.get("assigned_users", []) or []
+    assigned_users = tuple(
+        sorted(
+            {
+                str(username).strip()
+                for username in assigned_raw
+                if isinstance(username, str) and str(username).strip()
+            }
+        )
+    )
     return CameraEntry(
         id=camera_id,
         name=name,
         room=room,
         source=source,
         enabled=bool(raw.get("enabled", True)),
+        assigned_users=assigned_users,
     )
 
 
@@ -101,9 +115,74 @@ def suggest_camera_id(cameras: list[CameraEntry] | None = None) -> str:
         index += 1
 
 
-def list_cameras_payload(path: str | Path | None = None) -> dict[str, Any]:
-    cameras = load_cameras(path)
+def filter_cameras_for_user(
+    cameras: list[CameraEntry],
+    *,
+    username: str | None,
+    is_admin: bool,
+) -> list[CameraEntry]:
+    if is_admin or not username:
+        return cameras
+    target = username.strip()
+    return [
+        camera
+        for camera in cameras
+        if target in camera.assigned_users
+    ]
+
+
+def user_can_access_camera(
+    camera_id: str,
+    *,
+    username: str | None,
+    is_admin: bool,
+    path: str | Path | None = None,
+) -> bool:
+    if is_admin:
+        return True
+    if not username:
+        return False
+    camera = get_camera(camera_id, path)
+    if camera is None:
+        return False
+    return username.strip() in camera.assigned_users
+
+
+def list_cameras_payload(
+    path: str | Path | None = None,
+    *,
+    username: str | None = None,
+    is_admin: bool = False,
+) -> dict[str, Any]:
+    cameras = filter_cameras_for_user(
+        load_cameras(path),
+        username=username,
+        is_admin=is_admin,
+    )
     return {"cameras": [camera.to_dict() for camera in cameras]}
+
+
+def _normalize_assigned_users(assigned_users: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    if not assigned_users:
+        return ()
+    return tuple(
+        sorted(
+            {
+                str(username).strip()
+                for username in assigned_users
+                if str(username).strip()
+            }
+        )
+    )
+
+
+def _sync_camera_assignments_cloud(camera_id: str, assigned_users: tuple[str, ...]) -> None:
+    try:
+        from src.cloud_sync import sync_camera_assignments
+
+        sync_camera_assignments(camera_id, list(assigned_users))
+    except Exception:
+        pass
 
 
 def create_camera(
@@ -113,6 +192,7 @@ def create_camera(
     source: str,
     enabled: bool = True,
     camera_id: str | None = None,
+    assigned_users: list[str] | tuple[str, ...] | None = None,
     path: str | Path | None = None,
 ) -> CameraEntry:
     with _registry_lock:
@@ -120,11 +200,20 @@ def create_camera(
         new_id = _normalize_id(camera_id) if camera_id else suggest_camera_id(cameras)
         if any(camera.id == new_id for camera in cameras):
             raise ValueError(f"Ma camera da ton tai: {new_id}")
+        users = _normalize_assigned_users(assigned_users)
         entry = _parse_entry(
-            {"id": new_id, "name": name, "room": room, "source": source, "enabled": enabled}
+            {
+                "id": new_id,
+                "name": name,
+                "room": room,
+                "source": source,
+                "enabled": enabled,
+                "assigned_users": list(users),
+            }
         )
         cameras.append(entry)
         save_cameras(cameras, path)
+        _sync_camera_assignments_cloud(entry.id, entry.assigned_users)
         return entry
 
 
@@ -135,6 +224,7 @@ def update_camera(
     room: str,
     source: str,
     enabled: bool,
+    assigned_users: list[str] | tuple[str, ...] | None = None,
     path: str | Path | None = None,
 ) -> CameraEntry:
     with _registry_lock:
@@ -142,6 +232,7 @@ def update_camera(
         cameras = load_cameras(path)
         updated: list[CameraEntry] = []
         found: CameraEntry | None = None
+        users = _normalize_assigned_users(assigned_users)
         for camera in cameras:
             if camera.id != target:
                 updated.append(camera)
@@ -153,12 +244,14 @@ def update_camera(
                     "room": room,
                     "source": source,
                     "enabled": enabled,
+                    "assigned_users": list(users),
                 }
             )
             updated.append(found)
         if found is None:
             raise ValueError(f"Khong tim thay camera: {target}")
         save_cameras(updated, path)
+        _sync_camera_assignments_cloud(found.id, found.assigned_users)
         return found
 
 
@@ -170,6 +263,12 @@ def delete_camera(camera_id: str, path: str | Path | None = None) -> None:
         if len(remaining) == len(cameras):
             raise ValueError(f"Khong tim thay camera: {target}")
         save_cameras(remaining, path)
+        try:
+            from src.cloud_sync import delete_camera_assignments
+
+            delete_camera_assignments(target)
+        except Exception:
+            pass
 
 
 def resolve_start_source(

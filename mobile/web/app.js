@@ -7,11 +7,11 @@ const USER_META_KEY = "nckh_user_meta";
 const ALERT_SOUND_URL = "sounds/fall_alert.wav";
 
 const PATIENT_PROFILES = {
-  default: { name: "Nguyễn Thị Lan", initials: "NL", age: "72 tuổi", room: "Phòng 101", condition: "Cao tuổi", dob: "15/03/1954", blood: "O+", conditions: "Loãng xương, cao huyết áp", contact: "Anh Tuấn (con trai)" },
-  elderly: { name: "Nguyễn Thị Lan", initials: "NL", age: "72 tuổi", room: "Phòng 101", condition: "Cao tuổi", dob: "15/03/1954", blood: "O+", conditions: "Loãng xương, cao huyết áp", contact: "Anh Tuấn (con trai)" },
-  child: { name: "Bé Minh", initials: "BM", age: "8 tuổi", room: "Phòng 203", condition: "Trẻ em", dob: "12/08/2017", blood: "A+", conditions: "Hen suyễn nhẹ", contact: "Mẹ Hương" },
-  pregnant: { name: "Trần Thị Hoa", initials: "TH", age: "28 tuổi", room: "Phòng 105", condition: "Mang thai", dob: "20/05/1998", blood: "B+", conditions: "Thai 32 tuần", contact: "Chồng Minh" },
-  disabled: { name: "Lê Văn Đức", initials: "LĐ", age: "45 tuổi", room: "Phòng 102", condition: "Khuyết tật", dob: "03/11/1980", blood: "AB+", conditions: "Liệt nửa người", contact: "Chị Mai (vợ)" },
+  default: { name: "Người được giám sát", initials: "HS", age: "Chưa nhập", room: "Chưa nhập", condition: "Mặc định", dob: "Chưa nhập", blood: "Chưa nhập", conditions: "Chưa nhập", contact: "Chưa nhập" },
+  elderly: { name: "Người được giám sát", initials: "HS", age: "Chưa nhập", room: "Chưa nhập", condition: "Người già", dob: "Chưa nhập", blood: "Chưa nhập", conditions: "Chưa nhập", contact: "Chưa nhập" },
+  child: { name: "Người được giám sát", initials: "HS", age: "Chưa nhập", room: "Chưa nhập", condition: "Trẻ em", dob: "Chưa nhập", blood: "Chưa nhập", conditions: "Chưa nhập", contact: "Chưa nhập" },
+  pregnant: { name: "Người được giám sát", initials: "HS", age: "Chưa nhập", room: "Chưa nhập", condition: "Mang thai", dob: "Chưa nhập", blood: "Chưa nhập", conditions: "Chưa nhập", contact: "Chưa nhập" },
+  disabled: { name: "Người được giám sát", initials: "HS", age: "Chưa nhập", room: "Chưa nhập", condition: "Khuyết tật", dob: "Chưa nhập", blood: "Chưa nhập", conditions: "Chưa nhập", contact: "Chưa nhập" },
 };
 
 const STATE_META = {
@@ -42,6 +42,7 @@ let currentStatus = {}, lastEvent = null, emergencyDismissed = false;
 let currentTab = "home", cameras = [], selectedCam = null;
 let cameraFormMode = "add", cameraFormEditId = null, cameraFormSaving = false;
 let managedUsers = [], userFormMode = "add", userFormEditUsername = null, userFormSaving = false;
+let cloudProfileData = null, profileStats = null;
 let audioCtx = null, alertAudio = null, lastAlarmState = "", alarmTicksSinceBeep = 3;
 
 const $ = (id) => document.getElementById(id);
@@ -223,8 +224,92 @@ function getGreeting() {
 
 function capitalizeName(n) { return n ? n.charAt(0).toUpperCase() + n.slice(1) : "Admin"; }
 
+function mapApiProfileToPatient(apiProfile) {
+  if (!apiProfile) return null;
+  return {
+    name: apiProfile.full_name || "Người được giám sát",
+    initials: apiProfile.initials || "HS",
+    age: apiProfile.age_label || "Chưa nhập",
+    room: apiProfile.room_label || "Chưa nhập",
+    dob: apiProfile.date_of_birth || "Chưa nhập",
+    blood: apiProfile.blood_type || "Chưa nhập",
+    conditions: apiProfile.medical_conditions || "Chưa nhập",
+    contact: apiProfile.emergency_contact || "Chưa nhập",
+  };
+}
+
 function getPatient(profileId) {
-  return PATIENT_PROFILES[profileId] || PATIENT_PROFILES.default;
+  const key = profileId || "default";
+  if (cloudProfileData) {
+    return mapApiProfileToPatient(cloudProfileData) || PATIENT_PROFILES.default;
+  }
+  return PATIENT_PROFILES[key] || PATIENT_PROFILES.default;
+}
+
+function emptyIfMissing(value) {
+  return ["Chưa nhập", "—"].includes(value || "") ? "" : (value || "");
+}
+
+function extractPhone(text) {
+  const match = String(text || "").match(/(\+?\d[\d\s().-]{6,}\d)/);
+  return match ? match[1].replace(/[^\d+]/g, "") : "";
+}
+
+function renderContactList() {
+  const list = $("contactList");
+  if (!list) return;
+  const p = getPatient($("profileSelect")?.value || "default");
+  const contact = emptyIfMissing(p.contact);
+  list.innerHTML = "";
+  if (!contact) {
+    list.innerHTML = '<div class="activity-empty">Chưa nhập liên hệ khẩn cấp trong hồ sơ.</div>';
+    return;
+  }
+
+  const phone = extractPhone(contact);
+  const item = document.createElement("div");
+  item.className = "contact-item";
+  item.innerHTML = `<div class="contact-avatar">LH</div>
+    <div class="contact-body"><p class="contact-name"></p><p class="contact-role">Liên hệ chính trong hồ sơ</p></div>
+    <a class="contact-action call" aria-label="Gọi">📞</a>
+    <a class="contact-action msg" aria-label="Nhắn tin">💬</a>`;
+  item.querySelector(".contact-name").textContent = contact;
+  const call = item.querySelector(".contact-action.call");
+  const msg = item.querySelector(".contact-action.msg");
+  if (phone) {
+    call.href = `tel:${phone}`;
+    msg.href = `sms:${phone}`;
+  } else {
+    call.classList.add("disabled");
+    msg.classList.add("disabled");
+  }
+  list.appendChild(item);
+}
+
+function applyProfileStats(stats) {
+  if (!stats) return;
+  profileStats = stats;
+  txt("healthFalls30", String(stats.falls_30_days ?? 0));
+  txt("healthMobility", String(stats.mobility_score ?? 85));
+  txt("healthActive", String(stats.active_hours_avg ?? 6.2));
+}
+
+async function loadPatientProfile(profileKey) {
+  const key = profileKey || $("profileSelect")?.value || "default";
+  try {
+    const data = await api(`/api/patient-profile?profile=${encodeURIComponent(key)}`);
+    cloudProfileData = data.profile || null;
+    applyProfileStats(data.stats);
+    const storage = data.storage === "database" ? "Supabase (cloud)" : "Máy chủ local";
+    txt("profileStorage", storage);
+    updatePatientCard(key);
+    renderContactList();
+    renderAssignedCams();
+  } catch {
+    txt("profileStorage", "—");
+    updatePatientCard(key);
+    renderContactList();
+  }
 }
 
 function hideSplash(cb) {
@@ -384,6 +469,8 @@ async function refreshAuthMeta() {
     is_admin: Boolean(me.is_admin),
   });
   updateRoleUi();
+  const roleLabel = me.is_admin ? "Quản trị viên" : (me.role || "caregiver");
+  txt("profileAccount", `${me.full_name || me.username} (${roleLabel})`);
 }
 
 function showLogin(msg = "") {
@@ -425,7 +512,7 @@ function showApp() {
 
 function switchTab(tab) {
   currentTab = tab;
-  if (!["sub-camera", "sub-settings", "sub-contacts", "sub-camera-form", "sub-access-requests", "sub-users", "sub-user-form"].includes(tab)) {
+  if (!tab.startsWith("sub-")) {
     document.querySelectorAll(".tabbar-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   }
   document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
@@ -564,10 +651,33 @@ async function loadCameras() {
   syncCameraDetail();
 }
 
+function renderCamFormUserList(selected = []) {
+  const selectedSet = new Set(selected);
+  const users = managedUsers.filter((u) => !u.is_admin && u.enabled !== false);
+  const box = $("camFormUserList");
+  if (!box) return;
+  if (!users.length) {
+    box.innerHTML = '<p class="field-hint">Chưa có user. Thêm tại Quản lý người dùng.</p>';
+    return;
+  }
+  box.innerHTML = users.map((u) => {
+    const checked = selectedSet.has(u.username) ? "checked" : "";
+    const label = u.full_name ? `${u.full_name} (@${u.username})` : u.username;
+    return `<label class="check-row"><input type="checkbox" value="${u.username}" ${checked} /><span>${label}</span></label>`;
+  }).join("");
+}
+
+function getCamFormAssignedUsers() {
+  return [...($("camFormUserList")?.querySelectorAll('input[type="checkbox"]:checked') || [])].map((el) => el.value);
+}
+
 async function openCameraForm(mode, cam = null) {
   if (!isAdminUser()) {
     showToast("Chỉ admin mới được thêm hoặc sửa camera.", "error");
     return;
+  }
+  if (!managedUsers.length) {
+    try { await loadUsers(); } catch { /* admin only */ }
   }
   cameraFormMode = mode;
   cameraFormEditId = cam?.id || null;
@@ -582,12 +692,14 @@ async function openCameraForm(mode, cam = null) {
     val("camFormRoom", "");
     val("camFormSource", "0");
     if ($("camFormEnabled")) $("camFormEnabled").checked = true;
+    renderCamFormUserList([]);
   } else if (cam) {
     val("camFormId", cam.id);
     val("camFormName", cam.name);
     val("camFormRoom", cam.room);
     val("camFormSource", cam.source);
     if ($("camFormEnabled")) $("camFormEnabled").checked = Boolean(cam.enabled);
+    renderCamFormUserList(cam.assigned_users || []);
   }
   openSub("sub-camera-form");
 }
@@ -606,8 +718,10 @@ async function saveCameraFromForm(e) {
       room: val("camFormRoom").trim(),
       source: val("camFormSource").trim(),
       enabled: Boolean($("camFormEnabled")?.checked),
+      assigned_users: getCamFormAssignedUsers(),
     };
     if (!body.name || !body.room || !body.source) throw new Error("Điền đủ thông tin camera.");
+    if (!body.assigned_users.length) throw new Error("Chọn ít nhất một tài khoản được gán camera.");
     if (cameraFormMode === "add") {
       await api("/api/cameras", { method: "POST", body: JSON.stringify(body) });
       showToast("Đã thêm camera", "success");
@@ -768,16 +882,59 @@ async function deleteCameraFromForm() {
   closeSub("cameras");
 }
 
+function fillPatientProfileForm() {
+  const p = cloudProfileData || {};
+  const fallback = getPatient($("profileSelect")?.value || "default");
+  val("patientFormFullName", emptyIfMissing(p.full_name || fallback.name));
+  val("patientFormAge", emptyIfMissing(p.age_label || fallback.age));
+  val("patientFormRoom", emptyIfMissing(p.room_label || fallback.room));
+  val("patientFormDob", emptyIfMissing(p.date_of_birth || fallback.dob));
+  val("patientFormBlood", emptyIfMissing(p.blood_type || fallback.blood));
+  val("patientFormConditions", emptyIfMissing(p.medical_conditions || fallback.conditions));
+  val("patientFormContact", emptyIfMissing(p.emergency_contact || fallback.contact));
+}
+
+function openPatientProfileForm() {
+  fillPatientProfileForm();
+  openSub("sub-profile-form");
+}
+
+async function savePatientProfile() {
+  const key = $("profileSelect")?.value || "default";
+  const payload = {
+    full_name: val("patientFormFullName").trim(),
+    age_label: val("patientFormAge").trim(),
+    room_label: val("patientFormRoom").trim(),
+    date_of_birth: val("patientFormDob").trim(),
+    blood_type: val("patientFormBlood").trim(),
+    medical_conditions: val("patientFormConditions").trim(),
+    emergency_contact: val("patientFormContact").trim(),
+  };
+  const data = await api(`/api/patient-profile?profile=${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  cloudProfileData = data.profile || null;
+  applyProfileStats(data.stats);
+  txt("profileStorage", data.storage === "database" ? "Supabase (cloud)" : "Máy chủ local");
+  updatePatientCard(key);
+  renderContactList();
+  closeSub("profile");
+  showToast("Đã lưu hồ sơ cá nhân", "success");
+}
+
 function updatePatientCard(profileId) {
   const p = getPatient(profileId);
   txt("patientAvatar", p.initials);
   txt("patientName", p.name);
-  txt("patientMeta", `${p.age} · ${p.room}`);
+  txt("patientMeta", `${p.age || "Chưa nhập"} · ${p.room || "Chưa nhập"}`);
   txt("patientDob", p.dob || "—");
   txt("patientBlood", p.blood || "—");
   txt("patientConditions", p.conditions || "—");
   txt("patientContact", p.contact || "—");
   txt("emergencyPerson", p.name);
+  renderContactList();
+  if (profileStats) applyProfileStats(profileStats);
 }
 
 function updateEmergencyOverlay(data) {
@@ -1203,6 +1360,7 @@ async function bootstrapApp() {
   unlockAlertAudio();
   await refreshAuthMeta();
   await Promise.all([loadUiConfig(), loadSettings(), loadCameras()]);
+  await loadPatientProfile($("profileSelect")?.value || "default");
   await refreshStatus();
   await refreshEvents();
   connectSocket();
@@ -1262,6 +1420,9 @@ $("accessRequestForm")?.addEventListener("submit", (e) => {
 $("testConnBtn")?.addEventListener("click", () => testServerConnection().catch((e) => showToast(e.message, "error")));
 $("gotoAccessRequestsBtn")?.addEventListener("click", () => openSub("sub-access-requests"));
 $("gotoUsersBtn")?.addEventListener("click", () => openSub("sub-users"));
+$("editPatientProfileBtn")?.addEventListener("click", () => openPatientProfileForm());
+$("savePatientProfileBtn")?.addEventListener("click", () => savePatientProfile().catch((e) => showToast(e.message, "error")));
+$("patientProfileForm")?.addEventListener("submit", (e) => e.preventDefault());
 $("addUserBtn")?.addEventListener("click", () => openUserForm("add"));
 $("saveUserBtn")?.addEventListener("click", () => saveUserFromForm().catch((e) => showToast(e.message, "error")));
 $("deleteUserBtn")?.addEventListener("click", () => deleteUserFromForm().catch((e) => showToast(e.message, "error")));
@@ -1307,7 +1468,9 @@ $("sensitivitySlider")?.addEventListener("input", (e) => {
   $("sliderValue").textContent = `Cân bằng (${v}s)`;
 });
 
-$("profileSelect")?.addEventListener("change", () => updatePatientCard($("profileSelect").value));
+$("profileSelect")?.addEventListener("change", () => {
+  loadPatientProfile($("profileSelect").value).catch(() => updatePatientCard($("profileSelect").value));
+});
 $("toggleSound")?.addEventListener("change", () => {
   saveSoundPreference();
   showToast($("toggleSound").checked ? "Đã bật âm thanh cảnh báo" : "Đã tắt âm thanh cảnh báo");

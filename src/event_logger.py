@@ -87,11 +87,17 @@ class EventLogger:
             )
             writer.writerow(row)
             self._session_file.flush()
-            return
+        else:
+            with self.path.open("a", newline="", encoding="utf-8") as file:
+                writer = csv.DictWriter(file, fieldnames=self.columns, extrasaction="ignore")
+                writer.writerow(row)
 
-        with self.path.open("a", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=self.columns, extrasaction="ignore")
-            writer.writerow(row)
+        try:
+            from src.cloud_sync import sync_fall_event
+
+            sync_fall_event(row)
+        except Exception:
+            pass
 
     def _read_columns(self) -> list[str]:
         with self.path.open("r", newline="", encoding="utf-8") as file:

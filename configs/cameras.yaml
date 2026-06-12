@@ -1,1 +1,8 @@
-cameras: []
+cameras:
+- id: CAM-01
+  name: Phòng Ngủ
+  room: Tầng 1
+  source: '0'
+  enabled: true
+  assigned_users:
+  - bao2005
