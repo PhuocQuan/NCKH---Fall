@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import threading
 from dataclasses import replace
 
 import cv2
@@ -28,6 +29,11 @@ STATE_COLORS = {
     FallState.FALLEN: (40, 40, 230),
     FallState.ALERT: (0, 0, 255),
 }
+
+# Kêu chuông ngay khi nghi ngờ / xác nhận té ngã, không đợi ALERT (10 giây).
+FALL_ALARM_STATES = frozenset(
+    {FallState.POSSIBLE_FALL, FallState.FALLEN, FallState.ALERT}
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,6 +74,9 @@ def main() -> None:
     )
 
     window_name = "NCKH Fall Detection"
+    alert_beep_interval_frames = max(1, round(detector_config.assumed_fps * 2))
+    frames_since_alert_beep = alert_beep_interval_frames
+    prev_fall_state = FallState.NORMAL
 
     try:
         while True:
@@ -83,12 +92,19 @@ def main() -> None:
                 result = detector.update(points)
                 if result.event_started:
                     logger.write(result)
-                    _play_alert_sound()
+                frames_since_alert_beep, prev_fall_state = _update_fall_alarm(
+                    result.state,
+                    prev_fall_state,
+                    frames_since_alert_beep,
+                    alert_beep_interval_frames,
+                )
                 if config.app.draw_landmarks:
                     estimator.draw(frame, pose_results)
                 _draw_status(frame, result, ai_prediction)
             else:
                 feature_buffer.reset()
+                prev_fall_state = FallState.NORMAL
+                frames_since_alert_beep = alert_beep_interval_frames
                 _draw_text(frame, "No pose detected", (20, 40), (180, 180, 180))
 
             cv2.imshow(window_name, frame)
@@ -97,26 +113,53 @@ def main() -> None:
                 break
             if key == ord("r"):
                 detector.reset()
+                prev_fall_state = FallState.NORMAL
+                frames_since_alert_beep = alert_beep_interval_frames
     finally:
         estimator.close()
         video.release()
         cv2.destroyAllWindows()
 
-def _play_alert_sound() -> None:
-    """Phát âm thanh khi có cảnh báo té ngã.
+def _update_fall_alarm(
+    state: FallState,
+    prev_state: FallState,
+    frames_since_beep: int,
+    beep_interval_frames: int,
+) -> tuple[int, FallState]:
+    """Kêu ngay khi vừa phát hiện té ngã, lặp lại định kỳ cho đến khi hết nguy hiểm."""
 
-    Thiết kế: chỉ kêu khi detector bắn `event_started`, tức là thời điểm chuyển sang
-    trạng thái `ALERT` (không kêu khi chỉ nằm ngủ bình thường).
-    """
+    if state in FALL_ALARM_STATES:
+        if prev_state not in FALL_ALARM_STATES:
+            frames_since_beep = 0
+            _play_alert_sound()
+        else:
+            frames_since_beep += 1
+            if frames_since_beep >= beep_interval_frames:
+                frames_since_beep = 0
+                _play_alert_sound()
+    else:
+        frames_since_beep = beep_interval_frames
+
+    return frames_since_beep, state
+
+
+def _play_alert_sound() -> None:
+    """Phát chuông cảnh báo té ngã. Chạy trong thread riêng để không đơ camera."""
 
     if winsound is None:
         return
-    try:
-        # MessageBeep là "beep" hệ thống, không cần file âm thanh.
-        winsound.MessageBeep(winsound.MB_ICONHAND)
-    except Exception:
-        # Nếu hệ thống không cho phát âm thanh thì bỏ qua để không làm crash app.
-        return
+
+    def _beep() -> None:
+        try:
+            for _ in range(3):
+                winsound.Beep(880, 300)
+        except Exception:
+            try:
+                winsound.MessageBeep(winsound.MB_ICONHAND)
+            except Exception:
+                return
+
+    threading.Thread(target=_beep, daemon=True).start()
 
 
 def _draw_status(frame, result, ai_prediction) -> None:
@@ -132,7 +175,7 @@ def _draw_status(frame, result, ai_prediction) -> None:
         _draw_text(frame, ai_label, (20, 80), ai_color)
     else:
         _draw_text(frame, "AI: disabled/no model", (20, 80), (180, 180, 180))
-    if result.state in {FallState.FALLEN, FallState.ALERT}:
+    if result.state in FALL_ALARM_STATES:
         height, width = frame.shape[:2]
         cv2.rectangle(frame, (0, 0), (width - 1, height - 1), color, 6)
 
