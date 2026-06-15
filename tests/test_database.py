@@ -184,7 +184,7 @@ def test_update_event_media():
     assert test_event["video_url"] == "http://r2.com/vid.mp4"
 
 def test_upload_media_fallback(tmp_path):
-    """Test media upload fallback when R2 client is not configured."""
+    """Test media upload fallback when Cloudinary is not configured."""
     # Create a dummy file
     dummy_file = tmp_path / "dummy.jpg"
     dummy_file.write_text("dummy content")
@@ -192,6 +192,43 @@ def test_upload_media_fallback(tmp_path):
     # upload_media should return local url fallback /media/dummy.jpg
     url = upload_media(dummy_file, "dummy.jpg", "image/jpeg")
     assert url == "/media/dummy.jpg"
+
+def test_upload_media_cloudinary(tmp_path):
+    """Test media upload using Cloudinary when configuration is present."""
+    dummy_file = tmp_path / "dummy.jpg"
+    dummy_file.write_text("dummy content")
+    
+    config = {
+        "turso": {"url": "", "auth_token": ""},
+        "cloudinary": {
+            "cloud_name": "test_cloud",
+            "api_key": "test_key",
+            "api_secret": "test_secret"
+        }
+    }
+    
+    with patch("src.core.database.load_db_config", return_value=config), \
+         patch("cloudinary.uploader.upload") as mock_upload, \
+         patch("cloudinary.config") as mock_config:
+         
+        mock_upload.return_value = {"secure_url": "https://res.cloudinary.com/test_cloud/image/upload/dummy.jpg"}
+        
+        url = upload_media(dummy_file, "dummy.jpg", "image/jpeg")
+        
+        # Verify Cloudinary uploader was called correctly
+        mock_config.assert_called_once_with(
+            cloud_name="test_cloud",
+            api_key="test_key",
+            api_secret="test_secret",
+            secure=True
+        )
+        mock_upload.assert_called_once_with(
+            str(dummy_file),
+            public_id="dummy",
+            resource_type="image",
+            folder="fallguard"
+        )
+        assert url == "https://res.cloudinary.com/test_cloud/image/upload/dummy.jpg"
 
 def test_kv_store():
     """Test saving and retrieving values in the key-value store."""

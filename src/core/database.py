@@ -19,9 +19,10 @@ LOCAL_MEDIA_DIR = Path("data/media")
 _db_conn = None
 
 def load_db_config() -> dict[str, Any]:
-    """Loads Turso database configuration from configs/db.json or environment variables."""
+    """Loads Turso database and Cloudinary configuration from configs/db.json or environment variables."""
     config = {
-        "turso": {"url": "", "auth_token": ""}
+        "turso": {"url": "", "auth_token": ""},
+        "cloudinary": {"cloud_name": "", "api_key": "", "api_secret": ""}
     }
     
     # 1. Load from file if exists
@@ -31,6 +32,8 @@ def load_db_config() -> dict[str, Any]:
                 file_config = json.load(f)
                 if "turso" in file_config:
                     config["turso"].update(file_config["turso"])
+                if "cloudinary" in file_config:
+                    config["cloudinary"].update(file_config["cloudinary"])
         except Exception as e:
             print(f"[Database] Error reading configs/db.json: {e}")
             
@@ -42,6 +45,17 @@ def load_db_config() -> dict[str, Any]:
         config["turso"]["url"] = turso_url
     if turso_token:
         config["turso"]["auth_token"] = turso_token
+        
+    # Cloudinary env
+    c_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+    c_key = os.getenv("CLOUDINARY_API_KEY")
+    c_secret = os.getenv("CLOUDINARY_API_SECRET")
+    if c_name:
+        config["cloudinary"]["cloud_name"] = c_name
+    if c_key:
+        config["cloudinary"]["api_key"] = c_key
+    if c_secret:
+        config["cloudinary"]["api_secret"] = c_secret
         
     return config
 
@@ -382,8 +396,58 @@ def get_recent_alerts(limit: int = 50) -> list[dict[str, Any]]:
 # --- Local Media Upload Fallback ---
 
 def upload_media(local_file_path: str | Path, file_name: str, content_type: str = "image/jpeg") -> str:
-    """Returns the local path for the media file, as cloud storage is disabled."""
-    # Local fallback URL. The server mounts data/media at `/media`
-    return f"/media/{file_name}"
+    """Uploads the local file to Cloudinary if configured; otherwise falls back to local storage URL."""
+    config = load_db_config()
+    c_cfg = config.get("cloudinary", {})
+    c_name = c_cfg.get("cloud_name", "").strip()
+    c_key = c_cfg.get("api_key", "").strip()
+    c_secret = c_cfg.get("api_secret", "").strip()
+    
+    local_fallback_url = f"/media/{file_name}"
+    
+    if not (c_name and c_key and c_secret):
+        print("[Database] Cloudinary is not configured. Using local filesystem fallback.")
+        return local_fallback_url
+        
+    try:
+        import cloudinary
+        import cloudinary.uploader
+        
+        # Configure Cloudinary
+        cloudinary.config(
+            cloud_name=c_name,
+            api_key=c_key,
+            api_secret=c_secret,
+            secure=True
+        )
+        
+        # Determine resource type (image or video)
+        resource_type = "image"
+        if content_type.startswith("video/") or file_name.endswith(".mp4"):
+            resource_type = "video"
+            
+        print(f"[Database] Uploading {file_name} to Cloudinary (resource_type={resource_type})...")
+        
+        # Upload using Cloudinary SDK
+        public_id = Path(file_name).stem
+        
+        res = cloudinary.uploader.upload(
+            str(local_file_path),
+            public_id=public_id,
+            resource_type=resource_type,
+            folder="fallguard"
+        )
+        
+        secure_url = res.get("secure_url")
+        if secure_url:
+            print(f"[Database] Successfully uploaded to Cloudinary: {secure_url}")
+            return secure_url
+        else:
+            print("[Database Warning] Cloudinary upload completed but secure_url was not found in response. Falling back to local URL.")
+            return local_fallback_url
+            
+    except Exception as e:
+        print(f"[Database Error] Cloudinary upload failed: {e}. Falling back to local URL.")
+        return local_fallback_url
 
 
