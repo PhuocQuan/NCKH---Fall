@@ -86,8 +86,14 @@ class FallDetectionPipeline:
             return PipelineStatus(**self._status.to_dict())
 
     def recent_alerts(self) -> list[dict[str, Any]]:
-        with self._lock:
-            return list(self._recent_alerts)
+        try:
+            from src.core.database import get_recent_alerts
+            return get_recent_alerts()
+        except Exception as e:
+            print(f"[Pipeline Error] Could not fetch alerts from database: {e}")
+            with self._lock:
+                return list(self._recent_alerts)
+
 
     def get_jpeg_frame(self) -> bytes | None:
         with self._lock:
@@ -199,7 +205,7 @@ class FallDetectionPipeline:
                 
                 if event_triggered:
                     alert_id = f"AL-{int(time.time())}"
-                    self._logger.write(result)
+                    self._logger.write(result, alert_id)
                     self._push_alert(result, alert_id)
                     
                     # Play alert sound in a separate background thread
@@ -286,10 +292,13 @@ class FallDetectionPipeline:
         media_dir = project_root / "data" / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
         
-        # 1. Save snapshot image
         img_path = media_dir / f"{alert_id}.jpg"
+        img_url = None
+        video_url = None
+        
         cv2 = self._runtime["cv2"] if self._runtime else None
         if cv2 is not None:
+            # 1. Save snapshot image
             cv2.imwrite(str(img_path), snapshot_frame)
             
             # 2. Save video clip
@@ -312,16 +321,36 @@ class FallDetectionPipeline:
                     except Exception:
                         continue
             
-            # 3. Trigger actual notifications
+            # 3. Upload to Cloudflare R2
+            try:
+                from src.core.database import upload_media, update_event_media
+                
+                print(f"[Pipeline] Uploading image for alert {alert_id}...")
+                img_url = upload_media(img_path, f"{alert_id}.jpg", "image/jpeg")
+                
+                if video_written:
+                    print(f"[Pipeline] Uploading video for alert {alert_id}...")
+                    video_url = upload_media(video_path, f"{alert_id}.mp4", "video/mp4")
+                
+                # Update database with R2 URLs
+                update_event_media(alert_id, img_url, video_url)
+                print(f"[Pipeline] Media uploaded and URLs updated in database for alert {alert_id}")
+            except Exception as e:
+                print(f"[Pipeline Error] Failed to upload media or update DB: {e}")
+                
+            # 4. Trigger actual notifications
             try:
                 from src.web.backend.notifications import send_all_alerts
                 send_all_alerts(
                     alert_id=alert_id,
                     image_path=str(img_path),
-                    video_path=str(video_path) if video_written else None
+                    video_path=str(video_path) if video_written else None,
+                    image_url=img_url,
+                    video_url=video_url
                 )
             except Exception as e:
                 print(f"[Notification Error] Khong gui duoc canh bao: {e}")
+
 
 
 def _play_alert_sound() -> None:

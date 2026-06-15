@@ -183,8 +183,14 @@ def send_sms_alert(message: str) -> None:
         print(f"[Notification] Lỗi gửi SMS Twilio: {e}")
 
 
-def send_all_alerts(alert_id: str, image_path: str | None = None, video_path: str | None = None) -> None:
+def send_all_alerts(alert_id: str, image_path: str | None = None, video_path: str | None = None, image_url: str | None = None, video_url: str | None = None) -> None:
     msg = f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện sự cố té ngã tại hệ thống FallGuard! Mã cảnh báo: {alert_id}."
+    if image_url:
+        msg += f"\n📸 Ảnh sự cố: {image_url}"
+    if video_url:
+        msg += f"\n🎥 Video quay chậm: {video_url}"
+        
     send_telegram_alert(msg, image_path, video_path)
     send_email_alert(f"[FallGuard Alert] Phát hiện té ngã {alert_id}", msg, image_path)
     send_sms_alert(msg)
+

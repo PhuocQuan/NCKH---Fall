@@ -30,25 +30,25 @@ def login(username: str, password: str) -> str:
     user = username.strip().lower()
     if "@" in user:
         user = user.split("@", 1)[0]
-    if VALID_USERS.get(user) != password:
+        
+    from src.core.database import verify_user, create_session
+    
+    if not verify_user(user, password):
         raise ValueError("Sai tai khoan hoac mat khau.")
-    token = secrets.token_urlsafe(32)
-    _sessions[token] = Session(username=user, expires_at=time.time() + TOKEN_TTL_SECONDS)
+        
+    token = create_session(user, ttl_seconds=TOKEN_TTL_SECONDS)
     return token
 
 
 def verify_token(token: str | None) -> str | None:
     if not token:
         return None
-    session = _sessions.get(token)
-    if not session:
-        return None
-    if session.expires_at < time.time():
-        _sessions.pop(token, None)
-        return None
-    return session.username
+    from src.core.database import verify_session_token
+    return verify_session_token(token)
 
 
 def logout(token: str | None) -> None:
     if token:
-        _sessions.pop(token, None)
+        from src.core.database import delete_session
+        delete_session(token)
+

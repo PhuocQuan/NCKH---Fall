@@ -354,6 +354,7 @@
       authToken = payload.token;
       localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
       localStorage.setItem("nckh_server_url", apiBaseUrl());
+      loadStoreFromBackend();
       return authToken;
     }
 
@@ -372,7 +373,74 @@
       saveStore("fg_users", users);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_settings", settings);
+      syncStoreToBackend();
     }
+
+    async function syncStoreToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        await fetch(`${apiBaseUrl()}/api/data/store`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            cameras: cameras,
+            people: people,
+            users: users,
+            apiKeys: apiKeys,
+            settings: settings
+          })
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ dữ liệu lên Database:", e);
+      }
+    }
+
+    async function loadStoreFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/data/store`, {
+          headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          if (data.cameras && JSON.stringify(data.cameras) !== JSON.stringify(cameras)) {
+            cameras = data.cameras;
+            saveStore("fg_cameras", cameras);
+            changed = true;
+          }
+          if (data.people && JSON.stringify(data.people) !== JSON.stringify(people)) {
+            people = data.people;
+            saveStore("fg_people", people);
+            changed = true;
+          }
+          if (data.users && JSON.stringify(data.users) !== JSON.stringify(users)) {
+            users = data.users;
+            saveStore("fg_users", users);
+            changed = true;
+          }
+          if (data.apiKeys && JSON.stringify(data.apiKeys) !== JSON.stringify(apiKeys)) {
+            apiKeys = data.apiKeys;
+            saveStore("fg_api_keys", apiKeys);
+            changed = true;
+          }
+          if (data.settings && JSON.stringify(data.settings) !== JSON.stringify(settings)) {
+            settings = data.settings;
+            saveStore("fg_settings", settings);
+            changed = true;
+          }
+          if (changed) {
+            render(currentView);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ dữ liệu từ Database:", e);
+      }
+    }
+
 
     function toast(message) {
       const container = document.getElementById("toast-container") || (() => {
@@ -999,8 +1067,8 @@
 
     function usersView() {
       return `<div class="tools"><button class="btn primary" data-add-user>Thêm tài khoản</button></div>
-      ${table(["Tài khoản", "Họ tên", "Vai trò", "Trạng thái", "Thao tác"], users.map(u => [
-        esc(u.email), esc(u.name), statusPill(u.role), statusPill(u.status),
+      ${table(["Tài khoản", "Mật khẩu", "Họ tên", "Vai trò", "Trạng thái", "Thao tác"], users.map(u => [
+        esc(u.email), esc(u.password || "nckh2025"), esc(u.name), statusPill(u.role), statusPill(u.status),
         `<button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button> <button class="btn small line" data-toggle-user="${esc(u.email)}">Khóa/Mở khóa</button> <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>`
       ]))}`;
     }
@@ -1088,6 +1156,7 @@
         <input type="hidden" name="oldEmail" value="${esc(email)}">
         <div class="form-grid">
           <label class="field"><span>Email</span><input class="control" name="email" value="${esc(u.email || "")}" required></label>
+          <label class="field"><span>Mật khẩu</span><input class="control" type="text" name="password" value="${esc(u.password || "nckh2025")}" required></label>
           <label class="field"><span>Họ tên</span><input class="control" name="name" value="${esc(u.name || "")}" required></label>
           <label class="field"><span>Vai trò</span><select class="control" name="role">${["Admin","Quản lý","Nhân viên y tế","Người thân","Khách xem báo cáo"].map(r => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
           <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${u.status === "Đang hoạt động" ? "selected" : ""}>Đang hoạt động</option><option ${u.status === "Bị khóa" ? "selected" : ""}>Bị khóa</option></select></label>
@@ -2061,7 +2130,7 @@
         alert("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.");
         return;
       }
-      if (passwordInput !== "nckh2025") {
+      if (passwordInput !== (foundUser.password || "nckh2025")) {
         alert("Sai mật khẩu. Vui lòng thử lại.");
         return;
       }
@@ -2329,6 +2398,7 @@
         const type = event.target.closest("[data-action='view-media']").dataset.mediaType;
         const alertId = event.target.closest("[data-action='view-media']").dataset.alertId;
         const isMock = alertId.includes("20260615") || alertId.includes("001") || alertId.includes("002") || alertId.includes("003");
+        const alertObj = alerts.find(a => a.id === alertId);
         
         if (type === "Video clip" || type.toLowerCase().includes("video")) {
           if (isMock) {
@@ -2342,8 +2412,9 @@
               </div>
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           } else {
+            const videoSrc = (alertObj && alertObj.video_url) ? alertObj.video_url : `${apiBaseUrl()}/media/${alertId}.mp4`;
             openModal(`Xem Video ${alertId}`, `
-              <video src="${apiBaseUrl()}/media/${alertId}.mp4" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line)"></video>
+              <video src="${videoSrc}" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line)"></video>
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           }
         } else {
@@ -2358,8 +2429,9 @@
               </div>
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           } else {
+            const imgSrc = (alertObj && alertObj.image_url) ? alertObj.image_url : `${apiBaseUrl()}/media/${alertId}.jpg`;
             openModal(`Xem Ảnh chụp ${alertId}`, `
-              <img src="${apiBaseUrl()}/media/${alertId}.jpg" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line)">
+              <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line)">
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           }
         }
@@ -2431,6 +2503,7 @@
           name: formData.get("name"), 
           role: formData.get("role"), 
           status: formData.get("status"),
+          password: formData.get("password") || "nckh2025",
           assignedCameras: assignedCameras
         };
         const idx = users.findIndex((item) => item.email === oldEmail);

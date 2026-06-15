@@ -125,16 +125,21 @@ def list_alerts(user: str = Depends(require_user)) -> dict[str, Any]:
 
 @app.get("/api/events")
 def list_events(user: str = Depends(require_user)) -> dict[str, Any]:
-    log_path = Path("data/events.csv")
-    if not log_path.exists():
-        return {"events": []}
-    events = []
-    with log_path.open(encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            events.append(row)
-    events.reverse()
-    return {"events": events[:100]}
+    try:
+        from src.core.database import get_events
+        return {"events": get_events(limit=100)}
+    except Exception as e:
+        print(f"[Server Error] Failed to get events from database: {e}. Falling back to CSV.")
+        log_path = Path("data/events.csv")
+        if not log_path.exists():
+            return {"events": []}
+        events = []
+        with log_path.open(encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                events.append(row)
+        events.reverse()
+        return {"events": events[:100]}
 
 
 def _mjpeg_generator():
@@ -275,6 +280,185 @@ def test_notification(body: TestNotifRequest, user: str = Depends(require_user))
             raise HTTPException(status_code=500, detail=f"Lỗi gửi SMS: {e}")
             
     return {"ok": False, "detail": f"Kênh '{body.channel}' không hỗ trợ gửi thử thực tế."}
+
+
+@app.get("/api/data/store")
+def get_dashboard_store(user: str = Depends(require_user)) -> dict[str, Any]:
+    from src.core.database import get_kv, save_kv, get_db_connection
+    cameras = get_kv("fg_cameras")
+    people = get_kv("fg_people")
+    users_list = get_kv("fg_users")
+    if users_list is None:
+        users_list = []
+    api_keys = get_kv("fg_api_keys")
+    settings = get_kv("fg_settings")
+    
+    # Đồng bộ 2 chiều giữa kv_store và bảng SQL users
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, password, role FROM users")
+        db_rows = cursor.fetchall()
+        
+        # Tạo map lưu thông tin từ database SQL
+        db_users = {}
+        for row in db_rows:
+            if hasattr(row, "keys"):
+                r_dict = dict(row)
+                uname = r_dict["username"]
+                db_users[uname] = r_dict
+            elif isinstance(row, dict):
+                uname = row["username"]
+                db_users[uname] = row
+            else:
+                uname = row[0]
+                db_users[uname] = {"username": row[0], "password": row[1], "role": row[2]}
+                
+        # Cập nhật danh sách từ Frontend bằng dữ liệu từ SQL
+        frontend_usernames = set()
+        users_list_changed = False
+        
+        for u in users_list:
+            email = u.get("email", "").strip().lower()
+            if not email:
+                continue
+            username = email.split("@", 1)[0] if "@" in email else email
+            frontend_usernames.add(username)
+            
+            if username in db_users:
+                # Cập nhật password và role từ SQL vào frontend list nếu khác nhau
+                db_pwd = db_users[username].get("password")
+                if u.get("password") != db_pwd:
+                    u["password"] = db_pwd
+                    users_list_changed = True
+                
+                role_map = {
+                    "Admin": "Admin",
+                    "Quản lý": "Quản lý",
+                    "Điều dưỡng": "Nhân viên y tế",
+                    "Nhân viên y tế": "Nhân viên y tế",
+                    "Người nhà": "Người thân",
+                    "Người thân": "Người thân",
+                    "Khách": "Khách xem báo cáo",
+                    "Khách xem báo cáo": "Khách xem báo cáo"
+                }
+                db_role = db_users[username].get("role")
+                mapped_role = role_map.get(db_role, db_role)
+                if u.get("role") != mapped_role:
+                    u["role"] = mapped_role
+                    users_list_changed = True
+            else:
+                # Nếu có trên frontend nhưng chưa có trong SQL, thêm vào SQL
+                pwd = u.get("password") or "nckh2025"
+                role = u.get("role", "User")
+                cursor.execute(
+                    "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                    (username, pwd, role)
+                )
+                conn.commit()
+                db_users[username] = {"username": username, "password": pwd, "role": role}
+                
+        # Nếu có trong SQL nhưng chưa có trong frontend list, thêm vào frontend list
+        for username, db_u in db_users.items():
+            if username not in frontend_usernames and username:
+                role_map = {
+                    "Admin": "Admin",
+                    "Quản lý": "Quản lý",
+                    "Điều dưỡng": "Nhân viên y tế",
+                    "Nhân viên y tế": "Nhân viên y tế",
+                    "Người nhà": "Người thân",
+                    "Người thân": "Người thân",
+                    "Khách": "Khách xem báo cáo",
+                    "Khách xem báo cáo": "Khách xem báo cáo"
+                }
+                fe_role = role_map.get(db_u.get("role"), "Khách xem báo cáo")
+                
+                new_fe_user = {
+                    "email": f"{username}@nckh.vn",
+                    "name": username.capitalize(),
+                    "role": fe_role,
+                    "status": "Đang hoạt động",
+                    "password": db_u.get("password") or "nckh2025",
+                    "assignedCameras": []
+                }
+                users_list.append(new_fe_user)
+                users_list_changed = True
+                
+        if users_list_changed:
+            save_kv("fg_users", users_list)
+            print("[Sync Users Startup] Đã đồng bộ tài khoản giữa SQL và kv_store.")
+            
+    except Exception as e:
+        print(f"[Sync Users Startup Error] {e}")
+            
+    return {
+        "cameras": cameras,
+        "people": people,
+        "users": users_list,
+        "apiKeys": api_keys,
+        "settings": settings,
+    }
+
+
+@app.post("/api/data/store")
+def save_dashboard_store(body: dict[str, Any], user: str = Depends(require_user)) -> dict[str, bool]:
+    from src.core.database import save_kv, get_db_connection
+    if "cameras" in body:
+        save_kv("fg_cameras", body["cameras"])
+    if "people" in body:
+        save_kv("fg_people", body["people"])
+    if "users" in body:
+        save_kv("fg_users", body["users"])
+        
+        # Đồng bộ danh sách tài khoản sang bảng users trong SQL database để có thể Đăng nhập
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Lấy các username hiện tại trong SQL
+            cursor.execute("SELECT username FROM users")
+            db_usernames = {row[0] if isinstance(row, tuple) else row["username"] for row in cursor.fetchall()}
+            
+            frontend_usernames = set()
+            for u in body["users"]:
+                email = u.get("email", "").strip().lower()
+                if not email:
+                    continue
+                # Chuyển email sang username giống auth.py
+                username = email.split("@", 1)[0] if "@" in email else email
+                frontend_usernames.add(username)
+                
+                # Nếu chưa có trong SQL, thêm mới với mật khẩu từ Frontend
+                pwd = u.get("password") or "nckh2025"
+                role = u.get("role", "User")
+                if username not in db_usernames:
+                    cursor.execute(
+                        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                        (username, pwd, role)
+                    )
+                else:
+                    # Cập nhật mật khẩu và vai trò nếu thay đổi
+                    cursor.execute(
+                        "UPDATE users SET password = ?, role = ? WHERE username = ?",
+                        (pwd, role, username)
+                    )
+            
+            # Xóa các username trong SQL không còn nằm trong danh sách của Frontend (trừ tài khoản admin chính)
+            for db_user in db_usernames:
+                if db_user not in frontend_usernames and db_user not in {"admin"}:
+                    cursor.execute("DELETE FROM users WHERE username = ?", (db_user,))
+                    
+            conn.commit()
+            print(f"[Sync Users] Đã đồng bộ tài khoản SQL với danh sách Web. Usernames: {frontend_usernames}")
+        except Exception as e:
+            print(f"[Sync Users Error] Không thể đồng bộ bảng users: {e}")
+            
+    if "apiKeys" in body:
+        save_kv("fg_api_keys", body["apiKeys"])
+    if "settings" in body:
+        save_kv("fg_settings", body["settings"])
+    return {"ok": True}
+
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
