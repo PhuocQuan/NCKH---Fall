@@ -22,11 +22,17 @@ FallDetector
 
 ## Vai tro tung module
 
-- `src/video_source.py`: mo va doc frame tu webcam, video file, HTTP stream, RTSP stream.
-- `src/pose_estimator.py`: chuyen frame thanh cac diem moc co the nguoi.
-- `src/fall_detector.py`: xu ly chuoi diem moc va tra ve trang thai `normal`, `warning`, `fallen`.
-- `src/event_logger.py`: ghi su kien de phuc vu bao cao va danh gia.
-- `src/app.py`: ghep cac module thanh demo realtime.
+- `src/camera/video_source.py`: mo va doc frame tu webcam, video file, HTTP stream, RTSP stream.
+- `src/camera/check_camera.py`: kiem tra webcam truoc khi chay demo.
+- `src/detection/pose_estimator.py`: chuyen frame thanh cac diem moc co the nguoi.
+- `src/detection/fall_detector.py`: xu ly chuoi diem moc va tra ve trang thai `normal`, `warning`, `fallen`.
+- `src/detection/feature_extractor.py`: trich xuat dac trung tu chuoi landmark.
+- `src/ai/ai_classifier.py`: phan loai fall/non_fall bang model hoc may.
+- `src/ai/build_feature_dataset.py`, `src/ai/train_ai_model.py`: pipeline train AI.
+- `src/core/event_logger.py`: ghi su kien de phuc vu bao cao va danh gia.
+- `src/core/config.py`: cau hinh YAML.
+- `src/core/app.py`: ghep cac module thanh demo realtime.
+- `src/web/`: dashboard web FallGuard AI.
 
 ## Lo trinh tich hop camera thuc te
 
