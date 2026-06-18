@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/socket_service.dart';
 import '../widgets/mjpeg_view.dart';
+import 'Camera_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -91,6 +92,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       videoUrl: 'http://127.0.0.1:8000/video',
                       statusText: isFall ? 'Fall Detected' : 'Normal',
                       statusColor: isFall ? Colors.red : Colors.green,
+                      // WHY truyền callback onTap từ ngoài vào, không tự
+                      // Navigator.push trong _CameraCard:
+                      // _CameraCard là widget hiển thị thuần (dumb widget),
+                      // không nên biết về navigation logic hay cách tạo
+                      // CameraDetailScreen. HomeScreen (nơi nắm socketService)
+                      // mới là nơi có đủ thông tin để build route — giữ
+                      // _CameraCard tái dùng được cho mục đích khác sau này
+                      // (ví dụ nhúng vào 1 dashboard không cần tap-to-detail).
+                      onTap: () => _openCameraDetail(
+                        label: 'CAM-01 · Bedroom · Room 101',
+                        videoUrl: 'http://127.0.0.1:8000/video',
+                      ),
                     ),
                     // CAM-02, 03, 04: placeholder, chờ gắn logic/camera thật sau
                     const _PlaceholderCameraCard(
@@ -111,6 +124,33 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  // WHY tách thành method riêng thay vì viết inline trong onTap:
+  // sau này CAM-02/03/04 có data thật, mày chỉ cần gọi lại đúng method
+  // này với label/videoUrl khác, không phải copy-paste logic Navigator.push.
+  void _openCameraDetail({
+    required String label,
+    required String videoUrl,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CameraDetailScreen(
+          label: label,
+          videoUrl: videoUrl,
+          // WHY truyền socketService.stream (instance hiện tại), không
+          // socketService.channel.stream thô: .stream đã là broadcast
+          // stream (xem socket_service.dart — .asBroadcastStream()), nghĩa
+          // là Home và Detail có thể cùng listen() trên CÙNG 1 stream object
+          // mà không tranh nhau dữ liệu hay làm hỏng StreamBuilder của Home.
+          // Nếu dùng stream thường (single-subscription), Detail listen()
+          // vào sẽ làm StreamBuilder ở Home mất khả năng nhận data (1 stream
+          // chỉ cho phép 1 listener active).
+          socketStream: socketService.stream,
+        ),
+      ),
     );
   }
 
@@ -149,29 +189,39 @@ class _CameraCard extends StatelessWidget {
   final String videoUrl;
   final String statusText;
   final Color statusColor;
+  final VoidCallback onTap;
 
   const _CameraCard({
     required this.label,
     required this.videoUrl,
     required this.statusText,
     required this.statusColor,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // WHY bỏ borderRadius + boxShadow ở đây:
-      // theo yêu cầu "sát nhau, bỏ shadow cho đỡ rối" — bo góc + shadow từng
-      // card tạo cảm giác 4 card rời rạc, không hợp với spacing 3px. Bo góc
-      // tổng thể đã chuyển ra ClipRRect bọc ngoài GridView (xem build() của
-      // _HomeScreenState).
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildVideoArea(),
-          _buildFooterLabel(),
-        ],
+    // WHY bọc cả Container bằng InkWell (không phải GestureDetector):
+    // InkWell cho ripple effect khi tap — feedback hình ảnh ngay lập tức
+    // báo cho user biết "tap đã được nhận", quan trọng với app giám sát
+    // y tế vì user (caregiver) cần chắc chắn họ vừa mở đúng camera, không
+    // tap nhầm. GestureDetector không có visual feedback này.
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        // WHY bỏ borderRadius + boxShadow ở đây:
+        // theo yêu cầu "sát nhau, bỏ shadow cho đỡ rối" — bo góc + shadow từng
+        // card tạo cảm giác 4 card rời rạc, không hợp với spacing 3px. Bo góc
+        // tổng thể đã chuyển ra ClipRRect bọc ngoài GridView (xem build() của
+        // _HomeScreenState).
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildVideoArea(),
+            _buildFooterLabel(),
+          ],
+        ),
       ),
     );
   }
@@ -279,9 +329,13 @@ class _CameraCard extends StatelessWidget {
 // nói rõ cho người dùng biết camera này CHƯA kết nối, tránh hiểu lầm là đang
 // giám sát thật.
 //
+// WHY không có onTap: chưa có camera/route thật để mở -> tap vào không có
+// gì xảy ra (không đăng ký InkWell) thay vì navigate tới 1 Detail screen
+// với video URL rỗng/lỗi, gây trải nghiệm xấu hơn so với "không phản hồi".
+//
 // Khi gắn camera thật vào ô này (ví dụ thêm endpoint /video2 ở backend),
 // thay lời gọi _PlaceholderCameraCard(label: ...) bằng _CameraCard(label:,
-// videoUrl:, statusText:, statusColor:) như CAM-01 phía trên.
+// videoUrl:, statusText:, statusColor:, onTap:) như CAM-01 phía trên.
 class _PlaceholderCameraCard extends StatelessWidget {
   final String label;
 
