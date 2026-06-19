@@ -2823,15 +2823,24 @@
           if (data.alerts && data.alerts.length > 0) {
             let changed = false;
             data.alerts.forEach(backendAlert => {
-              if (!alerts.some(a => a.id === backendAlert.id)) {
+              const localIndex = alerts.findIndex(a => a.id === backendAlert.id);
+              if (localIndex < 0) {
                 alerts.unshift(backendAlert);
                 changed = true;
+              } else {
+                const local = alerts[localIndex];
+                if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status) {
+                  alerts[localIndex] = { ...local, ...backendAlert };
+                  changed = true;
+                }
               }
             });
             if (changed) {
               saveAll();
               updatePendingAlertsCount();
-              if (currentView === "alerts") render("alerts");
+              if (currentView === "alerts" || currentView === "media") {
+                render(currentView, false);
+              }
             }
           }
         }
@@ -2911,7 +2920,7 @@
       }));
     }
 
-    function render(id = "dashboard") {
+    function render(id = "dashboard", fetchSync = true) {
       currentView = id;
       const vis = getVisibleCameras();
       if (vis.length > 0) {
@@ -2933,6 +2942,11 @@
       // Fetch dynamic logs when rendering events
       if (id === "events") {
         fetchBackendEvents();
+      }
+
+      // Sync alerts from backend automatically when viewing alerts or media
+      if (fetchSync && (id === "alerts" || id === "media")) {
+        syncAlertsAndEvents();
       }
       
       // Auto-start status polling on detection tab or user dashboard if stream is active
