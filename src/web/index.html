@@ -350,6 +350,16 @@
     ];
 
     const $ = (id) => document.getElementById(id);
+    const hasVideo = (a) => {
+      if (!a) return false;
+      const isMock = a.id === "AL-20260615-001" || a.id === "AL-20260615-002" || a.id === "AL-20260615-003";
+      if (isMock) {
+        return a.media && a.media.toLowerCase().includes("video");
+      }
+      if (a.cloud_video_url) return true;
+      if (a.media && a.media.toLowerCase().includes("video")) return true;
+      return false;
+    };
     let currentView = "dashboard";
     let liveViewLevel = "locations"; // "locations", "cameras", "stream"
     let selectedLocation = "";
@@ -837,7 +847,7 @@
               <p class="hint" style="margin: 0;">Danh sách các sự kiện cảnh báo ngã tại khu vực này.</p>
             </div>
             ${table(["Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Media", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"], filteredAlerts.map(a => [
-              a.id, a.time, a.camera, a.person, a.media.includes("AL-") ? "Ảnh + video thực" : a.media, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+              a.id, a.time, a.camera, a.person, (a.id === "AL-20260615-001" || a.id === "AL-20260615-002" || a.id === "AL-20260615-003") ? a.media : (hasVideo(a) ? "Ảnh + video thực" : "Ảnh thực"), `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
               isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
             ]))}
           `;
@@ -879,8 +889,8 @@
             const camIds = camsInHouse.map(c => c.id);
             const houseAlerts = alerts.filter(a => camIds.includes(a.camera));
             const totalMedia = houseAlerts.length;
-            const imagesCount = houseAlerts.filter(a => !(a.media.includes("video") || a.media.includes("Video") || a.media.includes("AL-"))).length;
-            const videosCount = totalMedia - imagesCount;
+            const videosCount = houseAlerts.filter(hasVideo).length;
+            const imagesCount = totalMedia - videosCount;
 
             return `
               <div class="location-card animate-hover" onclick="selectedMediaLocation='${esc(house.name)}'; mediaViewLevel='media'; render('media', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
@@ -915,7 +925,7 @@
           const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
 
           const rows = filteredAlerts.map(a => {
-            const type = a.media.includes("video") || a.media.includes("Video") || a.media.includes("AL-") ? "Video clip" : "Ảnh chụp";
+            const type = hasVideo(a) ? "Video clip" : "Ảnh chụp";
             const deleteBtn = isEditable ? `<button class="btn small danger" data-action="delete-media" data-alert-id="${a.id}">Xóa</button>` : "";
             return [
               type,
@@ -3351,10 +3361,10 @@
 
       // Media Actions handler
       if (event.target.closest("[data-action='view-media']")) {
-        const type = event.target.closest("[data-action='view-media']").dataset.mediaType;
         const alertId = event.target.closest("[data-action='view-media']").dataset.alertId;
-        const isMock = alertId.includes("20260615") || alertId.includes("001") || alertId.includes("002") || alertId.includes("003");
         const a = alerts.find(x => x.id === alertId);
+        const isMock = alertId.startsWith("AL-20260615-");
+        const type = hasVideo(a) ? "Video clip" : "Ảnh chụp";
         
         let cloudLinkHtml = "";
         let imgSrc = `${apiBaseUrl()}/media/${alertId}.jpg`;

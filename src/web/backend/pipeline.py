@@ -299,7 +299,7 @@ class FallDetectionPipeline:
         import os
         from pathlib import Path
         
-        project_root = Path(__file__).resolve().parents[2]
+        project_root = Path(__file__).resolve().parents[3]
         media_dir = project_root / "data" / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
         
@@ -346,16 +346,18 @@ class FallDetectionPipeline:
                     if a["id"] == alert_id:
                         a["cloud_img_url"] = cloud_img_url
                         a["cloud_video_url"] = cloud_video_url
+                        a["media"] = f"{alert_id}_video" if video_written else f"{alert_id}_image"
                         break
             try:
                 from src.web.backend.db import get_db_client
                 with get_db_client() as client:
+                    media_val = f"{alert_id}_video" if video_written else f"{alert_id}_image"
                     client.execute(
-                        "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ? WHERE id = ?",
-                        [cloud_img_url, cloud_video_url, alert_id]
+                        "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ?, media = ? WHERE id = ?",
+                        [cloud_img_url, cloud_video_url, media_val, alert_id]
                     )
             except Exception as e:
-                print(f"[Database Error] Khong the cap nhat Cloud URL vao Turso: {e}")
+                print(f"[Database Error] Khong the cap nhat Cloud URL va media vao Turso: {e}")
             
             # 4. Trigger actual notifications
             try:
