@@ -521,13 +521,13 @@ def update_user(email: str, body: UserDB, user: str = Depends(require_user)) -> 
     with get_db_client() as client:
         if body.password:
             client.execute(
-                "UPDATE users SET name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ? WHERE email = ?",
-                [body.name, body.role, body.status, assigned_json, body.password, body.phone, email]
+                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ? WHERE email = ?",
+                [body.email, body.name, body.role, body.status, assigned_json, body.password, body.phone, email]
             )
         else:
             client.execute(
-                "UPDATE users SET name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ? WHERE email = ?",
-                [body.name, body.role, body.status, assigned_json, body.phone, email]
+                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ? WHERE email = ?",
+                [body.email, body.name, body.role, body.status, assigned_json, body.phone, email]
             )
     return {"ok": True}
 
