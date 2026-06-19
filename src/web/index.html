@@ -5,6 +5,186 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FallGuard AI - Dashboard NCKH</title>
   <link rel="stylesheet" href="dashboard.css" />
+  <style>
+    /* Keyframes and Animations */
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    @keyframes pulse-red {
+      0% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    @keyframes pulse-warning {
+      0% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+      70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+      100% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
+    
+    .status-dot-pulse {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-dot-pulse.online {
+      background-color: #10b981;
+      animation: pulse 2s infinite;
+    }
+    .status-dot-pulse.offline {
+      background-color: #ef4444;
+      animation: pulse-red 2s infinite;
+    }
+    .status-dot-pulse.maintenance {
+      background-color: #f59e0b;
+      animation: pulse-warning 2s infinite;
+    }
+
+    /* Premium Camera Grid and Cards */
+    .premium-camera-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .premium-camera-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .premium-camera-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      border-color: #818cf8;
+    }
+    .location-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 20px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04) !important;
+      border-color: #818cf8 !important;
+    }
+    .premium-camera-card .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 10px;
+    }
+    .premium-camera-card .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0;
+    }
+    .premium-camera-card .card-subtitle {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .premium-camera-card .conn-info {
+      background: #f8fafc;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .premium-camera-card .conn-info-row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .premium-camera-card .conn-info-label {
+      color: #64748b;
+    }
+    .premium-camera-card .conn-info-value {
+      font-weight: 600;
+      color: #334155;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    .premium-camera-card .param-badges {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+    .premium-camera-card .param-badge {
+      background: #f1f5f9;
+      border-radius: 6px;
+      padding: 6px 4px;
+      font-size: 11px;
+    }
+    .premium-camera-card .param-badge-label {
+      color: #64748b;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .premium-camera-card .param-badge-val {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .premium-camera-card .card-actions {
+      margin-top: auto;
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid #f1f5f9;
+      padding-top: 12px;
+    }
+    .premium-camera-card .card-actions button {
+      flex: 1;
+    }
+    
+    /* Logs pagination classes */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line);
+    }
+    .pagination-controls {
+      display: flex;
+      gap: 4px;
+    }
+    .pagination-btn {
+      min-width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--gray-700);
+      transition: all 0.2s;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    .pagination-btn.active {
+      background: #4f46e5;
+      color: #fff;
+      border-color: #4f46e5;
+    }
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
   <!-- MediaPipe dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -22,7 +202,13 @@
         </div>
       </div>
       <label class="field"><span>Tài khoản</span><input class="control" id="loginUsername" value="admin" /></label>
-      <label class="field"><span>Mật khẩu</span><input class="control" id="loginPassword" type="password" value="nckh2025" /></label>
+      <label class="field">
+        <span>Mật khẩu</span>
+        <div style="position: relative; display: flex; align-items: center; width: 100%;">
+          <input class="control" id="loginPassword" type="password" value="nckh2025" style="padding-right: 36px; width: 100%;" />
+          <button type="button" class="password-toggle" onclick="const input = document.getElementById('loginPassword'); if(input.type === 'password') { input.type = 'text'; this.textContent = '👁️'; } else { input.type = 'password'; this.textContent = '🙈'; }">🙈</button>
+        </div>
+      </label>
       <div class="row" style="margin-bottom:14px">
         <label class="hint"><input type="checkbox" checked /> Ghi nhớ đăng nhập</label>
         <button type="button" class="btn small line" id="forgotBtn">Quên mật khẩu</button>
@@ -46,10 +232,10 @@
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <div class="row" style="justify-content:flex-start">
-          <div class="avatar">AD</div>
+          <div class="avatar" id="sidebarAvatar">AD</div>
           <div>
-            <div style="color:#fff;font-weight:800">Admin NCKH</div>
-            <div class="hint">Quản trị viên</div>
+            <div id="sidebarUserName" style="color:#fff;font-weight:800">Admin NCKH</div>
+            <div id="sidebarUserRole" class="hint">Quản trị viên</div>
           </div>
           <button class="btn small line" id="logoutBtn" style="margin-left:auto">Đăng xuất</button>
         </div>
@@ -95,24 +281,20 @@
       { id: "AL-20260615-003", time: "15/06/2026 09:40", camera: "CAM-002", person: "Trần Văn An", confidence: 68, status: "Báo động giả", level: "Trung bình", media: "Video 8s" }
     ]);
 
-    let people = loadStore("fg_people", [
-      { id: "BN-001", name: "Nguyễn Văn Minh", dob: "12/04/1948", gender: "Nam", medical: "Tiền đình, huyết áp cao", note: "Đi lại cần gậy", contact: "Nguyễn Minh Anh - 0901 234 567" },
-      { id: "BN-002", name: "Trần Văn An", dob: "03/10/1955", gender: "Nam", medical: "Sau phẫu thuật khớp háng", note: "Theo dõi ban đêm", contact: "Trần Thu Hà - 0912 111 222" },
-      { id: "BN-003", name: "Lê Thị Hoa", dob: "20/08/1950", gender: "Nữ", medical: "Tiểu đường, chóng mặt", note: "Nguy cơ té cao", contact: "Lê Quốc Bảo - 0987 555 666" }
-    ]);
+
 
     // Migration block to ensure default non-admin users start with no assigned cameras
-    if (!localStorage.getItem("fg_users_migrated_v3")) {
+    if (!localStorage.getItem("fg_users_migrated_v4")) {
       localStorage.removeItem("fg_users");
-      localStorage.setItem("fg_users_migrated_v3", "true");
+      localStorage.setItem("fg_users_migrated_v4", "true");
     }
 
     let users = loadStore("fg_users", [
       { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
-      { email: "manager@nckh.vn", name: "Quản lý trung tâm", role: "Quản lý", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
-      { email: "nurse@nckh.vn", name: "Nhân viên y tế", role: "Nhân viên y tế", status: "Đang hoạt động", assignedCameras: [] },
-      { email: "family@nckh.vn", name: "Người thân BN-001", role: "Người thân", status: "Đang hoạt động", assignedCameras: [] },
-      { email: "guest@nckh.vn", name: "Khách xem báo cáo", role: "Khách xem báo cáo", status: "Bị khóa", assignedCameras: [] }
+      { email: "manager@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "nurse@nckh.vn", name: "Nhân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "family@nckh.vn", name: "Ân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "guest@nckh.vn", name: "Quân", role: "Khachhang", status: "Bị khóa", assignedCameras: [] }
     ]);
 
     // Safeguard to ensure admin@nckh.vn is always present and active
@@ -146,34 +328,40 @@
     ];
 
     const menu = [
-      ["Tổng quan", [["dashboard", "01", "Dashboard", "Thống kê, biểu đồ và bản đồ camera"]]],
+      ["Tổng quan", [["dashboard", "01", "Dashboard", "Thống kê tổng quan camera và khách hàng"]]],
       ["Vận hành", [
-        ["live", "02", "Giám sát trực tiếp", "Xem 1/4/9/16 camera, AI overlay"],
-        ["detection", "03", "Phát hiện té ngã", "Theo dõi người, pose và confidence"],
-        ["alerts", "04", "Hệ thống cảnh báo", "Cảnh báo, mức độ và trạng thái"],
-        ["notifications", "05", "Thông báo", "Web, Email, Telegram, SMS, Zalo, Push"]
+        ["live", "02", "Nơi lắp đặt", "Giám sát camera theo từng nhà, nơi đã lắp"],
+        ["alerts", "03", "Hệ thống cảnh báo", "Cảnh báo ngã và trạng thái xử lý"],
+        ["notifications", "04", "Thông báo", "Cài đặt các kênh thông báo tự động"]
       ]],
       ["Quản lý", [
-        ["cameras", "06", "Quản lý camera", "Danh sách, thêm, sửa, cấu hình"],
-        ["people", "07", "Người được theo dõi", "Hồ sơ y tế và liên hệ khẩn cấp"],
-        ["users", "08", "Tài khoản & phân quyền", "Người dùng, vai trò, khóa/mở khóa"],
-        ["media", "09", "Hình ảnh & video", "Ảnh chụp, video sự kiện, cloud"]
+        ["users", "05", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
+        ["media", "06", "Hình ảnh & video", "Ảnh chụp và video sự kiện cảnh báo theo nơi lắp đặt"],
+        ["cameras", "07", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
       ]],
       ["Dữ liệu", [
-        ["events", "10", "Lịch sử sự kiện", "Tìm kiếm, lọc, sắp xếp"],
-        ["reports", "11", "Báo cáo", "Ngày, tuần, tháng, năm, PDF/Excel"],
-        ["ai", "12", "Thống kê AI", "Accuracy, Precision, Recall, F1, hiệu suất"],
-        ["logs", "13", "Nhật ký hệ thống", "Đăng nhập, camera, cảnh báo"]
+        ["logs", "08", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
       ]],
       ["Hệ thống", [
-        ["settings", "14", "Cài đặt hệ thống", "AI, notification, storage"],
-        ["api", "15", "API Management", "Camera API, AI API, Mobile API, API key"],
-        ["mobile", "16", "Mobile Support", "Camera, cảnh báo, lịch sử, xác nhận"]
+        ["settings", "09", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
+        ["api", "10", "API Management", "Quản lý khóa API truy cập hệ thống"],
+        ["mobile", "11", "Ứng dụng điện thoại", "Tải ứng dụng di động hỗ trợ giám sát"]
       ]]
     ];
 
     const $ = (id) => document.getElementById(id);
     let currentView = "dashboard";
+    let liveViewLevel = "locations"; // "locations", "cameras", "stream"
+    let selectedLocation = "";
+    let alertsViewLevel = "locations"; // "locations", "alerts"
+    let selectedAlertsLocation = "";
+    let mediaViewLevel = "locations"; // "locations", "media"
+    let selectedMediaLocation = "";
+    let alertsLocationFilter = "Tất cả";
+    let mediaLocationFilter = "Tất cả";
+    let logsCurrentPage = 1;
+    const logsPerPage = 10;
+    let systemLogs = [];
     let selectedCameraId = cameras[0]?.id || "";
     let testCameraStream = null;
     let aiFallTestOn = false;
@@ -193,26 +381,66 @@
     
     function isMenuAllowed(menuId, role) {
       if (role === "Admin") return true;
-      if (role === "Quản lý") {
-        return !["users", "settings", "api", "logs"].includes(menuId);
-      }
-      if (role === "Nhân viên y tế") {
-        return ["dashboard", "live", "detection", "alerts", "people", "media", "events", "reports", "mobile"].includes(menuId);
-      }
-      if (role === "Người thân") {
-        return ["dashboard", "live", "alerts", "media", "reports", "mobile"].includes(menuId);
-      }
-      if (role === "Khách xem báo cáo") {
-        return ["dashboard", "live", "events", "reports"].includes(menuId);
+      if (role === "Khachhang" || role === "Khách hàng") {
+        return ["dashboard", "live", "alerts", "notifications", "media", "mobile"].includes(menuId);
       }
       return false;
     }
     
     function getVisibleCameras() {
-      if (currentUser.role === "Admin" || currentUser.role === "Quản lý") {
+      if (currentUser.role === "Admin") {
         return cameras;
       }
       return cameras.filter(c => (currentUser.assignedCameras || []).includes(c.id));
+    }
+    
+    function getVisibleAlerts() {
+      const visCamIds = getVisibleCameras().map(c => c.id);
+      const isPrivileged = currentUser.role === "Admin";
+      return isPrivileged ? alerts : alerts.filter(a => visCamIds.includes(a.camera));
+    }
+
+    function getTodayDateString(offsetHours = 0) {
+      const d = new Date();
+      if (offsetHours) d.setHours(d.getHours() - offsetHours);
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      const hour = String(d.getHours()).padStart(2, "0");
+      const minute = String(d.getMinutes()).padStart(2, "0");
+      return `${day}/${month}/${year} ${hour}:${minute}`;
+    }
+
+    function getVisibleHouses() {
+      const isPrivileged = currentUser.role === "Admin";
+      if (isPrivileged) {
+        const customerHouses = users
+          .filter(u => u.role !== "Admin")
+          .map(u => ({
+            name: `Nhà ${u.name}`,
+            ownerEmail: u.email,
+            cameras: u.assignedCameras || []
+          }));
+          
+        const assignedCamIds = new Set(users.filter(u => u.role !== "Admin").flatMap(u => u.assignedCameras || []));
+        const unassignedCams = cameras.filter(c => !assignedCamIds.has(c.id));
+        if (unassignedCams.length > 0) {
+          customerHouses.push({
+            name: "Thiết bị chưa gán",
+            ownerEmail: "",
+            cameras: unassignedCams.map(c => c.id)
+          });
+        }
+        return customerHouses;
+      } else {
+        return [
+          {
+            name: `Nhà ${currentUser.name}`,
+            ownerEmail: currentUser.email,
+            cameras: currentUser.assignedCameras || []
+          }
+        ];
+      }
     }
     
     // Audio Context Alarm Sound Synthesis
@@ -271,9 +499,9 @@
     }
 
     function updateSidebarFooter() {
-      const avatarEl = document.querySelector(".sidebar .avatar");
-      const nameEl = document.querySelector(".sidebar .side-foot div div:first-child");
-      const roleEl = document.querySelector(".sidebar .side-foot div .hint");
+      const avatarEl = $("sidebarAvatar");
+      const nameEl = $("sidebarUserName");
+      const roleEl = $("sidebarUserRole");
       
       if (avatarEl && nameEl && roleEl) {
         const initials = currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
@@ -365,10 +593,36 @@
       return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
     }
 
+    async function syncFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const [resUsers, resCameras, resAlerts] = await Promise.all([
+          fetch(`${apiBaseUrl()}/api/users`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null)
+        ]);
+        
+        if (resUsers && Array.isArray(resUsers)) {
+          users = resUsers;
+          saveStore("fg_users", users);
+        }
+        if (resCameras && Array.isArray(resCameras)) {
+          cameras = resCameras;
+          saveStore("fg_cameras", cameras);
+        }
+        if (resAlerts && Array.isArray(resAlerts.alerts)) {
+          alerts = resAlerts.alerts;
+          saveStore("fg_alerts", alerts);
+        }
+      } catch (err) {
+        console.error("Error syncing data from backend:", err);
+      }
+    }
+
+
     function saveAll() {
       saveStore("fg_cameras", cameras);
       saveStore("fg_alerts", alerts);
-      saveStore("fg_people", people);
       saveStore("fg_users", users);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_settings", settings);
@@ -446,17 +700,14 @@
       const visCameras = getVisibleCameras();
       const online = visCameras.filter(c => c.status === "online").length;
       const offline = visCameras.filter(c => c.status === "offline").length;
-      const visCamIds = visCameras.map(c => c.id);
-      const isPrivileged = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-      
-      const filteredPeople = isPrivileged ? people : people.filter(p => visCameras.some(c => c.target === p.id));
-      const filteredAlertsToday = alerts.filter(a => (isPrivileged || visCamIds.includes(a.camera)) && a.time.includes(new Date().toLocaleDateString('vi-VN').split(' ')[0]));
-      const filteredPendingAlerts = alerts.filter(a => (isPrivileged || visCamIds.includes(a.camera)) && a.status === "Chưa xử lý");
+      const totalCustomers = users.filter(u => u.role !== "Admin").length;
+      const filteredAlertsToday = alerts.filter(a => a.time.includes(new Date().toLocaleDateString('vi-VN').split(' ')[0]));
+      const filteredPendingAlerts = alerts.filter(a => a.status === "Chưa xử lý");
       
       return `<div class="grid kpis">
-        ${card("", `<div class="kpi"><div class="ico blue">CAM</div><div><div class="kpi-label">Tổng số camera</div><div class="kpi-value">${visCameras.length}</div><div class="hint">${online} online, ${offline} offline</div></div></div>`)}
-        ${card("", `<div class="kpi"><div class="ico green">ON</div><div><div class="kpi-label">Camera online</div><div class="kpi-value">${online}</div><div class="hint">Kết nối realtime ổn định</div></div></div>`)}
-        ${card("", `<div class="kpi"><div class="ico violet">BN</div><div><div class="kpi-label">Người theo dõi</div><div class="kpi-value">${filteredPeople.length}</div><div class="hint">Có hồ sơ y tế</div></div></div>`)}
+        ${card("", `<div class="kpi"><div class="ico blue">CAM</div><div><div class="kpi-label">Tổng số camera</div><div class="kpi-value">${visCameras.length}</div><div class="hint">${online} đang hoạt động, ${offline} ko hoạt động</div></div></div>`)}
+        ${card("", `<div class="kpi"><div class="ico green">ON</div><div><div class="kpi-label">Camera đang hoạt động</div><div class="kpi-value">${online}</div><div class="hint">Kết nối realtime ổn định</div></div></div>`)}
+        ${card("", `<div class="kpi"><div class="ico violet">KH</div><div><div class="kpi-label">Danh sách khách hàng</div><div class="kpi-value">${totalCustomers}</div><div class="hint">Tài khoản khách hàng</div></div></div>`)}
         ${card("", `<div class="kpi"><div class="ico red">AL</div><div><div class="kpi-label">Té ngã hôm nay</div><div class="kpi-value">${filteredAlertsToday.length}</div><div class="hint">${filteredPendingAlerts.length} cảnh báo chưa xử lý</div></div></div>`)}
       </div>`;
     }
@@ -502,13 +753,10 @@
 
     const views = {
       dashboard: () => {
-        if (currentUser.role === "Người thân") {
+        if (currentUser.role === "Khachhang" || currentUser.role === "Khách hàng") {
           return familyDashboardView();
         }
-        if (currentUser.role === "Nhân viên y tế") {
-          return nurseDashboardView();
-        }
-        return `${kpis()}${dashboardCameras()}<div style="height:24px"></div>${charts()}<div style="height:16px"></div>${mapView()}`;
+        return `${kpis()}`;
       },
       live: () => liveView(),
       detection: () => `<div class="grid two">
@@ -538,13 +786,62 @@
       </div>`,
       alerts: () => {
         const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý" || currentUser.role === "Nhân viên y tế";
-        const visCamIds = getVisibleCameras().map(c => c.id);
-        const filteredAlerts = currentUser.role === "Admin" || currentUser.role === "Quản lý" ? alerts : alerts.filter(a => visCamIds.includes(a.camera));
+        const houses = getVisibleHouses();
         
-        return table(["Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Media", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"], filteredAlerts.map(a => [
-          a.id, a.time, a.camera, a.person, a.media.includes("AL-") ? "Ảnh + video thực" : a.media, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
-          isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
-        ]));
+        if (alertsViewLevel === "locations") {
+          const locationCardsHtml = houses.map(house => {
+            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const camIds = camsInHouse.map(c => c.id);
+            const houseAlerts = alerts.filter(a => camIds.includes(a.camera));
+            const totalAlerts = houseAlerts.length;
+            const pendingAlerts = houseAlerts.filter(a => a.status === "Chưa xử lý").length;
+            
+            return `
+              <div class="location-card animate-hover" onclick="selectedAlertsLocation='${esc(house.name)}'; alertsViewLevel='alerts'; render('alerts', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+                <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+                <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
+                <div style="font-size: 13px; color: var(--gray-600);">
+                  <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
+                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                    <span class="pill blue small" style="padding: 2px 6px; font-size: 11px;">${totalAlerts} cảnh báo</span>
+                    ${pendingAlerts > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${pendingAlerts} chờ xử lý</span>` : '<span class="pill green small" style="padding: 2px 6px; font-size: 11px;">Đã xử lý xong</span>'}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          return `
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo)</h3>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo tại đó.</p>
+            </div>
+            <div class="grid three" style="gap: 20px;">
+              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+            </div>
+          `;
+        }
+
+        if (alertsViewLevel === "alerts") {
+          const house = houses.find(h => h.name === selectedAlertsLocation);
+          const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
+          const camIds = camsInHouse.map(c => c.id);
+          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
+
+          return `
+            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <button class="btn line" onclick="alertsViewLevel='locations'; render('alerts', false);">← Quay lại Nơi lắp đặt</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedAlertsLocation)}</h3>
+              <p class="hint" style="margin: 0;">Danh sách các sự kiện cảnh báo ngã tại khu vực này.</p>
+            </div>
+            ${table(["Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Media", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"], filteredAlerts.map(a => [
+              a.id, a.time, a.camera, a.person, a.media.includes("AL-") ? "Ảnh + video thực" : a.media, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+              isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
+            ]))}
+          `;
+        }
       },
       notifications: () => `<div class="grid three">
         ${[
@@ -571,35 +868,85 @@
         }).join("")}
       </div>`,
       cameras: () => camerasView(),
-      people: () => peopleView(),
       users: () => usersView(),
       media: () => {
         const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-        const visCamIds = getVisibleCameras().map(c => c.id);
-        const filteredAlerts = currentUser.role === "Admin" || currentUser.role === "Quản lý" ? alerts : alerts.filter(a => visCamIds.includes(a.camera));
-        
-        const rows = filteredAlerts.map(a => {
-          const type = a.media.includes("video") || a.media.includes("Video") || a.media.includes("AL-") ? "Video clip" : "Ảnh chụp";
-          const deleteBtn = isEditable ? `<button class="btn small danger" data-action="delete-media" data-alert-id="${a.id}">Xóa</button>` : "";
-          return [
-            type,
-            a.id,
-            a.time,
-            a.camera,
-            "Cloud Storage",
-            `<button class="btn small line" data-action="view-media" data-media-type="${type}" data-alert-id="${a.id}">Xem</button>
-             <button class="btn small line" data-action="download-media" data-alert-id="${a.id}">Tải về</button>
-             ${deleteBtn}`
-          ];
-        });
-        return table(["Loại", "Sự kiện", "Thời gian", "Camera", "Lưu trữ", "Thao tác"], rows);
+        const houses = getVisibleHouses();
+
+        if (mediaViewLevel === "locations") {
+          const locationCardsHtml = houses.map(house => {
+            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const camIds = camsInHouse.map(c => c.id);
+            const houseAlerts = alerts.filter(a => camIds.includes(a.camera));
+            const totalMedia = houseAlerts.length;
+            const imagesCount = houseAlerts.filter(a => !(a.media.includes("video") || a.media.includes("Video") || a.media.includes("AL-"))).length;
+            const videosCount = totalMedia - imagesCount;
+
+            return `
+              <div class="location-card animate-hover" onclick="selectedMediaLocation='${esc(house.name)}'; mediaViewLevel='media'; render('media', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+                <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+                <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
+                <div style="font-size: 13px; color: var(--gray-600);">
+                  <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
+                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                    <span class="pill green small" style="padding: 2px 6px; font-size: 11px;">${imagesCount} ảnh chụp</span>
+                    <span class="pill blue small" style="padding: 2px 6px; font-size: 11px;">${videosCount} video clip</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          return `
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Tệp đa phương tiện)</h3>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách ảnh chụp và video clip tại đó.</p>
+            </div>
+            <div class="grid three" style="gap: 20px;">
+              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+            </div>
+          `;
+        }
+
+        if (mediaViewLevel === "media") {
+          const house = houses.find(h => h.name === selectedMediaLocation);
+          const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
+          const camIds = camsInHouse.map(c => c.id);
+          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
+
+          const rows = filteredAlerts.map(a => {
+            const type = a.media.includes("video") || a.media.includes("Video") || a.media.includes("AL-") ? "Video clip" : "Ảnh chụp";
+            const deleteBtn = isEditable ? `<button class="btn small danger" data-action="delete-media" data-alert-id="${a.id}">Xóa</button>` : "";
+            return [
+              type,
+              a.id,
+              a.time,
+              a.camera,
+              "Cloud Storage",
+              `<button class="btn small line" data-action="view-media" data-media-type="${type}" data-alert-id="${a.id}">Xem</button>
+               <button class="btn small line" data-action="download-media" data-alert-id="${a.id}">Tải về</button>
+               ${deleteBtn}`
+            ];
+          });
+
+          return `
+            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <button class="btn line" onclick="mediaViewLevel='locations'; render('media', false);">← Quay lại Nơi lắp đặt</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedMediaLocation)}</h3>
+              <p class="hint" style="margin: 0;">Danh sách ảnh chụp và video clip ghi nhận tại khu vực này.</p>
+            </div>
+            ${table(["Loại", "Sự kiện", "Thời gian", "Camera", "Lưu trữ", "Thao tác"], rows)}
+          `;
+        }
       },
       events: () => {
         let rows = [
-          ["16:22", "Té ngã (fallen)", "CAM-003", "BN-003", statusPill("Khẩn cấp"), statusPill("Chưa xử lý")],
-          ["15:00", "Mất kết nối camera", "CAM-005", "-", statusPill("Trung bình"), statusPill("Đang xử lý")],
-          ["14:10", "Nằm lâu (lying)", "CAM-006", "BN-006", statusPill("Cao"), statusPill("Đã xử lý")],
-          ["09:40", "Cảnh báo giả", "CAM-002", "BN-002", statusPill("Thấp"), statusPill("Báo động giả")]
+          ["16:22", "Té ngã (fallen)", "CAM-003", statusPill("Khẩn cấp"), statusPill("Chưa xử lý")],
+          ["15:00", "Mất kết nối camera", "CAM-005", statusPill("Trung bình"), statusPill("Đang xử lý")],
+          ["14:10", "Nằm lâu (lying)", "CAM-006", statusPill("Cao"), statusPill("Đã xử lý")],
+          ["09:40", "Cảnh báo giả", "CAM-002", statusPill("Thấp"), statusPill("Báo động giả")]
         ];
         const visCamIds = getVisibleCameras().map(c => c.id);
         const isPrivileged = currentUser.role === "Admin" || currentUser.role === "Quản lý";
@@ -612,7 +959,6 @@
               timeStr,
               `Phát hiện AI: ${e.state} (Góc: ${e.torso_angle_deg}°, Nằm: ${e.lying_seconds}s)`,
               "CAM-LOCAL",
-              "BN-LOCAL",
               statusPill(level),
               statusPill("Đã ghi log")
             ];
@@ -621,14 +967,106 @@
         
         let filteredRows = isPrivileged ? rows : rows.filter(r => visCamIds.includes(r[2]));
         
-        return `${toolBar("Tìm kiếm sự kiện...", ["Té ngã", "Nằm lâu", "Mất kết nối", "Bình thường"])}<div id="eventsTableContainer">${table(["Thời gian", "Sự kiện", "Camera", "Đối tượng", "Mức độ", "Trạng thái"], filteredRows)}</div>`;
+        return `${toolBar("Tìm kiếm sự kiện...", ["Té ngã", "Nằm lâu", "Mất kết nối", "Bình thường"])}<div id="eventsTableContainer">${table(["Thời gian", "Sự kiện", "Camera", "Mức độ", "Trạng thái"], filteredRows)}</div>`;
       },
       reports: () => `<div class="grid four">${["Báo cáo ngày", "Báo cáo tuần", "Báo cáo tháng", "Báo cáo năm"].map(t => card(t, `<p class="hint">Tổng hợp cảnh báo, camera, đối tượng và thống kê AI.</p><button class="btn small primary" data-action="export-report-pdf">Xuất PDF</button> <button class="btn small line" data-action="export-report-excel">Xuất Excel</button>`)).join("")}</div>${charts()}`,
       ai: () => `<div class="grid four">${[["Accuracy","96.2%","blue"],["Precision","94.8%","green"],["Recall","92.5%","amber"],["F1 Score","93.6%","violet"],["FPS xử lý","28.4","blue"],["CPU Usage","42%","green"],["GPU Usage","61%","amber"],["Latency","36ms","red"]].map(([l,v,c])=>card("", `<div class="kpi"><div class="ico ${c}">${l.split(" ")[0][0]}</div><div><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div></div>`)).join("")}</div>`,
-      logs: () => table(["Thời gian", "Loại log", "Nguồn", "Nội dung"], logs.map(l => [l[0], statusPill(l[1]), l[2], l[3]])),
+      logs: () => {
+        // Trigger loading system logs from backend asynchronously
+        setTimeout(() => { fetchBackendLogs(); }, 50);
+        return `
+          <div class="card" style="padding: 20px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px;">
+            <div class="tools" style="margin-bottom:15px; display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-weight:600; font-size:15px; color: var(--gray-700);">Nhật ký hoạt động hệ thống</span>
+              <button class="btn line" id="btnRefreshLogs" onclick="fetchBackendLogs()">Làm mới</button>
+            </div>
+            <div id="logsTableContainer">
+              <div style="text-align: center; padding: 30px; color: var(--muted);">Đang tải nhật ký...</div>
+            </div>
+            <div id="logsPaginationContainer"></div>
+          </div>
+        `;
+      },
       settings: () => settingsView(),
       api: () => apiView(),
-      mobile: () => `<div class="grid four">${["Xem camera", "Nhận cảnh báo", "Xem lịch sử", "Xác nhận xử lý"].map(t => card(t, `<p class="hint">Chức năng mobile app cho người thân và nhân viên y tế.</p>${statusPill("Đã hỗ trợ")}`)).join("")}</div><div style="height:16px"></div>${table(["Màn hình mobile", "Mô tả", "Trạng thái"], [["Đăng nhập", "Xác thực tài khoản", statusPill("Hoạt động")], ["Live camera", "Xem camera realtime", statusPill("Hoạt động")], ["Cảnh báo", "Nhận push notification", statusPill("Hoạt động")], ["Lịch sử", "Xem sự kiện đã xử lý", statusPill("Hoạt động")]])}`
+      mobile: () => {
+        const downloadUrl = window.location.origin + "/downloads/fallguard-release.apk";
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(downloadUrl)}`;
+        
+        return `
+          <div class="card" style="padding: 40px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); width: 100%;">
+            <div style="text-align: center; margin-bottom: 40px;">
+              <div style="font-size: 64px; margin-bottom: 20px;">📱</div>
+              <h2 style="margin: 0 0 12px; font-size: 26px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px;">Tải ứng dụng FallGuard AI</h2>
+              <p style="color: var(--gray-600); font-size: 15px; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                Tải xuống ứng dụng di động chính thức để nhận cảnh báo té ngã thời gian thực, xem live stream camera và xác nhận tình trạng xử lý sự kiện ngay trên điện thoại của bạn.
+              </p>
+            </div>
+            
+            <div class="grid two" style="gap: 30px; margin: 0 auto; align-items: stretch; width: 100%;">
+              <!-- Android Card -->
+              <div class="card animate-hover" style="padding: 30px; border: 1px solid var(--line); border-radius: 16px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; margin-top: 0;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <span style="font-size: 40px;">🤖</span>
+                    <div>
+                      <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Phiên bản Android (APK)</h4>
+                      <span class="pill green small" style="margin-top: 4px; display: inline-block;">Đã hỗ trợ</span>
+                    </div>
+                  </div>
+                  <p class="hint" style="margin-bottom: 24px; font-size: 13.5px; line-height: 1.5; color: var(--gray-600);">
+                    Hỗ trợ hệ điều hành Android 8.0 trở lên. Bạn có thể tải trực tiếp tệp cài đặt APK về điện thoại hoặc quét mã QR bên phải để tải xuống nhanh chóng mà không cần cáp nối.
+                  </p>
+                </div>
+                
+                <div style="display: flex; gap: 20px; align-items: center; margin-top: 15px; flex-wrap: wrap;">
+                  <div style="flex: 1; min-width: 180px;">
+                    <a href="/downloads/fallguard-release.apk" download class="btn primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; justify-content: center; width: 100%; height: 42px; font-weight: 700; border-radius: 8px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);">
+                      <span>⬇️</span> Tải trực tiếp APK
+                    </a>
+                  </div>
+                  <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <img src="${qrUrl}" alt="QR Code" style="width: 140px; height: 140px; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04);" />
+                    <span style="font-size: 11px; color: var(--gray-500); font-weight: 600;">Quét mã để tải nhanh</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- iOS Card -->
+              <div class="card animate-hover" style="padding: 30px; border: 1px solid var(--line); border-radius: 16px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; margin-top: 0;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <span style="font-size: 40px;">🍏</span>
+                    <div>
+                      <h4 style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">Phiên bản iOS (iPhone)</h4>
+                      <span class="pill amber small" style="margin-top: 4px; display: inline-block;">Đang thử nghiệm</span>
+                    </div>
+                  </div>
+                  <p class="hint" style="margin-bottom: 24px; font-size: 13.5px; line-height: 1.5; color: var(--gray-600);">
+                    Hỗ trợ hệ điều hành iOS 14.0 trở lên. Ứng dụng đang được kiểm duyệt trên Apple App Store. Hiện tại bạn có thể đăng ký nhận liên kết mời TestFlight hoặc liên hệ Admin để cài đặt bản thử nghiệm nội bộ.
+                  </p>
+                </div>
+                
+                <div style="display: flex; gap: 20px; align-items: center; margin-top: 15px; flex-wrap: wrap;">
+                  <div style="flex: 1; min-width: 180px;">
+                    <button onclick="alert('Đang cấu hình liên kết mời TestFlight. Vui lòng liên hệ Admin để được cấp quyền kiểm thử!')" class="btn line" style="display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; height: 42px; font-weight: 700; border-radius: 8px;">
+                      <span>App Store</span> (Sắp ra mắt)
+                    </button>
+                  </div>
+                  <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0.4;">
+                    <div style="width: 140px; height: 140px; border: 1px dashed var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #fafafa; font-size: 24px;">🔒</div>
+                    <span style="font-size: 11px; color: var(--gray-500); font-weight: 600;">Mã QR sắp ra mắt</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--gray-500); text-align: center;">
+              Để cấu hình nhận thông báo qua Telegram hoặc Zalo, quý khách vui lòng bật switch cài đặt tương ứng trong mục <strong>09 Cài đặt hệ thống</strong>.
+            </div>
+          </div>
+        `;
+      }
     };
 
     function toolBar(search, filters) {
@@ -644,9 +1082,7 @@
     function cameraForm() {
       return `<h3>Thêm / cập nhật camera</h3><div class="form-grid">${["Tên camera","IP Camera","RTSP URL","Vị trí","Mô tả","FPS","Độ phân giải","Ngưỡng phát hiện"].map(x=>`<label class="field"><span>${x}</span><input class="control" placeholder="${x}"></label>`).join("")}</div><button class="btn primary">Lưu camera</button>`;
     }
-    function personForm() {
-      return `<h3>Hồ sơ người được theo dõi</h3><div class="form-grid">${["Mã người","Họ tên","Ngày sinh","Giới tính","Ảnh","Bệnh nền","Ghi chú","Người thân / Số điện thoại"].map(x=>`<label class="field"><span>${x}</span><input class="control" placeholder="${x}"></label>`).join("")}</div><button class="btn primary">Lưu hồ sơ</button>`;
-    }
+    
     function userForm() {
       return `<h3>Thêm tài khoản</h3><div class="form-grid">${["Tài khoản","Mật khẩu","Họ tên","Vai trò"].map(x=>`<label class="field"><span>${x}</span><input class="control" placeholder="${x}"></label>`).join("")}</div><button class="btn primary">Lưu tài khoản</button>`;
     }
@@ -670,8 +1106,8 @@
     }
 
     function liveView() {
-      const cam = cameraById(selectedCameraId);
-      if (!cam) {
+      const visCameras = getVisibleCameras();
+      if (visCameras.length === 0) {
         return `<div class="live-toolbar">
           <button class="btn line" data-back-dashboard>← Quay lại Dashboard</button>
         </div>
@@ -685,60 +1121,148 @@
           <button class="btn primary" onclick="alert('Vui lòng liên hệ Admin qua hotline hoặc trực ban phòng quản lý!')">Gửi yêu cầu hỗ trợ</button>
         </div>`;
       }
-      const idx = Math.max(0, cameras.findIndex((item) => item.id === cam.id));
-      const metrics = cameraMetrics(cam);
-      const isTestable = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-      const testBtn = isTestable ? `<button class="btn danger" data-toggle-fall-test>Test té ngã AI</button>` : "";
-      
-      return `<div class="live-toolbar">
-        <button class="btn line" data-back-dashboard>← Quay lại Dashboard</button>
-        <div class="row" style="gap:8px">
-          <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
-            <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
-            <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
-          </select>
-          <button class="btn primary" data-start-test-camera>Mở camera</button>
-          ${testBtn}
-          <button class="btn line" data-stop-test-camera>Dừng camera</button>
-          <button class="btn line" data-snapshot-test-camera>Chụp ảnh test</button>
-        </div>
-      </div>
-      <div class="detail-layout" style="grid-template-columns: 2fr 1fr;">
-        <article class="cam live-detail ${aiFallTestOn ? "fallen" : ""}" style="flex:1;">
-          <div class="cam-head"><span>${cameraRoomName(cam, idx)}</span><span class="live">LIVE</span></div>
-          <div class="cam-view ${aiFallTestOn ? "ai-test-on" : ""}" style="position:relative;">
-            <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
-            <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-            <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
-            ${personSvg()}
-            <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
-            <span class="state" id="liveStateBadge">${statusPill(cam.state.toUpperCase())}</span>
+
+      // LEVEL 1: Locations List
+      if (liveViewLevel === "locations") {
+        const houses = getVisibleHouses();
+        const locationCardsHtml = houses.map(house => {
+          const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+          const onlineCount = camsInHouse.filter(c => c.status === "online").length;
+          const offlineCount = camsInHouse.filter(c => c.status === "offline").length;
+          return `
+            <div class="location-card animate-hover" onclick="selectedLocation='${esc(house.name)}'; liveViewLevel='cameras'; render('live', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+              <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
+              <div style="font-size: 13px; color: var(--gray-600);">
+                <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
+                <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                  <span class="pill green small" style="padding: 2px 6px; font-size: 11px;">${onlineCount} hoạt động</span>
+                  ${offlineCount > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${offlineCount} ko hoạt động</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="live-toolbar" style="margin-bottom: 20px;">
+            <button class="btn line" data-back-dashboard>← Quay lại Dashboard</button>
           </div>
-        </article>
+          <div style="margin-bottom: 20px;">
+            <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt</h3>
+            <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách camera tại đó.</p>
+          </div>
+          <div class="grid three" style="gap: 20px;">
+            ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+          </div>
+        `;
+      }
+
+      // LEVEL 2: Cameras list in selected location
+      if (liveViewLevel === "cameras") {
+        const houses = getVisibleHouses();
+        const house = houses.find(h => h.name === selectedLocation);
+        const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
+        const cameraCardsHtml = camsInHouse.map((c, index) => `
+          <article class="cam ${stateClass(c)}" onclick="selectedCameraId='${esc(c.id)}'; liveViewLevel='stream'; render('live', false);" style="cursor: pointer;">
+            <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live">Live</span></div>
+            <div class="cam-view">
+              <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+              <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+              <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(c.status === "online" ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+            </div>
+          </article>
+        `).join("");
+
+        const isEditable = currentUser.role === "Admin";
+        const permissionBtn = (isEditable && house && house.ownerEmail)
+          ? `<button class="btn primary" onclick="cameraPermissionModal('${esc(house.ownerEmail)}')" style="margin-left:auto;">Phân quyền camera</button>`
+          : "";
+
+        return `
+          <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <button class="btn line" onclick="liveViewLevel='locations'; render('live', false);">← Quay lại Nơi lắp đặt</button>
+            ${permissionBtn}
+          </div>
+          <div style="margin-bottom: 20px;">
+            <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedLocation)}</h3>
+            <p class="hint" style="margin: 0;">Danh sách camera giám sát tại khu vực này.</p>
+          </div>
+          <div class="grid camera-grid">
+            ${cameraCardsHtml.length > 0 ? cameraCardsHtml : `
+              <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: #fafafa; border: 1px dashed var(--line); border-radius: 8px; width: 100%;">
+                <div style="font-size: 32px; margin-bottom: 10px;">🔒</div>
+                <div style="font-weight: 600; color: var(--red);">Không có camera được gán cho nơi này hoặc bạn không có quyền xem.</div>
+              </div>
+            `}
+          </div>
+        `;
+      }
+
+      // LEVEL 3: Detailed Camera Stream (Same as original stream view, but with custom back button)
+      if (liveViewLevel === "stream") {
+        const cam = cameraById(selectedCameraId);
+        if (!cam) {
+          liveViewLevel = "cameras";
+          return liveView();
+        }
+        const idx = Math.max(0, cameras.findIndex((item) => item.id === cam.id));
+        const metrics = cameraMetrics(cam);
+        const isTestable = currentUser.role === "Admin";
+        const testBtn = isTestable ? `<button class="btn danger" data-toggle-fall-test>Test té ngã AI</button>` : "";
+        const owner = users.find(u => (u.assignedCameras || []).includes(cam.id));
+        const ownerName = owner ? owner.name : "Chưa gán";
         
-        <div class="card" style="display:flex; flex-direction:column; gap:16px;">
-          <h3 style="margin:0 0 10px">Thông số AI Realtime</h3>
-          <div class="metric-list" id="liveMetricsPanel">
-            <div class="metric-row"><span>Trạng thái</span><strong id="metricState">${statusPill(metrics.status)}</strong></div>
-            <div class="metric-row"><span>Độ tin cậy</span><strong id="metricConfidence">${metrics.confidence}</strong></div>
-            <div class="metric-row"><span>Góc nghiêng thân</span><strong id="metricTorso">${metrics.torso}</strong></div>
-            <div class="metric-row"><span>Thời gian nằm</span><strong id="metricLying">${metrics.lying}</strong></div>
-            <div class="metric-row"><span>Vận tốc hông</span><strong id="metricHip">${metrics.hip}</strong></div>
-          </div>
-          
-          <div style="margin-top:10px; padding-top:15px; border-top: 1px solid var(--line);">
-            <h4 style="margin:0 0 8px">Thông tin thiết bị</h4>
-            <div class="metric-row"><span>Mã thiết bị</span><strong>${cam.id}</strong></div>
-            <div class="metric-row"><span>Vị trí</span><strong>${cam.area}</strong></div>
-            <div class="metric-row"><span>IP / RTSP</span><strong style="font-size:11px; word-break:break-all;">${cam.ip}</strong></div>
-            <div class="metric-row"><span>Bệnh nhân</span><strong>${people.find(p => p.id === cam.target)?.name || cam.target}</strong></div>
-          </div>
-          
-          <div id="cameraTestHint" class="hint" style="margin-top:auto; font-style:italic;">
-            Nhấn "Mở camera" để bắt đầu luồng dữ liệu trực tiếp.
+        return `<div class="live-toolbar">
+          <button class="btn line" onclick="liveViewLevel='cameras'; render('live', false);">← Quay lại Danh sách Camera</button>
+          <div class="row" style="gap:8px">
+            <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
+              <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
+              <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
+            </select>
+            <button class="btn primary" data-start-test-camera>Mở camera</button>
+            ${testBtn}
+            <button class="btn line" data-stop-test-camera>Dừng camera</button>
+            <button class="btn line" data-snapshot-test-camera>Chụp ảnh test</button>
           </div>
         </div>
-      </div>`;
+        <div class="detail-layout" style="grid-template-columns: 2fr 1fr;">
+          <article class="cam live-detail ${aiFallTestOn ? "fallen" : ""}" style="flex:1;">
+            <div class="cam-head"><span>${cameraRoomName(cam, idx)}</span><span class="live">LIVE</span></div>
+            <div class="cam-view ${aiFallTestOn ? "ai-test-on" : ""}" style="position:relative;">
+              <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+              <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
+              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+              ${personSvg()}
+              <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
+              <span class="state" id="liveStateBadge">${statusPill(cam.state.toUpperCase())}</span>
+            </div>
+          </article>
+          
+          <div class="card" style="display:flex; flex-direction:column; gap:16px;">
+            <h3 style="margin:0 0 10px">Thông số AI Realtime</h3>
+            <div class="metric-list" id="liveMetricsPanel">
+              <div class="metric-row"><span>Trạng thái</span><strong id="metricState">${statusPill(metrics.status)}</strong></div>
+              <div class="metric-row"><span>Độ tin cậy</span><strong id="metricConfidence">${metrics.confidence}</strong></div>
+              <div class="metric-row"><span>Góc nghiêng thân</span><strong id="metricTorso">${metrics.torso}</strong></div>
+              <div class="metric-row"><span>Thời gian nằm</span><strong id="metricLying">${metrics.lying}</strong></div>
+              <div class="metric-row"><span>Vận tốc hông</span><strong id="metricHip">${metrics.hip}</strong></div>
+            </div>
+            
+            <div style="margin-top:10px; padding-top:15px; border-top: 1px solid var(--line);">
+              <h4 style="margin:0 0 8px">Thông tin thiết bị</h4>
+              <div class="metric-row"><span>Mã thiết bị</span><strong>${cam.id}</strong></div>
+              <div class="metric-row"><span>Vị trí</span><strong>${cam.area}</strong></div>
+              <div class="metric-row"><span>IP / RTSP</span><strong style="font-size:11px; word-break:break-all;">${cam.ip}</strong></div>
+              <div class="metric-row"><span>Khách hàng</span><strong>${esc(ownerName)}</strong></div>
+            </div>
+            
+            <div id="cameraTestHint" class="hint" style="margin-top:auto; font-style:italic;">
+              Nhấn "Mở camera" để bắt đầu luồng dữ liệu trực tiếp.
+            </div>
+          </div>
+        </div>`;
+      }
     }
 
     function familyDashboardView() {
@@ -758,7 +1282,6 @@
         `;
       }
       const myCam = visCameras[0];
-      const myPatient = people.find(p => p.id === myCam.target) || { id: "N/A", name: "Chưa rõ", dob: "N/A", gender: "N/A", medical: "N/A", note: "N/A", contact: "N/A" };
       const myAlerts = alerts.filter(a => a.camera === myCam.id);
       
       return `
@@ -767,36 +1290,9 @@
           <p style="margin:0; color: #475569; font-size:14px;">Hệ thống giám sát FallGuard AI đang hoạt động để bảo vệ người thân của bạn.</p>
         </div>
         
-        <div class="grid two" style="grid-template-columns: 1.6fr 1fr; gap: 20px;">
-          <!-- Left: Camera & Timeline -->
+        <div class="grid two" style="grid-template-columns: 1.25fr 1fr; gap: 20px;">
+          <!-- Left: Timeline -->
           <div style="display:flex; flex-direction:column; gap:20px;">
-            <!-- Beautiful Camera Panel -->
-            <article class="cam live-detail" style="padding:16px; width: 100%; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); background:#fff;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="margin:0; font-size:16px;">📹 Giám sát trực tiếp: ${myCam.name}</h3>
-                <span class="pill green" style="font-weight:700;">Live</span>
-              </div>
-              
-              <div class="cam-view" style="position:relative; aspect-ratio: 16/9; border-radius:8px; overflow:hidden; background:#000; margin-bottom:12px;">
-                <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
-                <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-                <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
-                <div class="person" style="display:none;"><span class="joint j1"></span><span class="joint j2"></span><span class="joint j3"></span><span class="joint j4"></span><span class="joint j5"></span><span class="joint j6"></span><span class="bone l1"></span><span class="bone l2"></span><span class="bone l3"></span><span class="bone l4"></span><span class="bone l5"></span></div>
-                <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
-                <span class="state" id="liveStateBadge">${statusPill(myCam.state.toUpperCase())}</span>
-              </div>
-              
-              <div style="display:flex; gap:10px; justify-content:center;">
-                <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
-                  <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
-                  <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
-                </select>
-                <button class="btn primary" data-start-test-camera>Mở camera</button>
-                <button class="btn line" data-stop-test-camera style="color:var(--red);">Dừng</button>
-                <button class="btn line" data-snapshot-test-camera>Chụp ảnh test</button>
-              </div>
-            </article>
-            
             <!-- Activity Timeline -->
             <section class="card" style="padding:16px;">
               <h3 style="margin:0 0 12px; font-size:16px;">📋 Nhật ký hoạt động gần đây</h3>
@@ -821,30 +1317,30 @@
           
           <!-- Right: Profile & Notifications & Help -->
           <div style="display:flex; flex-direction:column; gap:20px;">
-            <!-- Patient Profile Card -->
-            <article class="card" style="padding:16px; border:1px solid #fbcfe8; background:#fffdfd;">
-              <h3 style="margin:0 0 12px; font-size:16px; color:#db2777; display:flex; align-items:center; gap:5px;">❤️ Hồ sơ người thân</h3>
+            <!-- Customer Profile Card -->
+            <article class="card" style="padding:16px; border:1px solid #c7d2fe; background:#fffdfd;">
+              <h3 style="margin:0 0 12px; font-size:16px; color:#4f46e5; display:flex; align-items:center; gap:5px;">👤 Thông tin tài khoản</h3>
               <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
-                <div style="width:48px; height:48px; border-radius:50%; background:#db2777; color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:18px;">
-                  ${myPatient.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
+                <div style="width:48px; height:48px; border-radius:50%; background:#4f46e5; color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:18px;">
+                  ${currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <strong style="font-size:16px;">${myPatient.name}</strong>
-                  <div class="hint">Ngày sinh: ${myPatient.dob} (${myPatient.gender})</div>
+                  <strong style="font-size:16px;">${currentUser.name}</strong>
+                  <div class="hint">Khách hàng hệ thống</div>
                 </div>
               </div>
               <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
                 <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Mã đối tượng:</span><strong>${myPatient.id}</strong>
+                  <span style="color:#64748b;">Email:</span><strong>${currentUser.email}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Tình trạng sức khỏe:</span><strong style="color:var(--red);">${myPatient.medical}</strong>
+                  <span style="color:#64748b;">Số điện thoại:</span><strong>${currentUser.phone || "Chưa cập nhật"}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Lưu ý an toàn:</span><strong>${myPatient.note}</strong>
+                  <span style="color:#64748b;">Trạng thái:</span><strong style="color:var(--green);">${currentUser.status || "Đang hoạt động"}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; padding-top:4px;">
-                  <span style="color:#64748b;">Liên hệ khẩn cấp:</span><strong>${myPatient.contact}</strong>
+                  <span style="color:#64748b;">Thiết bị giám sát:</span><strong>${visCameras.length} Camera</strong>
                 </div>
               </div>
             </article>
@@ -888,121 +1384,294 @@
       `;
     }
 
-    function nurseDashboardView() {
-      const visCameras = getVisibleCameras();
-      const visCamIds = visCameras.map(c => c.id);
-      const activeAlerts = alerts.filter(a => a.status === "Chưa xử lý" && visCamIds.includes(a.camera));
-      const visPeopleIds = visCameras.map(c => c.target).filter(Boolean);
-      const visPeople = people.filter(p => visPeopleIds.includes(p.id));
-      
-      return `
-        <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--line);">
-          <h2 style="margin:0 0 5px; color: #0d9488;">Chào mừng quay trở lại, Điều dưỡng ${currentUser.name}!</h2>
-          <p style="margin:0; color: #475569; font-size:14px;">Bảng điều hành giám sát y tế trung tâm. Hãy luôn chú ý các báo động té ngã màu đỏ.</p>
-        </div>
 
-        <div class="grid three" style="grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-          ${card("", `<div class="kpi"><div class="ico blue">CAM</div><div><div class="kpi-label">Camera trực tuyến</div><div class="kpi-value">${visCameras.filter(c=>c.status==='online').length} / ${visCameras.length}</div></div></div>`)}
-          ${card("", `<div class="kpi"><div class="ico red">AL</div><div><div class="kpi-label">Cảnh báo khẩn cấp</div><div class="kpi-value">${activeAlerts.length}</div></div></div>`)}
-          ${card("", `<div class="kpi"><div class="ico green">BN</div><div><div class="kpi-label">Bệnh nhân theo dõi</div><div class="kpi-value">${visPeople.length}</div></div></div>`)}
-        </div>
+
+    window.cameraActiveStatusFilter = "Tất cả";
+    
+    window.setCameraStatusFilter = function(status) {
+      window.cameraActiveStatusFilter = status;
+      
+      // Update filter buttons styling
+      const buttons = document.querySelectorAll("#cameraStatusFilters button");
+      buttons.forEach(btn => {
+        const filterVal = btn.getAttribute("data-status-filter");
+        if (filterVal === status) {
+          btn.className = "btn small primary";
+        } else {
+          btn.className = "btn small line";
+        }
+      });
+      
+      window.filterCamerasTable();
+    };
+
+    window.filterCamerasTable = function() {
+      const searchInput = document.getElementById("cameraSearchInput");
+      const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+      const statusFilter = window.cameraActiveStatusFilter;
+      
+      const cards = document.querySelectorAll("#camerasCardGrid .premium-camera-card");
+      cards.forEach(card => {
+        const name = card.getAttribute("data-camera-name") || "";
+        const id = (card.getAttribute("data-camera-id") || "").toLowerCase();
+        const ip = card.getAttribute("data-camera-ip") || "";
+        const status = card.getAttribute("data-camera-status") || "";
         
-        <div class="grid two" style="grid-template-columns: 1.8fr 1fr; gap: 20px;">
-          <!-- Left: All Cameras Grid -->
-          <div>
-            <section class="card" style="padding:16px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="margin:0; font-size:16px;">📹 Tất cả Camera Giám Sát</h3>
-                ${visCameras.length > 0 ? `
-                <div style="display:flex; gap:8px;">
-                  <button class="btn small primary" data-start-test-camera>Mở camera tất cả</button>
-                  <button class="btn small line" data-stop-test-camera>Dừng camera</button>
-                </div>
-                ` : ""}
-              </div>
-              <div class="grid camera-grid">
-                ${visCameras.length === 0 ? `
-                  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: #fafafa; border: 1px dashed var(--line); border-radius: 8px; width: 100%;">
-                    <div style="font-size: 32px; margin-bottom: 10px;">🔒</div>
-                    <div style="font-weight: 600; color: var(--gray-700);">Chưa được cấp quyền xem camera</div>
-                    <div class="hint" style="margin-top: 5px;">Vui lòng liên hệ Admin để được cấu hình và phân quyền.</div>
-                  </div>
-                ` : visCameras.map(cameraCard).join("")}
-              </div>
-            </section>
+        const matchesSearch = !query || name.includes(query) || id.includes(query) || ip.includes(query);
+        const matchesStatus = statusFilter === "Tất cả" || status === statusFilter;
+        
+        if (matchesSearch && matchesStatus) {
+          card.style.display = "flex";
+        } else {
+          card.style.display = "none";
+        }
+      });
+    };
+
+    function camerasView() {
+      const isEditable = currentUser.role === "Admin";
+      const visCameras = getVisibleCameras();
+      
+      // Calculate KPIs
+      const total = visCameras.length;
+      const active = visCameras.filter(c => c.status === "online").length;
+      const inactive = visCameras.filter(c => c.status === "offline").length;
+      const maintenance = visCameras.filter(c => c.status === "maintenance").length;
+      
+      // Top KPI Cards
+      const kpisHtml = `
+        <div class="grid kpis" style="margin-bottom: 20px;">
+          ${card("", `<div class="kpi"><div class="ico blue">CAM</div><div><div class="kpi-label">Tổng số camera</div><div class="kpi-value">${total}</div><div class="hint">Đang quản lý</div></div></div>`)}
+          ${card("", `<div class="kpi"><div class="ico green">ON</div><div><div class="kpi-label">Đang chạy</div><div class="kpi-value">${active}</div><div class="hint">Kết nối realtime</div></div></div>`)}
+          ${card("", `<div class="kpi"><div class="ico red">OFF</div><div><div class="kpi-label">Ko hoạt động</div><div class="kpi-value">${inactive}</div><div class="hint">Lỗi kết nối</div></div></div>`)}
+          ${card("", `<div class="kpi"><div class="ico amber">MAI</div><div><div class="kpi-label">Bảo trì</div><div class="kpi-value">${maintenance}</div><div class="hint">Đang cấu hình</div></div></div>`)}
+        </div>
+      `;
+      
+      // Control bar
+      const addBtn = isEditable ? `<button class="btn primary" data-add-camera style="height:38px;">Thêm camera</button>` : "";
+      const controlsHtml = `
+        <div class="tools" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+          <input class="control" id="cameraSearchInput" oninput="window.filterCamerasTable()" placeholder="Tìm theo tên, ID hoặc IP..." style="width: 280px; height: 38px;">
+          
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="cameraStatusFilters">
+            <button class="btn small primary" data-status-filter="Tất cả" onclick="window.setCameraStatusFilter('Tất cả')" style="height:38px; padding: 0 16px;">Tất cả</button>
+            <button class="btn small line" data-status-filter="online" onclick="window.setCameraStatusFilter('online')" style="height:38px; padding: 0 16px;">Đang chạy</button>
+            <button class="btn small line" data-status-filter="offline" onclick="window.setCameraStatusFilter('offline')" style="height:38px; padding: 0 16px;">Ko hoạt động</button>
+            <button class="btn small line" data-status-filter="maintenance" onclick="window.setCameraStatusFilter('maintenance')" style="height:38px; padding: 0 16px;">Bảo trì</button>
           </div>
           
-          <!-- Right: Active Alerts & Contacts -->
-          <div style="display:flex; flex-direction:column; gap:20px;">
-            <!-- Active Alerts (Actionable) -->
-            <section class="card" style="padding:16px; border:1px solid #fecaca; background:#fff5f5;">
-              <h3 style="margin:0 0 12px; font-size:16px; color:var(--red);">🚨 Báo động chưa xử lý</h3>
-              <div style="display:flex; flex-direction:column; gap:10px;">
-                ${activeAlerts.length === 0 ? '<p class="hint" style="text-align:center; padding:10px; color:#15803d;">Tất cả cảnh báo đã được xử lý. Giao ca an toàn!</p>' : 
-                  activeAlerts.map(a => `
-                    <div style="padding:10px; background:#fff; border-radius:6px; border:1px solid #fee2e2;">
-                      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <strong>${a.camera} - ${a.person}</strong>
-                        <span class="pill red" style="font-weight:700;">Khẩn</span>
-                      </div>
-                      <div class="hint" style="margin-bottom:8px;">Thời gian: ${a.time}</div>
-                      <div style="display:flex; gap:6px;">
-                        <button class="btn small primary" data-action="view-media" data-media-type="video" data-alert-id="${a.id}">Xem Clip</button>
-                        <button class="btn small line" data-solve-alert="${a.id}">Đã xử lý</button>
-                      </div>
-                    </div>
-                  `).join("")
-                }
+          <div style="flex-grow: 1;"></div>
+          ${addBtn}
+        </div>
+      `;
+
+      // Cards Grid
+      const cardsHtml = visCameras.map(c => {
+        const statusLabel = c.status === "online" ? "Đang chạy" : c.status === "offline" ? "Ko hoạt động" : "Bảo trì";
+        const statusClass = c.status; // online, offline, maintenance
+        const statusPillClass = c.status === "online" ? "green" : c.status === "offline" ? "red" : "amber";
+        const viewBtn = `<button class="btn small line" data-open-camera="${esc(c.id)}">Xem</button>`;
+        const editBtn = isEditable ? `<button class="btn small line" data-edit-camera="${esc(c.id)}">Sửa</button>` : "";
+        const deleteBtn = isEditable ? `<button class="btn small danger" data-delete-camera="${esc(c.id)}">Xóa</button>` : "";
+        
+        return `
+          <div class="premium-camera-card" data-camera-id="${esc(c.id)}" data-camera-name="${esc(c.name.toLowerCase())}" data-camera-ip="${esc(c.ip.toLowerCase())}" data-camera-status="${esc(c.status)}">
+            <div class="card-header">
+              <div>
+                <h4 class="card-title">${esc(c.name)}</h4>
+                <span class="card-subtitle">ID: ${esc(c.id)}</span>
               </div>
-            </section>
+              <span class="pill ${statusPillClass}" style="display: inline-flex; align-items: center; font-weight:700;">
+                <span class="status-dot-pulse ${statusClass}"></span>
+                ${statusLabel}
+              </span>
+            </div>
             
-            <!-- Quick Contacts Info -->
-            <section class="card" style="padding:16px;">
-              <h3 style="margin:0 0 12px; font-size:16px;">☎️ Danh bạ khẩn cấp trung tâm</h3>
-              <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Trực ban y tế:</span><strong>Phòng 100 - Máy lẻ 101</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Bác sĩ phụ trách:</span><strong>Dr. Nguyễn Anh Tuấn (0911 222 333)</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding-bottom:4px;">
-                  <span style="color:#64748b;">Kỹ thuật viên hệ thống:</span><strong>Kỹ sư Hoàng Hải (0909 888 777)</strong>
-                </div>
+            <div class="conn-info">
+              <div class="conn-info-row">
+                <span class="conn-info-label">IP Address</span>
+                <span class="conn-info-value">${esc(c.ip)}</span>
               </div>
-            </section>
+              <div class="conn-info-row">
+                <span class="conn-info-label">RTSP URL</span>
+                <span class="conn-info-value" title="${esc(c.rtsp)}">${esc(c.rtsp)}</span>
+              </div>
+            </div>
+            
+            <div class="param-badges">
+              <div class="param-badge">
+                <span class="param-badge-label">FPS</span>
+                <span class="param-badge-val">${esc(c.fps)}</span>
+              </div>
+              <div class="param-badge">
+                <span class="param-badge-label">Resolution</span>
+                <span class="param-badge-val">${esc(c.resolution)}</span>
+              </div>
+              <div class="param-badge">
+                <span class="param-badge-label">Ngưỡng AI</span>
+                <span class="param-badge-val">${esc(c.threshold)}%</span>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              ${viewBtn}
+              ${editBtn}
+              ${deleteBtn}
+            </div>
           </div>
+        `;
+      }).join("");
+
+      return `
+        ${kpisHtml}
+        ${controlsHtml}
+        <div class="premium-camera-grid" id="camerasCardGrid">
+          ${cardsHtml || '<div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px;">Chưa cấu hình camera nào trên hệ thống.</div>'}
         </div>
       `;
     }
 
-    function camerasView() {
-      const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-      const toolbarHtml = isEditable ? `<div class="tools"><button class="btn primary" data-add-camera>Thêm camera</button><button class="btn line">Lọc</button><button class="btn line">Phân trang: 1 / 3</button></div>` : `<div class="tools"><button class="btn line">Lọc</button><button class="btn line">Phân trang: 1 / 3</button></div>`;
+    async function fetchBackendLogs() {
+      const btnRefresh = $("btnRefreshLogs");
+      if (btnRefresh) btnRefresh.disabled = true;
       
-      return `${toolbarHtml}
-      ${table(["ID", "Tên camera", "IP Camera", "RTSP URL", "Vị trí", "FPS", "Độ phân giải", "Ngưỡng", "Trạng thái", "Thao tác"], getVisibleCameras().map(c => [
-        esc(c.id), esc(c.name), esc(c.ip), esc(c.rtsp), esc(c.area), esc(c.fps), esc(c.resolution), `${esc(c.threshold)}%`, statusPill(c.status),
-        isEditable ? `<button class="btn small line" data-open-camera="${esc(c.id)}">Xem</button> <button class="btn small line" data-edit-camera="${esc(c.id)}">Sửa</button> <button class="btn small danger" data-delete-camera="${esc(c.id)}">Xóa</button>` : `<button class="btn small line" data-open-camera="${esc(c.id)}">Xem</button>`
-      ]))}`;
+      if (!isBackendOnline || !authToken) {
+        updateLogsContainer(1);
+        if (btnRefresh) btnRefresh.disabled = false;
+        return;
+      }
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/logs`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.logs) {
+            systemLogs = data.logs;
+            updateLogsContainer(1);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi tải logs:", e);
+        updateLogsContainer(1);
+      } finally {
+        if (btnRefresh) btnRefresh.disabled = false;
+      }
     }
 
-    function peopleView() {
-      const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-      const toolbarHtml = isEditable ? `<div class="tools"><button class="btn primary" data-add-person>Thêm hồ sơ</button></div>` : "";
-      return `${toolbarHtml}
-      ${table(["Mã người", "Họ tên", "Ngày sinh", "Giới tính", "Thông tin y tế", "Ghi chú", "Liên hệ khẩn cấp", "Thao tác"], people.map(p => [
-        esc(p.id), esc(p.name), esc(p.dob), esc(p.gender), esc(p.medical), esc(p.note), esc(p.contact),
-        isEditable ? `<button class="btn small line" data-edit-person="${esc(p.id)}">Sửa</button> <button class="btn small danger" data-delete-person="${esc(p.id)}">Xóa</button>` : `<span class="pill blue">Chỉ xem</span>`
-      ]))}`;
+    function updateLogsContainer(page = 1) {
+      logsCurrentPage = page;
+      const container = $("logsTableContainer");
+      const paginationContainer = $("logsPaginationContainer");
+      if (!container) return;
+      
+      const dataSrc = (systemLogs && systemLogs.length > 0) ? systemLogs : logs;
+      const totalLogs = dataSrc.length;
+      const totalPages = Math.max(1, Math.ceil(totalLogs / logsPerPage));
+      
+      if (logsCurrentPage < 1) logsCurrentPage = 1;
+      if (logsCurrentPage > totalPages) logsCurrentPage = totalPages;
+      
+      const startIndex = (logsCurrentPage - 1) * logsPerPage;
+      const endIndex = Math.min(startIndex + logsPerPage, totalLogs);
+      const pageLogs = dataSrc.slice(startIndex, endIndex);
+      
+      container.innerHTML = table(["Thời gian", "Loại hành động", "Người thực hiện", "Nội dung chi tiết"], pageLogs.map(l => [
+        esc(l[0]), statusPill(l[1]), esc(l[2]), esc(l[3])
+      ]));
+      
+      if (paginationContainer) {
+        let pagesHtml = "";
+        const prevDisabled = logsCurrentPage === 1 ? "disabled" : "";
+        pagesHtml += `<button class="pagination-btn" ${prevDisabled} onclick="updateLogsContainer(${logsCurrentPage - 1})">Trước</button>`;
+        
+        for (let i = 1; i <= totalPages; i++) {
+          const activeClass = i === logsCurrentPage ? "active" : "";
+          pagesHtml += `<button class="pagination-btn ${activeClass}" onclick="updateLogsContainer(${i})">${i}</button>`;
+        }
+        
+        const nextDisabled = logsCurrentPage === totalPages ? "disabled" : "";
+        pagesHtml += `<button class="pagination-btn" ${nextDisabled} onclick="updateLogsContainer(${logsCurrentPage + 1})">Sau</button>`;
+        
+        paginationContainer.innerHTML = `
+          <div class="pagination-bar">
+            <span style="font-size: 13px; color: var(--gray-600);">
+              Hiển thị từ <strong>${totalLogs > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalLogs}</strong> nhật ký
+            </span>
+            <div class="pagination-controls">
+              ${pagesHtml}
+            </div>
+          </div>
+        `;
+      }
     }
+
+
 
     function usersView() {
-      return `<div class="tools"><button class="btn primary" data-add-user>Thêm tài khoản</button></div>
-      ${table(["Tài khoản", "Họ tên", "Vai trò", "Trạng thái", "Thao tác"], users.map(u => [
-        esc(u.email), esc(u.name), statusPill(u.role), statusPill(u.status),
-        `<button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button> <button class="btn small line" data-toggle-user="${esc(u.email)}">Khóa/Mở khóa</button> <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>`
-      ]))}`;
+      const cardsHtml = users.map(u => {
+        const initials = u.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+        
+        const isLocked = u.status === "Bị khóa";
+        const statusClass = isLocked ? "red" : "green";
+        
+        const cams = u.assignedCameras || [];
+        const camsHtml = cams.length > 0 
+          ? cams.map(c => `<span class="mini-tag">${c}</span>`).join("")
+          : `<span class="mini-tag empty">Không có camera</span>`;
+          
+        return `
+          <div class="user-card ${isLocked ? "locked" : ""}">
+            <div class="user-card-head">
+              <span class="pill purple">${u.role === "Admin" ? "Admin" : "Khách hàng"}</span>
+              <span class="pill ${statusClass}">${u.status}</span>
+            </div>
+            
+            <div class="user-card-body">
+              <div class="user-avatar-wrap">
+                <div class="user-avatar">${initials}</div>
+                <span class="status-dot ${statusClass}"></span>
+              </div>
+              <div class="user-info">
+                <h4 class="user-name" title="${esc(u.name)}">${esc(u.name)}</h4>
+                <div class="user-meta">
+                  <span class="meta-item" title="${esc(u.email)}">📧 ${esc(u.email)}</span>
+                  <span class="meta-item">📞 ${esc(u.phone || "Chưa cập nhật")}</span>
+                  <span class="meta-item" style="gap: 4px;">
+                    🔑 Mật khẩu: 
+                    <span style="font-family: monospace; font-weight: 600; font-size: 13px;">••••••••</span>
+                    <button type="button" data-pwd="${esc(u.password || "nckh2025")}" onclick="const txt = this.previousElementSibling; if(txt.textContent === '••••••••') { txt.textContent = this.dataset.pwd; this.textContent = '🙈'; } else { txt.textContent = '••••••••'; this.textContent = '👁️'; }" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; margin-left: 2px;">👁️</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="user-card-cams">
+              <strong>Quyền xem camera:</strong>
+              <div class="user-cams-list">
+                ${camsHtml}
+              </div>
+            </div>
+            
+            <div class="user-card-actions">
+              <button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button>
+              <button class="btn small line warning-btn" data-toggle-user="${esc(u.email)}">${isLocked ? "Mở khóa" : "Khóa"}</button>
+              <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      
+      return `
+        <div class="tools" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Danh sách khách hàng</h2>
+          <button class="btn primary" data-add-user>Thêm tài khoản</button>
+        </div>
+        <div class="user-grid-container">
+          ${cardsHtml}
+        </div>
+      `;
     }
 
     function settingsView() {
@@ -1051,8 +1720,6 @@
             ["name", "Tên camera", cam.name || ""],
             ["ip", "IP Camera", cam.ip || "192.168.1.120"],
             ["rtsp", "RTSP URL", cam.rtsp || "rtsp://192.168.1.120/live"],
-            ["area", "Vị trí", cam.area || "Khu A"],
-            ["target", "Người theo dõi", cam.target || "BN-001"],
             ["fps", "FPS", cam.fps || 30],
             ["resolution", "Độ phân giải", cam.resolution || "1920x1080"],
             ["threshold", "Ngưỡng phát hiện", cam.threshold || 80],
@@ -1063,14 +1730,30 @@
       </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="cameraFormReal">Lưu camera</button>`);
     }
 
-    function personModal(id = "") {
-      const p = people.find(item => item.id === id) || {};
-      openModal(id ? "Sửa hồ sơ" : "Thêm hồ sơ", `<form id="personFormReal">
-        <input type="hidden" name="oldId" value="${esc(id)}">
-        <div class="form-grid">
-          ${[["id","Mã người",p.id || `BN-${String(people.length + 1).padStart(3,"0")}`],["name","Họ tên",p.name || ""],["dob","Ngày sinh",p.dob || ""],["gender","Giới tính",p.gender || "Nam"],["medical","Bệnh nền",p.medical || ""],["note","Ghi chú",p.note || ""],["contact","Liên hệ khẩn cấp",p.contact || ""]].map(([n,l,v]) => `<label class="field"><span>${l}</span><input class="control" name="${n}" value="${esc(v)}" required></label>`).join("")}
+    function cameraPermissionModal(email = "") {
+      const u = users.find(item => item.email === email) || {};
+      const assigned = u.assignedCameras || [];
+      
+      const camerasCheckboxes = cameras.map(c => `
+        <label style="display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13.5px; font-weight: normal; cursor: pointer;">
+          <input type="checkbox" name="assignedCameras" value="${c.id}" ${assigned.includes(c.id) ? "checked" : ""}>
+          <span>${c.name} (${c.id})</span>
+        </label>
+      `).join("");
+
+      openModal("Phân quyền xem Camera", `<form id="cameraPermissionFormReal">
+        <input type="hidden" name="email" value="${esc(email)}">
+        <div style="margin-bottom: 12px; font-size: 14px; color: var(--gray-700);">
+          <div style="margin-bottom: 4px;">Khách hàng: <strong style="color:#0f172a;">${esc(u.name || "")}</strong></div>
+          <div>Email: <strong style="color:#0f172a;">${esc(u.email || "")}</strong></div>
         </div>
-      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="personFormReal">Lưu hồ sơ</button>`);
+        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line);">
+          <strong style="display:block; margin-bottom: 8px; font-size: 14px;">Tích chọn các Camera được phép xem:</strong>
+          <div style="max-height: 250px; overflow-y: auto; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; border-color: var(--line);">
+            ${camerasCheckboxes || '<div style="color:var(--muted); text-align:center; padding: 10px;">Không có camera nào trên hệ thống.</div>'}
+          </div>
+        </div>
+      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="cameraPermissionFormReal">Lưu phân quyền</button>`);
     }
 
     function userModal(email = "") {
@@ -1089,8 +1772,16 @@
         <div class="form-grid">
           <label class="field"><span>Email</span><input class="control" name="email" value="${esc(u.email || "")}" required></label>
           <label class="field"><span>Họ tên</span><input class="control" name="name" value="${esc(u.name || "")}" required></label>
-          <label class="field"><span>Vai trò</span><select class="control" name="role">${["Admin","Quản lý","Nhân viên y tế","Người thân","Khách xem báo cáo"].map(r => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+          <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(u.phone || "")}" placeholder="Ví dụ: 0912345678"></label>
+          <label class="field"><span>Vai trò</span><select class="control" name="role"><option value="Admin" ${u.role === "Admin" ? "selected" : ""}>Admin</option><option value="Khachhang" ${u.role === "Khachhang" ? "selected" : ""}>Khách hàng</option></select></label>
           <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${u.status === "Đang hoạt động" ? "selected" : ""}>Đang hoạt động</option><option ${u.status === "Bị khóa" ? "selected" : ""}>Bị khóa</option></select></label>
+          <label class="field">
+            <span>Mật khẩu</span>
+            <div style="position: relative; display: flex; align-items: center; width: 100%;">
+              <input class="control" type="password" id="userPasswordInput" name="password" placeholder="${email ? "Để trống nếu không đổi" : "Mặc định: nckh2025"}" style="padding-right: 36px; width: 100%;">
+              <button type="button" class="password-toggle" onclick="const input = document.getElementById('userPasswordInput'); if(input.type === 'password') { input.type = 'text'; this.textContent = '👁️'; } else { input.type = 'password'; this.textContent = '🙈'; }">🙈</button>
+            </div>
+          </label>
         </div>
         <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line);">
           <strong style="display:block; margin-bottom: 6px; font-size: 14px;">Cấp quyền xem Camera:</strong>
@@ -1647,32 +2338,237 @@
       }
     }
 
-    function snapshotTestCamera() {
+    async function snapshotTestCamera() {
       const video = $("testCameraVideo");
       const img = $("testCameraImg");
       const modeSelect = $("cameraModeSelect");
       const isClientMode = modeSelect ? modeSelect.value === "client" : true;
       
-      if (isClientMode && video && video.srcObject && video.videoWidth) {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0);
+      let base64Data = null;
+      if (isClientMode) {
+        if (video && video.srcObject && video.videoWidth) {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0);
+          
+          // Overlay skeleton coordinates if visible
+          const overlayCanvas = document.getElementById("testCameraCanvas");
+          if (overlayCanvas && overlayCanvas.style.display !== "none") {
+            ctx.drawImage(overlayCanvas, 0, 0);
+          }
+          base64Data = canvas.toDataURL("image/jpeg", 0.85);
+        } else {
+          alert("Bạn cần mở camera trước khi chụp ảnh.");
+          return;
+        }
+      } else {
+        if (!isBackendOnline) {
+          alert("Không thể kết nối đến máy chủ.");
+          return;
+        }
+      }
+      
+      // Open loading modal
+      openModal("Đang xử lý ảnh chụp test...", `
+        <div style="text-align:center; padding:30px;">
+          <div style="display:inline-block; width:40px; height:40px; border:4px solid var(--line); border-top-color:#4f46e5; border-radius:50%; animation: spin 1s linear infinite; margin-bottom:15px;"></div>
+          <p style="font-weight:600; margin:0 0 5px;">Hệ thống đang xử lý ảnh chụp...</p>
+          <p class="hint" style="margin:0;">Đang lưu hình ảnh và tải lên Cloudinary để kiểm tra kết nối.</p>
+          <style>
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          </style>
+        </div>
+      `, "");
+      
+      try {
+        const response = await fetch(`${apiBaseUrl()}/api/camera/test-snapshot`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ 
+            image_data: base64Data,
+            camera_id: selectedCameraId || null
+          })
+        });
         
-        // Overlay skeleton coordinates if visible
-        const overlayCanvas = document.getElementById("testCameraCanvas");
-        if (overlayCanvas && overlayCanvas.style.display !== "none") {
-          ctx.drawImage(overlayCanvas, 0, 0);
+        if (!response.ok) {
+          throw new Error("Lỗi phản hồi từ máy chủ: " + response.statusText);
         }
         
-        const url = canvas.toDataURL("image/png");
-        openModal("Ảnh chụp camera (Trình duyệt AI)", `<img src="${url}" alt="Snapshot" style="width:100%;border-radius:8px;border:1px solid var(--line)">`, `<button class="btn line" data-close-modal>Đóng</button>`);
-      } else if (!isClientMode && img && img.getAttribute("src")) {
-        const snapshotUrl = `${apiBaseUrl()}/api/camera/snapshot?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
-        openModal("Ảnh chụp camera (Server AI)", `<img src="${snapshotUrl}" alt="Snapshot" style="width:100%;border-radius:8px;border:1px solid var(--line)">`, `<button class="btn line" data-close-modal>Đóng</button>`);
-      } else {
-        alert("Bạn cần mở camera trước khi chụp ảnh.");
+        const data = await response.json();
+        if (data.ok) {
+          // Push alert locally so frontend updates immediately
+          const testAlertId = data.alert_id;
+          const localTime = new Date().toLocaleDateString("vi-VN") + " " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+          
+          const newAlert = {
+            id: testAlertId,
+            time: localTime,
+            camera: selectedCameraId || (isClientMode ? "CAM-BROWSER" : "CAM-SERVER"),
+            person: "Ảnh chụp test",
+            confidence: 100,
+            status: "Đã xử lý",
+            level: "Trung bình",
+            media: testAlertId,
+            state: "test",
+            cloud_img_url: data.cloud_url || ""
+          };
+          
+          alerts.unshift(newAlert);
+          saveAll();
+          
+          // Render current view if we are on media or alerts tab
+          if (currentView === "media" || currentView === "alerts") {
+            render(currentView);
+          }
+          
+          // Construct success screen
+          let cloudStatusHtml = "";
+          let pollIntervalId = null;
+          
+          if (data.cloud_url === "pending") {
+            cloudStatusHtml = `
+              <div id="cloudUploadStatus" style="margin:15px 0; padding:12px; background:rgba(79,70,229,0.08); border:1px solid rgba(79,70,229,0.18); border-radius:8px; text-align:left;">
+                <div style="color:#4f46e5; font-weight:700; margin-bottom:5px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                  <div style="display:inline-block; width:12px; height:12px; border:2px solid var(--line); border-top-color:#4f46e5; border-radius:50%; animation: spin 1s linear infinite;"></div>
+                  <span>☁️</span> Đang tải lên Cloudinary...
+                </div>
+                <p style="margin:0; font-size:12px; color:var(--gray-600);">
+                  Hình ảnh đang được tải lên đám mây ở tiến trình nền. Vui lòng đợi trong giây lát...
+                </p>
+              </div>
+            `;
+          } else if (data.cloud_url) {
+            cloudStatusHtml = `
+              <div style="margin:15px 0; padding:12px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.18); border-radius:8px; text-align:left;">
+                <div style="color:#22c55e; font-weight:700; margin-bottom:5px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                  <span>✅</span> Lưu Cloudinary thành công!
+                </div>
+                <div style="font-size:12px; word-break:break-all;">
+                  <strong>URL Cloudinary:</strong><br>
+                  <a href="${data.cloud_url}" target="_blank" style="color:#4f46e5; text-decoration:underline; font-weight:600;">${data.cloud_url}</a>
+                </div>
+              </div>
+            `;
+          } else {
+            cloudStatusHtml = `
+              <div style="margin:15px 0; padding:12px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.18); border-radius:8px; text-align:left;">
+                <div style="color:var(--red); font-weight:700; margin-bottom:5px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                  <span>❌</span> Không thể tải lên Cloudinary
+                </div>
+                <p style="margin:0; font-size:12px; color:var(--gray-600);">
+                  Vui lòng kiểm tra lại cấu hình thông tin Cloudinary (cloud_name, api_key, api_secret) trong file <code>configs/db.json</code> và đảm bảo máy chủ kết nối internet.
+                </p>
+              </div>
+            `;
+          }
+          
+          const localPreviewUrl = `${apiBaseUrl()}${data.local_path}`;
+          
+          openModal("Kết quả chụp ảnh test", `
+            <div style="text-align:center;">
+              <img src="${localPreviewUrl}" alt="Preview" style="width:100%; max-height:260px; object-fit:contain; border-radius:8px; border:1px solid var(--line); margin-bottom:10px;">
+              <p style="font-size:13px; color:var(--gray-600); margin:0;">
+                Ảnh đã được lưu cục bộ tại máy chủ và tạo bản ghi sự kiện thành công!
+              </p>
+              ${cloudStatusHtml}
+            </div>
+          `, `
+            <button class="btn primary" id="btnGoToMedia">Xem Hình ảnh & video</button>
+            <button class="btn line" data-close-modal>Đóng</button>
+          `);
+          
+          // Wire up redirect button
+          const btnGoToMedia = document.getElementById("btnGoToMedia");
+          if (btnGoToMedia) {
+            btnGoToMedia.addEventListener("click", () => {
+              render("media");
+              document.querySelector("[data-close-modal]")?.click();
+            });
+          }
+
+          // Start status polling if pending
+          if (data.cloud_url === "pending") {
+            let attempts = 0;
+            pollIntervalId = setInterval(async () => {
+              attempts++;
+              const container = document.getElementById("cloudUploadStatus");
+              // If modal was closed, element is removed from DOM, cancel polling safely
+              if (!container) {
+                clearInterval(pollIntervalId);
+                return;
+              }
+              if (attempts > 15) {
+                clearInterval(pollIntervalId);
+                container.style.background = "rgba(239,68,68,0.08)";
+                container.style.borderColor = "rgba(239,68,68,0.18)";
+                container.innerHTML = `
+                  <div style="color:var(--red); font-weight:700; margin-bottom:5px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                    <span>❌</span> Tải lên Cloudinary quá thời gian
+                  </div>
+                  <p style="margin:0; font-size:12px; color:var(--gray-600);">
+                    Không nhận được phản hồi từ Cloudinary sau 15 giây. Vui lòng kiểm tra lại cấu hình hoặc kết nối mạng của máy chủ.
+                  </p>
+                `;
+                return;
+              }
+
+              try {
+                const res = await fetch(`${apiBaseUrl()}/api/alerts`, {
+                  headers: { "Authorization": `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                  const alertData = await res.json();
+                  const currentAlert = alertData.alerts.find(x => x.id === testAlertId);
+                  if (currentAlert && currentAlert.cloud_img_url) {
+                    clearInterval(pollIntervalId);
+                    
+                    // Update in local cache
+                    const localIdx = alerts.findIndex(x => x.id === testAlertId);
+                    if (localIdx !== -1) {
+                      alerts[localIdx].cloud_img_url = currentAlert.cloud_img_url;
+                      saveAll();
+                    }
+                    
+                    // Update DOM content dynamically with green check
+                    container.style.background = "rgba(34,197,94,0.08)";
+                    container.style.borderColor = "rgba(34,197,94,0.18)";
+                    container.innerHTML = `
+                      <div style="color:#22c55e; font-weight:700; margin-bottom:5px; font-size:14px; display:flex; align-items:center; gap:6px;">
+                        <span>✅</span> Tải lên Cloudinary thành công!
+                      </div>
+                      <div style="font-size:12px; word-break:break-all;">
+                        <strong>URL Cloudinary:</strong><br>
+                        <a href="${currentAlert.cloud_img_url}" target="_blank" style="color:#4f46e5; text-decoration:underline; font-weight:600;">${currentAlert.cloud_img_url}</a>
+                      </div>
+                    `;
+                  }
+                }
+              } catch (err) {
+                console.error("Lỗi poll trạng thái upload:", err);
+              }
+            }, 1000);
+          }
+          
+        } else {
+          throw new Error(data.detail || "Không rõ nguyên nhân.");
+        }
+      } catch (err) {
+        console.error("Lỗi chụp ảnh test:", err);
+        openModal("Lỗi chụp ảnh test", `
+          <div style="text-align:center; padding:15px;">
+            <div style="font-size:48px; margin-bottom:10px;">⚠️</div>
+            <p style="font-weight:600; color:var(--red); margin:0 0 10px;">Lỗi xử lý yêu cầu chụp ảnh</p>
+            <p style="font-size:13px; color:var(--gray-600); word-break:break-word;">${err.message}</p>
+          </div>
+        `, `<button class="btn line" data-close-modal>Đóng</button>`);
       }
     }
 
@@ -1706,12 +2602,14 @@
       if (card) card.classList.toggle("fallen", aiFallTestOn);
       
       if (aiFallTestOn && !isBackendOnline) {
-        const activeCam = cameraById(selectedCameraId) || { id: "CAM-001", target: "BN-001" };
+        const activeCam = cameraById(selectedCameraId) || { id: "CAM-001" };
+        const owner = users.find(u => (u.assignedCameras || []).includes(activeCam.id));
+        const ownerName = owner ? owner.name : "Khách hàng";
         const newAlert = {
           id: `AL-${Date.now()}`,
           time: new Date().toLocaleString("vi-VN"),
           camera: activeCam.id,
-          person: people.find(p => p.id === activeCam.target)?.name || "Đối tượng",
+          person: ownerName,
           confidence: 94,
           status: "Chưa xử lý",
           level: "Khẩn cấp",
@@ -2004,7 +2902,13 @@
         ).join("")}`
       ).join("");
       
-      document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => render(btn.dataset.view)));
+      document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => {
+        const viewId = btn.dataset.view;
+        if (viewId === "live") liveViewLevel = "locations";
+        if (viewId === "alerts") alertsViewLevel = "locations";
+        if (viewId === "media") mediaViewLevel = "locations";
+        render(viewId);
+      }));
     }
 
     function render(id = "dashboard") {
@@ -2052,6 +2956,42 @@
         else if (lowerUser === "guest") usernameInput = "guest@nckh.vn";
       }
       
+      await checkBackendStatus();
+      
+      let authenticated = false;
+      if (isBackendOnline) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: usernameInput, password: passwordInput }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(payload.detail || "Sai tài khoản hoặc mật khẩu.");
+            return;
+          }
+          authToken = payload.token;
+          localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
+          localStorage.setItem("nckh_server_url", apiBaseUrl());
+          
+          // Fetch remote users to refresh local users list first
+          const usersRes = await fetch(`${apiBaseUrl()}/api/users`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (usersRes.ok) {
+            const remoteUsers = await usersRes.json();
+            if (Array.isArray(remoteUsers)) {
+              users = remoteUsers;
+              saveStore("fg_users", users);
+            }
+          }
+          authenticated = true;
+        } catch (err) {
+          console.error("Backend auth failed, trying local fallback:", err);
+        }
+      }
+      
       const foundUser = users.find(u => u.email.toLowerCase() === usernameInput.toLowerCase());
       if (!foundUser) {
         alert("Tài khoản không tồn tại trên hệ thống.");
@@ -2061,34 +3001,32 @@
         alert("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.");
         return;
       }
-      if (passwordInput !== "nckh2025") {
-        alert("Sai mật khẩu. Vui lòng thử lại.");
-        return;
+      
+      if (!authenticated) {
+        if (passwordInput !== "nckh2025") {
+          alert("Sai mật khẩu. Vui lòng thử lại.");
+          return;
+        }
       }
       
       currentUser = foundUser;
+      localStorage.setItem("nckh_current_user_email", currentUser.email);
       updateSidebarFooter();
+      
+      if (isBackendOnline && authToken) {
+        await syncFromBackend();
+      }
       
       $("loginScreen").classList.add("hidden");
       $("app").classList.remove("hidden");
       buildNav();
       render("dashboard");
       
-      checkBackendStatus().then(async (online) => {
-        if (online) {
-          try {
-            await backendLogin(true);
-            console.log("Đã đăng nhập backend AI thành công!");
-          } catch (err) {
-            console.warn("Không tự động đăng nhập được backend:", err);
-          }
-        }
-      });
       backendCheckInterval = setInterval(checkBackendStatus, 5000);
     });
 
     $("forgotBtn").addEventListener("click", () => alert("Liên hệ Admin để đặt lại mật khẩu hoặc dùng chức năng đổi mật khẩu sau khi đăng nhập."));
-    $("logoutBtn").addEventListener("click", () => {
+    function performLogout() {
       stopTestCamera(false);
       if (backendCheckInterval) {
         clearInterval(backendCheckInterval);
@@ -2101,10 +3039,13 @@
         }).catch(() => {});
         authToken = "";
         localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem("nckh_current_user_email");
       }
       $("app").classList.add("hidden");
       $("loginScreen").classList.remove("hidden");
-    });
+    }
+
+    $("logoutBtn").addEventListener("click", performLogout);
 
     // Check setting key changes
     document.addEventListener("change", (event) => {
@@ -2173,22 +3114,30 @@
       if (event.target.closest("[data-delete-camera]")) {
         const id = event.target.closest("[data-delete-camera]").dataset.deleteCamera;
         if (confirm(`Xóa camera ${id}?`)) {
+          if (isBackendOnline && authToken) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/cameras/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${authToken}` }
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(errData.detail || "Không thể xóa camera trên máy chủ.");
+                return;
+              }
+            } catch (err) {
+              console.error("Camera delete sync failed:", err);
+              alert("Lỗi kết nối khi đồng bộ xóa camera.");
+              return;
+            }
+          }
           cameras = cameras.filter((cam) => cam.id !== id);
           if (selectedCameraId === id) selectedCameraId = cameras[0]?.id || "";
           saveAll();
           render(currentView);
         }
       }
-      if (event.target.closest("[data-add-person]")) personModal();
-      if (event.target.closest("[data-edit-person]")) personModal(event.target.closest("[data-edit-person]").dataset.editPerson);
-      if (event.target.closest("[data-delete-person]")) {
-        const id = event.target.closest("[data-delete-person]").dataset.deletePerson;
-        if (confirm(`Xóa hồ sơ ${id}?`)) {
-          people = people.filter((p) => p.id !== id);
-          saveAll();
-          render("people");
-        }
-      }
+
       if (event.target.closest("[data-add-user]")) userModal();
       if (event.target.closest("[data-edit-user]")) userModal(event.target.closest("[data-edit-user]").dataset.editUser);
       if (event.target.closest("[data-toggle-user]")) {
@@ -2197,9 +3146,37 @@
           alert("Bạn không thể tự khóa tài khoản của chính mình!");
           return;
         }
-        users = users.map((u) => u.email === email ? { ...u, status: u.status === "Bị khóa" ? "Đang hoạt động" : "Bị khóa" } : u);
-        saveAll();
-        render("users");
+        const targetUser = users.find(u => u.email === email);
+        if (targetUser) {
+          const updatedUser = { 
+            ...targetUser, 
+            status: targetUser.status === "Bị khóa" ? "Đang hoạt động" : "Bị khóa" 
+          };
+          if (isBackendOnline && authToken) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(email)}`, {
+                method: "PUT",
+                headers: { 
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${authToken}`
+                },
+                body: JSON.stringify(updatedUser)
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(errData.detail || "Không thể đồng bộ trạng thái tài khoản.");
+                return;
+              }
+            } catch (err) {
+              console.error("User toggle sync failed:", err);
+              alert("Lỗi kết nối khi đồng bộ trạng thái tài khoản.");
+              return;
+            }
+          }
+          users = users.map((u) => u.email === email ? updatedUser : u);
+          saveAll();
+          render("users");
+        }
       }
       if (event.target.closest("[data-delete-user]")) {
         const email = event.target.closest("[data-delete-user]").dataset.deleteUser;
@@ -2208,6 +3185,23 @@
           return;
         }
         if (confirm(`Xóa tài khoản ${email}?`)) {
+          if (isBackendOnline && authToken) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(email)}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${authToken}` }
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(errData.detail || "Không thể xóa tài khoản trên máy chủ.");
+                return;
+              }
+            } catch (err) {
+              console.error("User delete sync failed:", err);
+              alert("Lỗi kết nối khi đồng bộ xóa tài khoản.");
+              return;
+            }
+          }
           users = users.filter((u) => u.email !== email);
           saveAll();
           render("users");
@@ -2268,8 +3262,10 @@
       }
       if (event.target.closest("[data-action='mark-alert']")) {
         const id = event.target.closest("[data-action='mark-alert']").dataset.id;
-        const cam = cameraById(id) || { id: id, target: "BN-001" };
-        alerts.unshift({ id: `AL-${Date.now()}`, time: new Date().toLocaleString("vi-VN"), camera: cam.id, person: cam.target, confidence: 94, status: "Chưa xử lý", level: "Khẩn cấp", media: "Ảnh + video 12s" });
+        const cam = cameraById(id) || { id: id };
+        const owner = users.find(u => (u.assignedCameras || []).includes(cam.id));
+        const ownerName = owner ? owner.name : "Khách hàng";
+        alerts.unshift({ id: `AL-${Date.now()}`, time: new Date().toLocaleString("vi-VN"), camera: cam.id, person: ownerName, confidence: 94, status: "Chưa xử lý", level: "Khẩn cấp", media: "Ảnh + video 12s" });
         saveAll();
         toast("Đã tạo cảnh báo mới cho camera này.");
       }
@@ -2280,7 +3276,7 @@
         const alertItem = alerts.find(a => a.id === id);
         if (alertItem) {
           const cam = cameraById(alertItem.camera);
-          const person = cam ? (people.find(p => p.id === cam.target) || people[0]) : (people.find(p => p.name === alertItem.person) || people[0]);
+          const owner = users.find(u => (u.assignedCameras || []).includes(alertItem.camera)) || users.find(u => u.name === alertItem.person);
           const content = `
             <div style="display:flex; flex-direction:column; gap:16px;">
               <div class="card" style="background:#fff5f5; border:1px solid #fee2e2;">
@@ -2294,13 +3290,11 @@
               </div>
               
               <div class="card">
-                <h4 style="margin:0 0 10px">Thông tin người bệnh</h4>
-                <div class="metric-row"><span>Họ và tên</span><strong>${person ? person.name : "Chưa cập nhật"}</strong></div>
-                <div class="metric-row"><span>Ngày sinh</span><strong>${person ? person.dob : "Chưa cập nhật"}</strong></div>
-                <div class="metric-row"><span>Giới tính</span><strong>${person ? person.gender : "Chưa cập nhật"}</strong></div>
-                <div class="metric-row"><span>Thông tin y tế</span><strong style="color:var(--red);">${person ? person.medical : "N/A"}</strong></div>
-                <div class="metric-row"><span>Ghi chú</span><strong>${person ? person.note : "N/A"}</strong></div>
-                <div class="metric-row"><span>Người thân liên hệ</span><strong>${person ? person.contact : "N/A"}</strong></div>
+                <h4 style="margin:0 0 10px">Thông tin tài khoản khách hàng</h4>
+                <div class="metric-row"><span>Họ và tên</span><strong>${owner ? owner.name : "Chưa rõ"}</strong></div>
+                <div class="metric-row"><span>Email</span><strong>${owner ? owner.email : "Chưa rõ"}</strong></div>
+                <div class="metric-row"><span>Số điện thoại</span><strong>${owner ? (owner.phone || "Chưa cập nhật") : "Chưa cập nhật"}</strong></div>
+                <div class="metric-row"><span>Trạng thái tài khoản</span><strong>${owner ? owner.status : "Đang hoạt động"}</strong></div>
               </div>
               
               <div class="card">
@@ -2318,6 +3312,23 @@
       // Alert solved handler
       if (event.target.closest("[data-solve-alert]")) {
         const id = event.target.closest("[data-solve-alert]").dataset.solveAlert;
+        if (isBackendOnline && authToken) {
+          try {
+            const res = await fetch(`${apiBaseUrl()}/api/alerts/${encodeURIComponent(id)}/solve`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${authToken}` }
+            });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              alert(errData.detail || "Không thể đồng bộ xác nhận xử lý.");
+              return;
+            }
+          } catch (err) {
+            console.error("Alert solve sync failed:", err);
+            alert("Lỗi kết nối khi đồng bộ xác nhận xử lý.");
+            return;
+          }
+        }
         alerts = alerts.map(a => a.id === id ? { ...a, status: "Đã xử lý" } : a);
         saveAll();
         render(currentView);
@@ -2329,6 +3340,33 @@
         const type = event.target.closest("[data-action='view-media']").dataset.mediaType;
         const alertId = event.target.closest("[data-action='view-media']").dataset.alertId;
         const isMock = alertId.includes("20260615") || alertId.includes("001") || alertId.includes("002") || alertId.includes("003");
+        const a = alerts.find(x => x.id === alertId);
+        
+        let cloudLinkHtml = "";
+        let imgSrc = `${apiBaseUrl()}/media/${alertId}.jpg`;
+        let videoSrc = `${apiBaseUrl()}/media/${alertId}.mp4`;
+
+        if (a && a.cloud_img_url) {
+          imgSrc = a.cloud_img_url;
+          cloudLinkHtml = `
+            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:13px; text-align:left;">
+              <div style="color:#22c55e; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                <span>☁️</span> Đã lưu trữ Cloudinary thành công
+              </div>
+              <a href="${a.cloud_img_url}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">${a.cloud_img_url}</a>
+            </div>
+          `;
+        } else if (a && a.cloud_video_url) {
+          videoSrc = a.cloud_video_url;
+          cloudLinkHtml = `
+            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:13px; text-align:left;">
+              <div style="color:#22c55e; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                <span>☁️</span> Đã lưu trữ Cloudinary thành công
+              </div>
+              <a href="${a.cloud_video_url}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">${a.cloud_video_url}</a>
+            </div>
+          `;
+        }
         
         if (type === "Video clip" || type.toLowerCase().includes("video")) {
           if (isMock) {
@@ -2343,7 +3381,13 @@
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           } else {
             openModal(`Xem Video ${alertId}`, `
-              <video src="${apiBaseUrl()}/media/${alertId}.mp4" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line)"></video>
+              <video src="${videoSrc}" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line)" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${alertId}').style.display='block';"></video>
+              <div id="mediaDeleteNote-${alertId}" style="display:none; padding:40px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+                <div style="font-size:36px; margin-bottom:8px;">🗑️</div>
+                <p style="font-weight:600; margin:0 0 4px; color:var(--red);">Hình ảnh / Video không khả dụng</p>
+                <p class="hint" style="margin:0;">Nội dung này đã bị xóa trên Cloudinary nên không thể hiển thị.</p>
+              </div>
+              ${cloudLinkHtml}
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           }
         } else {
@@ -2359,7 +3403,13 @@
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           } else {
             openModal(`Xem Ảnh chụp ${alertId}`, `
-              <img src="${apiBaseUrl()}/media/${alertId}.jpg" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line)">
+              <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line)" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${alertId}').style.display='block';">
+              <div id="mediaDeleteNote-${alertId}" style="display:none; padding:40px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+                <div style="font-size:36px; margin-bottom:8px;">🗑️</div>
+                <p style="font-weight:600; margin:0 0 4px; color:var(--red);">Hình ảnh / Video không khả dụng</p>
+                <p class="hint" style="margin:0;">Nội dung này đã bị xóa trên Cloudinary nên không thể hiển thị.</p>
+              </div>
+              ${cloudLinkHtml}
             `, `<button class="btn line" data-close-modal>Đóng</button>`);
           }
         }
@@ -2370,13 +3420,33 @@
       }
       if (event.target.closest("[data-action='delete-media']")) {
         const alertId = event.target.closest("[data-action='delete-media']").dataset.alertId;
-        if (confirm(`Xóa tệp media của cảnh báo ${alertId}?`)) {
-          toast(`Đã xóa tệp media của cảnh báo ${alertId}`);
+        if (confirm(`Xóa cảnh báo và tệp media của sự kiện ${alertId}?`)) {
+          if (isBackendOnline && authToken) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/alerts/${encodeURIComponent(alertId)}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${authToken}` }
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(errData.detail || "Không thể xóa cảnh báo trên máy chủ.");
+                return;
+              }
+            } catch (err) {
+              console.error("Alert delete sync failed:", err);
+              alert("Lỗi kết nối khi đồng bộ xóa cảnh báo.");
+              return;
+            }
+          }
+          alerts = alerts.filter(a => a.id !== alertId);
+          saveAll();
+          render(currentView);
+          toast(`Đã xóa cảnh báo và tệp media ${alertId}`);
         }
       }
     });
 
-    document.addEventListener("submit", (event) => {
+    document.addEventListener("submit", async (event) => {
       if (event.target.id === "cameraFormReal") {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.target).entries());
@@ -2384,7 +3454,34 @@
           alert("Mã camera này đã tồn tại trên hệ thống!");
           return;
         }
-        const cam = { id: data.id, name: data.name, ip: data.ip, rtsp: data.rtsp, area: data.area, target: data.target, state: data.state, status: data.status, fps: Number(data.fps), resolution: data.resolution, threshold: Number(data.threshold) };
+        const cam = { id: data.id, name: data.name, ip: data.ip, rtsp: data.rtsp, area: "", target: "", state: data.state, status: data.status, fps: Number(data.fps), resolution: data.resolution, threshold: Number(data.threshold) };
+        
+        if (isBackendOnline && authToken) {
+          try {
+            const url = data.oldId 
+              ? `${apiBaseUrl()}/api/cameras/${encodeURIComponent(data.oldId)}`
+              : `${apiBaseUrl()}/api/cameras`;
+            const method = data.oldId ? "PUT" : "POST";
+            const res = await fetch(url, {
+              method: method,
+              headers: { 
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${authToken}`
+              },
+              body: JSON.stringify(cam)
+            });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              alert(errData.detail || "Không thể đồng bộ dữ liệu camera lên máy chủ.");
+              return;
+            }
+          } catch (err) {
+            console.error("Camera sync failed:", err);
+            alert("Lỗi kết nối khi đồng bộ dữ liệu camera.");
+            return;
+          }
+        }
+
         const idx = cameras.findIndex((item) => item.id === data.oldId);
         if (idx >= 0) cameras[idx] = cam; else cameras.push(cam);
         selectedCameraId = cam.id;
@@ -2392,19 +3489,52 @@
         closeModal();
         render(currentView);
       }
-      if (event.target.id === "personFormReal") {
+      if (event.target.id === "cameraPermissionFormReal") {
         event.preventDefault();
-        const data = Object.fromEntries(new FormData(event.target).entries());
-        if (!data.oldId && people.some(p => p.id.toLowerCase() === data.id.toLowerCase())) {
-          alert("Mã người được theo dõi (ID) đã tồn tại trên hệ thống!");
+        const formData = new FormData(event.target);
+        const email = formData.get("email");
+        const assignedCameras = formData.getAll("assignedCameras");
+        
+        const targetUser = users.find(u => u.email === email);
+        if (!targetUser) {
+          alert("Không tìm thấy thông tin khách hàng!");
           return;
         }
-        const person = { id: data.id, name: data.name, dob: data.dob, gender: data.gender, medical: data.medical, note: data.note, contact: data.contact };
-        const idx = people.findIndex((item) => item.id === data.oldId);
-        if (idx >= 0) people[idx] = person; else people.push(person);
+
+        // Keep all other fields (name, role, status, phone, password), only update assignedCameras
+        const updatedUser = {
+          ...targetUser,
+          assignedCameras: assignedCameras
+        };
+
+        if (isBackendOnline && authToken) {
+          try {
+            const url = `${apiBaseUrl()}/api/users/${encodeURIComponent(email)}`;
+            const res = await fetch(url, {
+              method: "PUT",
+              headers: { 
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${authToken}`
+              },
+              body: JSON.stringify(updatedUser)
+            });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              alert(errData.detail || "Không thể đồng bộ phân quyền camera lên máy chủ.");
+              return;
+            }
+          } catch (err) {
+            console.error("Camera permission sync failed:", err);
+            alert("Lỗi kết nối khi đồng bộ phân quyền camera.");
+            return;
+          }
+        }
+
+        const idx = users.findIndex((item) => item.email === email);
+        if (idx >= 0) users[idx] = updatedUser;
         saveAll();
         closeModal();
-        render("people");
+        render(currentView, false);
       }
       if (event.target.id === "userFormReal") {
         event.preventDefault();
@@ -2426,15 +3556,49 @@
           }
         }
         const assignedCameras = formData.getAll("assignedCameras");
+        const password = formData.get("password")?.trim();
         const user = { 
           email: email, 
           name: formData.get("name"), 
           role: formData.get("role"), 
           status: formData.get("status"),
-          assignedCameras: assignedCameras
+          assignedCameras: assignedCameras,
+          phone: formData.get("phone")?.trim() || null
         };
+        if (password) {
+          user.password = password;
+        }
+
+        if (isBackendOnline && authToken) {
+          try {
+            const url = oldEmail 
+              ? `${apiBaseUrl()}/api/users/${encodeURIComponent(oldEmail)}`
+              : `${apiBaseUrl()}/api/users`;
+            const method = oldEmail ? "PUT" : "POST";
+            const res = await fetch(url, {
+              method: method,
+              headers: { 
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${authToken}`
+              },
+              body: JSON.stringify(user)
+            });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              alert(errData.detail || "Không thể đồng bộ tài khoản lên máy chủ.");
+              return;
+            }
+          } catch (err) {
+            console.error("User sync failed:", err);
+            alert("Lỗi kết nối khi đồng bộ tài khoản.");
+            return;
+          }
+        }
+
         const idx = users.findIndex((item) => item.email === oldEmail);
-        if (idx >= 0) users[idx] = user; else users.push(user);
+        const savedUser = { ...user };
+        delete savedUser.password;
+        if (idx >= 0) users[idx] = savedUser; else users.push(savedUser);
         saveAll();
         closeModal();
         render("users");
@@ -2459,6 +3623,48 @@
         render("settings");
       }
     });
+
+    async function initSession() {
+      const savedEmail = localStorage.getItem("nckh_current_user_email");
+      if (authToken && savedEmail) {
+        const found = users.find(u => u.email.toLowerCase() === savedEmail.toLowerCase());
+        if (found && found.status !== "Bị khóa") {
+          currentUser = found;
+          updateSidebarFooter();
+          
+          $("loginScreen").classList.add("hidden");
+          $("app").classList.remove("hidden");
+          buildNav();
+          render("dashboard");
+          
+          const online = await checkBackendStatus();
+          if (online) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/users`, {
+                headers: { Authorization: `Bearer ${authToken}` }
+              });
+              if (res.ok) {
+                console.log("Auto-login session verified with backend.");
+                await syncFromBackend();
+              } else {
+                console.warn("Session token expired or invalid.");
+                performLogout();
+              }
+            } catch (err) {
+              console.warn("Could not verify session with backend, continuing offline:", err);
+            }
+          }
+          
+          backendCheckInterval = setInterval(checkBackendStatus, 5000);
+          return;
+        }
+      }
+      $("loginScreen").classList.remove("hidden");
+      $("app").classList.add("hidden");
+    }
+
+    // Auto-login session initialization on load
+    initSession();
   </script>
 
 </body>

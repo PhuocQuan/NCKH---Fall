@@ -33,7 +33,14 @@ class VideoSource:
         self.capture = self._open()
 
     def _open(self) -> cv2.VideoCapture:
-        capture = cv2.VideoCapture(self.source)
+        import sys
+        capture = None
+        if sys.platform.startswith("win") and isinstance(self.source, int):
+            capture = cv2.VideoCapture(self.source, cv2.CAP_DSHOW)
+            
+        if capture is None or not capture.isOpened():
+            capture = cv2.VideoCapture(self.source)
+
         if self.width:
             capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         if self.height:
@@ -79,12 +86,19 @@ def _normalize_source(source: int | str) -> int | str:
 
 
 def probe_camera(index: int, width: int = 640, height: int = 480) -> SourceInfo | None:
-    capture = cv2.VideoCapture(index)
+    import sys
+    capture = None
+    if sys.platform.startswith("win"):
+        capture = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    if capture is None or not capture.isOpened():
+        capture = cv2.VideoCapture(index)
+
     capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     ok, frame = capture.read()
     if not capture.isOpened() or not ok or frame is None:
-        capture.release()
+        if capture:
+            capture.release()
         return None
 
     info = SourceInfo(

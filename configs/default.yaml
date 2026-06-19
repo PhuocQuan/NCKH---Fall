@@ -1,20 +1,21 @@
 detector:
-  torso_fall_angle_deg: 62
+  torso_fall_angle_deg: 58
   torso_upright_angle_deg: 35
   head_hip_height_ratio: 0.18
   hip_drop_velocity: 0.035
   angle_change_velocity_deg: 18
   min_fall_frames: 7
   warning_frames: 3
-  alert_after_seconds: 10
-  alert_on_long_lying_without_fall: false
+  alert_after_seconds: 7
+  alert_on_long_lying_without_fall: true
   assumed_fps: 30
   cooldown_frames: 20
   profile: default
 
 app:
-  camera_width: 1280
-  camera_height: 720
+  camera_width: 640
+  camera_height: 480
+  model_complexity: 1
   draw_landmarks: true
   event_log_path: data/events.csv
 

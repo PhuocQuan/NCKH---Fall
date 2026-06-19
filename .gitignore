@@ -10,3 +10,4 @@ data/events.db
 *.log
 .env
 .ipynb_checkpoints/
+configs/db.json

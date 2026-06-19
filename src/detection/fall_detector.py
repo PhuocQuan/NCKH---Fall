@@ -71,7 +71,11 @@ class FallDetector:
         nose = landmarks["nose"]
 
         torso_angle = _angle_from_vertical(shoulder, hip)
-        head_hip_delta = hip.y - nose.y
+        if nose.visibility >= 0.35:
+            head_hip_delta = hip.y - nose.y
+        else:
+            # Fallback to shoulder when nose is occluded, scaling up by 1.5 to match nose-hip ratio
+            head_hip_delta = (hip.y - shoulder.y) * 1.5
         hip_velocity = 0.0 if self._previous_hip_y is None else hip.y - self._previous_hip_y
         angle_velocity = (
             0.0
@@ -129,11 +133,9 @@ class FallDetector:
         elif self._abnormal_frames >= self.config.min_fall_frames:
             state = FallState.FALLEN
         elif self._abnormal_frames >= self.config.warning_frames:
-            state = FallState.POSSIBLE_FALL
+            state = FallState.POSSIBLE_FALL if lying else FallState.WARNING
         elif lying:
             state = FallState.LYING
-        elif self._abnormal_frames >= self.config.warning_frames:
-            state = FallState.WARNING
         else:
             state = FallState.NORMAL
 

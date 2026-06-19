@@ -57,7 +57,7 @@ def main() -> None:
     detector = FallDetector(detector_config)
     feature_buffer = LandmarkFeatureBuffer(window_size=round(detector_config.assumed_fps))
     ai_classifier = FallAIClassifier(config.ai)
-    estimator = PoseEstimator()
+    estimator = PoseEstimator(model_complexity=config.app.model_complexity)
     logger = EventLogger(config.app.event_log_path)
 
     source = args.video if args.video else args.camera if args.camera is not None else args.source

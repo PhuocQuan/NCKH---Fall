@@ -52,6 +52,7 @@ class PipelineStatus:
     ai_enabled: bool = False
     pose_detected: bool = False
     fps: float = 0.0
+    latency_ms: float = 0.0
     last_error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -122,7 +123,7 @@ class FallDetectionPipeline:
         self._detector = FallDetector(config.detector)
         self._feature_buffer = LandmarkFeatureBuffer(window_size=round(config.detector.assumed_fps))
         self._ai_classifier = FallAIClassifier(config.ai)
-        self._estimator = PoseEstimator()
+        self._estimator = PoseEstimator(model_complexity=config.app.model_complexity)
         self._logger = EventLogger(config.app.event_log_path)
 
         normalized = int(source) if str(source).isdigit() else source
@@ -174,6 +175,7 @@ class FallDetectionPipeline:
         frames = 0
         started = time.perf_counter()
         while self._running and self._video and self._estimator and self._detector:
+            frame_start = time.perf_counter()
             ok, frame = self._video.read()
             if not ok or frame is None:
                 with self._lock:
@@ -248,6 +250,8 @@ class FallDetectionPipeline:
             frames += 1
             elapsed = max(time.perf_counter() - started, 0.001)
             status.fps = round(frames / elapsed, 1)
+            status.latency_ms = round((time.perf_counter() - frame_start) * 1000, 1)
+
 
             ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
             if ok_enc:
@@ -274,9 +278,21 @@ class FallDetectionPipeline:
             "level": level,
             "media": alert_id,
             "state": result.state.value,
+            "cloud_img_url": None,
+            "cloud_video_url": None,
         }
         self._recent_alerts.insert(0, alert)
         self._recent_alerts = self._recent_alerts[:50]
+
+        try:
+            from src.web.backend.db import get_db_client
+            with get_db_client() as client:
+                client.execute(
+                    "INSERT INTO alerts (id, time, camera, person, confidence, status, level, media, state, cloud_img_url, cloud_video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [alert_id, alert["time"], alert["camera"], alert["person"], alert["confidence"], alert["status"], alert["level"], alert["media"], alert["state"], None, None]
+                )
+        except Exception as e:
+            print(f"[Database Error] Khong the luu alert vao Turso: {e}")
 
     def _save_event_media(self, alert_id: str, snapshot_frame, video_frames: list) -> None:
         import os
@@ -312,13 +328,43 @@ class FallDetectionPipeline:
                     except Exception:
                         continue
             
-            # 3. Trigger actual notifications
+            # 3. Upload to Cloudinary if configured in db.json
+            cloud_img_url = None
+            cloud_video_url = None
+            try:
+                from src.web.backend.cloudinary_uploader import upload_to_cloudinary
+                cloud_img_url = upload_to_cloudinary(str(img_path))
+                if video_written:
+                    cloud_video_url = upload_to_cloudinary(str(video_path))
+            except Exception as e:
+                print(f"[Cloudinary Error] Lỗi upload lên Cloud: {e}")
+            
+            # Update local memory and DB with cloud URLs
+            with self._lock:
+                for a in self._recent_alerts:
+                    if a["id"] == alert_id:
+                        a["cloud_img_url"] = cloud_img_url
+                        a["cloud_video_url"] = cloud_video_url
+                        break
+            try:
+                from src.web.backend.db import get_db_client
+                with get_db_client() as client:
+                    client.execute(
+                        "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ? WHERE id = ?",
+                        [cloud_img_url, cloud_video_url, alert_id]
+                    )
+            except Exception as e:
+                print(f"[Database Error] Khong the cap nhat Cloud URL vao Turso: {e}")
+            
+            # 4. Trigger actual notifications
             try:
                 from src.web.backend.notifications import send_all_alerts
                 send_all_alerts(
                     alert_id=alert_id,
                     image_path=str(img_path),
-                    video_path=str(video_path) if video_written else None
+                    video_path=str(video_path) if video_written else None,
+                    cloud_img_url=cloud_img_url,
+                    cloud_video_url=cloud_video_url
                 )
             except Exception as e:
                 print(f"[Notification Error] Khong gui duoc canh bao: {e}")

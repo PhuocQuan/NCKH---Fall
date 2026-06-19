@@ -56,7 +56,8 @@ class PoseEstimator:
             )
             for name, index in LANDMARK_NAMES.items()
         }
-        if any(point.visibility < 0.45 for point in points.values()):
+        critical_landmarks = ["left_shoulder", "right_shoulder", "left_hip", "right_hip"]
+        if any(points[name].visibility < 0.35 for name in critical_landmarks) or points["nose"].visibility < 0.15:
             return None, results
         return points, results
 

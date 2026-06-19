@@ -23,8 +23,9 @@ class DetectorConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
-    camera_width: int = 1280
-    camera_height: int = 720
+    camera_width: int = 640
+    camera_height: int = 480
+    model_complexity: int = 1
     draw_landmarks: bool = True
     event_log_path: str = "data/events.csv"
 
