@@ -31,6 +31,7 @@ class LoginRequest(BaseModel):
 
 class ControlRequest(BaseModel):
     source: str = "0"
+    camera_id: str | None = None
 
 
 class TestNotifRequest(BaseModel):
@@ -103,7 +104,7 @@ def api_logout(request: Request, user: str = Depends(require_user)) -> dict[str,
 @app.post("/api/control/start")
 def control_start(body: ControlRequest, user: str = Depends(require_user)) -> dict[str, Any]:
     try:
-        pipeline.start(body.source)
+        pipeline.start(body.source, camera_id=body.camera_id)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Khong khoi dong camera: {exc}") from exc
     return {"ok": True, "source": body.source, "status": pipeline.status.to_dict()}

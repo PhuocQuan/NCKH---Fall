@@ -98,12 +98,13 @@ class FallDetectionPipeline:
         with self._lock:
             return self._running
 
-    def start(self, source: str | int = "0") -> None:
+    def start(self, source: str | int = "0", camera_id: str | None = None) -> None:
         with self._lock:
             if self._running:
                 return
 
         self.stop()
+        self.camera_id = camera_id or "CAM-LOCAL"
         try:
             runtime = _import_runtime()
         except ImportError as exc:
@@ -271,7 +272,7 @@ class FallDetectionPipeline:
         alert = {
             "id": alert_id,
             "time": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "camera": "CAM-LOCAL",
+            "camera": getattr(self, "camera_id", "CAM-LOCAL"),
             "person": "Phat hien tu AI",
             "confidence": min(99, int(70 + result.torso_angle_deg / 2)),
             "status": "Chưa xử lý",

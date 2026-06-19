@@ -1810,7 +1810,7 @@
           const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-            body: JSON.stringify({ source: "0" }),
+            body: JSON.stringify({ source: "0", camera_id: selectedCameraId }),
           });
           const payload = await res.json().catch(() => ({}));
           if (!res.ok && res.status !== 409) {
