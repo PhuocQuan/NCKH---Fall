@@ -1,0 +1,15 @@
+{
+  "telegram": {
+    "enabled": true,
+    "bot_token": "8169554639:AAGY0eo5ZC6Nd6-b0p7PPHxyZxOOLdQdqjk",
+    "chat_id": "8723679518"
+  },
+  "email": {
+    "enabled": false,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "sender_email": "dinhbao2525@gmail.com",
+    "sender_password": "zopsgoxdfcuzzrdm",
+    "receiver_email": "bao105833@donga.edu.vn"
+  }
+}
