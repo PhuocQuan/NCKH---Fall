@@ -303,74 +303,85 @@ class FallDetectionPipeline:
         media_dir = project_root / "data" / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
         
-        # 1. Save snapshot image
         img_path = media_dir / f"{alert_id}.jpg"
-        cv2 = self._runtime["cv2"] if self._runtime else None
-        if cv2 is not None:
-            cv2.imwrite(str(img_path), snapshot_frame)
-            
-            # 2. Save video clip
-            video_written = False
-            video_path = media_dir / f"{alert_id}.mp4"
-            if video_frames:
-                height, width = video_frames[0].shape[:2]
+        video_path = media_dir / f"{alert_id}.mp4"
+        video_written = False
+        cloud_img_url = None
+        cloud_video_url = None
+
+        try:
+            # 1. Save snapshot image
+            cv2 = self._runtime["cv2"] if self._runtime else None
+            if cv2 is not None:
+                cv2.imwrite(str(img_path), snapshot_frame)
                 
-                # Try multiple common codecs for browser compatibility
-                for codec in ["avc1", "H264", "mp4v"]:
-                    try:
-                        fourcc = cv2.VideoWriter_fourcc(*codec)
-                        writer = cv2.VideoWriter(str(video_path), fourcc, 25.0, (width, height))
-                        if writer.isOpened():
-                            for f in video_frames:
-                                writer.write(f)
-                            writer.release()
-                            video_written = True
+                # 2. Save video clip
+                if video_frames:
+                    height, width = video_frames[0].shape[:2]
+                    
+                    # Try multiple common codecs for browser compatibility
+                    for codec in ["avc1", "H264", "mp4v"]:
+                        try:
+                            fourcc = cv2.VideoWriter_fourcc(*codec)
+                            writer = cv2.VideoWriter(str(video_path), fourcc, 25.0, (width, height))
+                            if writer.isOpened():
+                                for f in video_frames:
+                                    writer.write(f)
+                                writer.release()
+                                video_written = True
+                                break
+                        except Exception:
+                            continue
+                
+                # 3. Upload to Cloudinary if configured in db.json
+                try:
+                    from src.web.backend.cloudinary_uploader import upload_to_cloudinary
+                    cloud_img_url = upload_to_cloudinary(str(img_path))
+                    if video_written:
+                        cloud_video_url = upload_to_cloudinary(str(video_path))
+                except Exception as e:
+                    print(f"[Cloudinary Error] Lỗi upload lên Cloud: {e}")
+                
+                # Update local memory and DB with cloud URLs
+                with self._lock:
+                    for a in self._recent_alerts:
+                        if a["id"] == alert_id:
+                            a["cloud_img_url"] = cloud_img_url
+                            a["cloud_video_url"] = cloud_video_url
+                            a["media"] = f"{alert_id}_video" if video_written else f"{alert_id}_image"
                             break
-                    except Exception:
-                        continue
-            
-            # 3. Upload to Cloudinary if configured in db.json
-            cloud_img_url = None
-            cloud_video_url = None
-            try:
-                from src.web.backend.cloudinary_uploader import upload_to_cloudinary
-                cloud_img_url = upload_to_cloudinary(str(img_path))
-                if video_written:
-                    cloud_video_url = upload_to_cloudinary(str(video_path))
-            except Exception as e:
-                print(f"[Cloudinary Error] Lỗi upload lên Cloud: {e}")
-            
-            # Update local memory and DB with cloud URLs
-            with self._lock:
-                for a in self._recent_alerts:
-                    if a["id"] == alert_id:
-                        a["cloud_img_url"] = cloud_img_url
-                        a["cloud_video_url"] = cloud_video_url
-                        a["media"] = f"{alert_id}_video" if video_written else f"{alert_id}_image"
-                        break
-            try:
-                from src.web.backend.db import get_db_client
-                with get_db_client() as client:
-                    media_val = f"{alert_id}_video" if video_written else f"{alert_id}_image"
-                    client.execute(
-                        "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ?, media = ? WHERE id = ?",
-                        [cloud_img_url, cloud_video_url, media_val, alert_id]
+                try:
+                    from src.web.backend.db import get_db_client
+                    with get_db_client() as client:
+                        media_val = f"{alert_id}_video" if video_written else f"{alert_id}_image"
+                        client.execute(
+                            "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ?, media = ? WHERE id = ?",
+                            [cloud_img_url, cloud_video_url, media_val, alert_id]
+                        )
+                except Exception as e:
+                    print(f"[Database Error] Khong the cap nhat Cloud URL va media vao Turso: {e}")
+                
+                # 4. Trigger actual notifications
+                try:
+                    from src.web.backend.notifications import send_all_alerts
+                    send_all_alerts(
+                        alert_id=alert_id,
+                        image_path=str(img_path),
+                        video_path=str(video_path) if video_written else None,
+                        cloud_img_url=cloud_img_url,
+                        cloud_video_url=cloud_video_url
                     )
-            except Exception as e:
-                print(f"[Database Error] Khong the cap nhat Cloud URL va media vao Turso: {e}")
-            
-            # 4. Trigger actual notifications
+                except Exception as e:
+                    print(f"[Notification Error] Khong gui duoc canh bao: {e}")
+        finally:
+            # Delete local files immediately to avoid saving data locally
             try:
-                from src.web.backend.notifications import send_all_alerts
-                send_all_alerts(
-                    alert_id=alert_id,
-                    image_path=str(img_path),
-                    video_path=str(video_path) if video_written else None,
-                    cloud_img_url=cloud_img_url,
-                    cloud_video_url=cloud_video_url
-                )
-            except Exception as e:
-                print(f"[Notification Error] Khong gui duoc canh bao: {e}")
+                if img_path.exists():
+                    img_path.unlink()
+                if video_path.exists():
+                    video_path.unlink()
+            except Exception as cleanup_err:
+                print(f"[Media Cleanup Error] Không thể xóa file tạm: {cleanup_err}")
 
 
 def _play_alert_sound() -> None:

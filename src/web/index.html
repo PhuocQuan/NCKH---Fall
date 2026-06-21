@@ -349,6 +349,42 @@
       ]]
     ];
 
+    const userMenu = [
+      ["Tổng quan", [
+        ["user_dashboard", "🏠", "Trang chủ", "Tổng quan trạng thái giám sát"]
+      ]],
+      ["Giám sát", [
+        ["user_live", "🎥", "Xem Camera Trực Tiếp", "Theo dõi trực tiếp luồng camera"],
+        ["user_alerts", "⚠️", "Danh sách cảnh báo", "Các sự kiện cảnh báo té ngã phát hiện được"],
+        ["user_history", "📅", "Lịch sử té ngã", "Xem lại các video, hình ảnh sự kiện cũ"]
+      ]],
+      ["Cá nhân & Liên hệ", [
+        ["user_stats", "📊", "Thống kê cá nhân", "Biểu đồ tần suất té ngã ghi nhận"],
+        ["user_contacts", "📞", "Liên hệ khẩn cấp", "Số điện thoại, email liên lạc khẩn cấp"],
+        ["user_notifications", "🔔", "Thông báo", "Danh sách thông báo từ hệ thống giám sát"],
+        ["user_account", "⚙️", "Tài khoản cá nhân", "Đổi mật khẩu, ảnh đại diện, đăng xuất"]
+      ]]
+    ];
+
+    let monitoredProfile = loadStore("fg_monitored_profile", {
+      name: "Nguyễn Văn A",
+      age: 78,
+      gender: "Nam",
+      address: "Số 12 Ngõ 34, Phố Lê Thanh Nghị, Hai Bà Trưng, Hà Nội",
+      emergencyContact: "Nguyễn Văn B (Con trai)"
+    });
+
+    let emergencyContacts = loadStore("fg_emergency_contacts", [
+      { name: "Nguyễn Văn B", relationship: "Con trai", phone: "0987654321", email: "con-trai@gmail.com" },
+      { name: "Trực Ban Phòng Trực Y Tế", relationship: "Bệnh viện địa phương", phone: "115", email: "trucban@bvien.org" }
+    ]);
+
+    let userNotifications = loadStore("fg_user_notifications", [
+      { id: "NT-001", type: "fall", title: "Cảnh báo phát hiện té ngã", content: "AI phát hiện có người ngã ở Camera phòng khách lúc 10:35 ngày 15/06/2026.", time: "15/06/2026 10:35", read: false },
+      { id: "NT-002", type: "disconnect", title: "Camera hành lang mất kết nối", content: "Camera hành lang A (CAM-002) mất tín hiệu kết nối mạng RTSP.", time: "14/06/2026 23:10", read: true },
+      { id: "NT-003", type: "maintenance", title: "Hệ thống bảo trì định kỳ", content: "Hệ thống FallGuard AI sẽ tiến hành bảo trì nâng cấp thuật toán từ 01:00 đến 03:00 ngày 20/06/2026.", time: "14/06/2026 18:00", read: false }
+    ]);
+
     const $ = (id) => document.getElementById(id);
     const hasVideo = (a) => {
       if (!a) return false;
@@ -391,8 +427,8 @@
     
     function isMenuAllowed(menuId, role) {
       if (role === "Admin") return true;
-      if (role === "Khachhang" || role === "Khách hàng") {
-        return ["dashboard", "live", "alerts", "notifications", "media", "mobile"].includes(menuId);
+      if (role === "Khachhang" || role === "Khách hàng" || role === "User") {
+        return ["dashboard", "live", "alerts", "notifications", "media", "mobile", "user_dashboard", "user_live", "user_alerts", "user_history", "user_stats", "user_contacts", "user_notifications", "user_account"].includes(menuId);
       }
       return false;
     }
@@ -514,10 +550,15 @@
       const roleEl = $("sidebarUserRole");
       
       if (avatarEl && nameEl && roleEl) {
-        const initials = currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
-        avatarEl.textContent = initials;
+        const savedAvatar = localStorage.getItem(`avatar_${currentUser.email}`);
+        if (savedAvatar) {
+          avatarEl.innerHTML = `<img src="${savedAvatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        } else {
+          const initials = currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+          avatarEl.textContent = initials;
+        }
         nameEl.textContent = currentUser.name;
-        roleEl.textContent = currentUser.role;
+        roleEl.textContent = currentUser.role === "Admin" ? "Quản trị viên" : "User (Khách hàng)";
       }
     }
 
@@ -761,12 +802,1000 @@
     </section>`;
     };
 
+    // User Views Helper Functions
+    function userLiveGridHtml() {
+      const visCameras = getVisibleCameras();
+      return `<section class="dashboard-cameras">
+        <div class="row" style="margin-bottom:16px">
+          <h2 style="font-weight: 850; letter-spacing: -0.5px;">Camera Đang Giám Sát Trực Tiếp</h2>
+          ${visCameras.length > 0 ? `
+          <div class="row" style="gap:8px">
+            <button class="btn small primary" onclick="startTestCamera()">Mở tất cả camera</button>
+            <button class="btn small line" onclick="stopTestCamera()">Dừng camera</button>
+          </div>
+          ` : ""}
+        </div>
+        <div class="grid camera-grid">
+          ${visCameras.length === 0 ? `
+            <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: #fafafa; border: 1px dashed var(--line); border-radius: 8px; width: 100%;">
+              <div style="font-size: 32px; margin-bottom: 10px;">🔒</div>
+              <div style="font-weight: 600; color: var(--gray-700);">Chưa được phân quyền xem camera nào</div>
+              <div class="hint" style="margin-top: 5px;">Vui lòng liên hệ Admin để được cấp quyền giám sát thiết bị.</div>
+            </div>
+          ` : visCameras.map((c, i) => {
+            const isOnline = c.status === "online";
+            const clickHandler = isOnline 
+              ? `selectedCameraId='${esc(c.id)}'; liveViewLevel='stream'; render('user_live', false);` 
+              : `alert('Camera ${esc(c.name)} hiện tại không hoạt động!');`;
+            const cursorStyle = isOnline ? "pointer" : "not-allowed";
+            const opacityStyle = isOnline ? "1" : "0.6";
+            
+            return `
+              <article class="cam ${stateClass(c)}" onclick="${clickHandler}" style="cursor: ${cursorStyle}; opacity: ${opacityStyle};">
+                <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
+                <div class="cam-view">
+                  <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+                  <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+                  <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+                </div>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </section>`;
+    }
+
+    function userLiveView() {
+      const visCameras = getVisibleCameras();
+      if (visCameras.length === 0) {
+        return `
+          <div class="card" style="padding: 50px; text-align: center; border: 1px dashed var(--line); border-radius: 12px;">
+            <div style="font-size: 64px; margin-bottom: 20px;">🔒</div>
+            <h2 style="margin: 0 0 10px; color: var(--red);">Chưa được cấp quyền xem camera</h2>
+            <p style="color: var(--gray-600); font-size: 15px; max-width: 500px; margin: 0 auto;">
+              Tài khoản của bạn chưa được cấp quyền xem camera nào. Vui lòng liên hệ Admin để cấu hình quyền truy cập.
+            </p>
+          </div>
+        `;
+      }
+      
+      if (liveViewLevel === "cameras" || liveViewLevel === "locations") {
+        const gridHtml = visCameras.map((c, index) => {
+          const isOnline = c.status === "online";
+          const clickHandler = isOnline 
+            ? `selectedCameraId='${esc(c.id)}'; liveViewLevel='stream'; render('user_live', false);` 
+            : `alert('Camera ${esc(c.name)} hiện tại không hoạt động!');`;
+          const cursorStyle = isOnline ? "pointer" : "not-allowed";
+          const opacityStyle = isOnline ? "1" : "0.6";
+          
+          return `
+            <article class="cam ${stateClass(c)}" onclick="${clickHandler}" style="cursor: ${cursorStyle}; opacity: ${opacityStyle};">
+              <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
+              <div class="cam-view">
+                <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+                <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+                <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+              </div>
+            </article>
+          `;
+        }).join("");
+        
+        return `
+          <div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <h3 style="margin: 0 0 4px; font-size: 18px; font-weight: 700;">Danh sách camera giám sát</h3>
+              <p class="hint" style="margin: 0;">Click vào bất kỳ camera nào để xem chi tiết luồng AI, phóng to hoặc chụp màn hình.</p>
+            </div>
+            <div class="row" style="gap:8px">
+              <button class="btn small primary" onclick="startTestCamera()">Mở tất cả camera</button>
+              <button class="btn small line" onclick="stopTestCamera()">Dừng camera</button>
+            </div>
+          </div>
+          <div class="grid camera-grid">
+            ${gridHtml}
+          </div>
+        `;
+      }
+      
+      if (liveViewLevel === "stream") {
+        const cam = cameraById(selectedCameraId);
+        if (!cam || cam.status !== "online") {
+          liveViewLevel = "cameras";
+          return userLiveView();
+        }
+        const idx = Math.max(0, cameras.findIndex(item => item.id === cam.id));
+        const metrics = cameraMetrics(cam);
+        
+        return `
+          <div class="live-toolbar" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px;">
+            <button class="btn line" onclick="liveViewLevel='cameras'; render('user_live', false);">← Xem nhiều camera</button>
+            <div class="row" style="gap:8px">
+              <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
+                <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
+                <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
+              </select>
+              <button class="btn primary" onclick="startTestCamera()">Mở camera</button>
+              <button class="btn line" onclick="captureScreenshot()">📸 Chụp ảnh</button>
+              <button class="btn line" onclick="toggleFullscreen()">🔲 Full màn hình</button>
+              <button class="btn danger" onclick="toggleFallTest()">Test té ngã AI</button>
+              <button class="btn line" onclick="stopTestCamera()">Dừng camera</button>
+            </div>
+          </div>
+          
+          <div class="detail-layout" style="display: grid; grid-template-columns: 2.2fr 1fr; gap: 20px;">
+            <article class="cam live-detail ${aiFallTestOn ? "fallen" : ""}" style="margin-top: 0;">
+              <div class="cam-head"><span>${cameraRoomName(cam, idx)} (${cam.id})</span><span class="live">LIVE</span></div>
+              <div class="cam-view" style="position:relative; background:#0b0f19;">
+                <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+                <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
+                <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+                <div class="person" style="display:none;"></div>
+                <span class="overlay-note" id="liveOverlayNote" style="display:none; z-index: 10;">Fall Detected</span>
+                <span class="state" id="liveStateBadge" style="z-index: 10;">${statusPill(cam.state.toUpperCase())}</span>
+              </div>
+            </article>
+            
+            <div class="card" style="display:flex; flex-direction:column; gap:16px;">
+              <h3 style="margin:0 0 10px">Thông số AI Realtime</h3>
+              <div class="metric-list" id="liveMetricsPanel">
+                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px;">
+                  <span>Trạng thái tư thế</span><strong id="metricState">${statusPill(metrics.status)}</strong>
+                </div>
+                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
+                  <span>Độ tin cậy AI</span><strong id="metricConfidence">${metrics.confidence}</strong>
+                </div>
+                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
+                  <span>Góc nghiêng thân</span><strong id="metricTorso">${metrics.torso}</strong>
+                </div>
+                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
+                  <span>Thời gian nằm</span><strong id="metricLying">${metrics.lying}</strong>
+                </div>
+                <div class="metric-row" style="display:flex; justify-content:space-between; padding-top:8px;">
+                  <span>Vận tốc hông</span><strong id="metricHip">${metrics.hip}</strong>
+                </div>
+              </div>
+              
+              <div style="margin-top:10px; padding-top:15px; border-top: 1px solid var(--line);">
+                <h4 style="margin:0 0 8px">Giải thích nhãn trạng thái</h4>
+                <div style="font-size:12px; display:flex; flex-direction:column; gap:6px; color:var(--muted);">
+                  <div>🟢 <strong>Đứng / Ngồi / Đi</strong>: Trạng thái sinh hoạt bình thường.</div>
+                  <div>🟡 <strong>Nằm</strong>: Tư thế nằm nghỉ trên giường/sàn (Chờ phân tích nằm lâu).</div>
+                  <div>🔴 <strong>Té ngã</strong>: Góc nghiêng thay đổi đột ngột và nằm yên quá thời gian cho phép.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function captureScreenshot() {
+      const video = document.getElementById("testCameraVideo");
+      const canvas = document.getElementById("testCameraCanvas");
+      const img = document.getElementById("testCameraImg");
+      const modeSelect = document.getElementById("cameraModeSelect");
+      const isClientMode = modeSelect ? modeSelect.value === "client" : true;
+      
+      const targetCanvas = document.createElement("canvas");
+      const ctx = targetCanvas.getContext("2d");
+      
+      if (isClientMode && video && video.readyState === video.HAVE_ENOUGH_DATA) {
+        targetCanvas.width = video.videoWidth;
+        targetCanvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        if (canvas && canvas.style.display !== "none") {
+          ctx.drawImage(canvas, 0, 0, targetCanvas.width, targetCanvas.height);
+        }
+      } else if (!isClientMode && img && img.src && img.style.display !== "none") {
+        targetCanvas.width = img.naturalWidth || 640;
+        targetCanvas.height = img.naturalHeight || 480;
+        ctx.drawImage(img, 0, 0);
+      } else {
+        alert("Camera chưa được mở hoặc không có luồng dữ liệu.");
+        return;
+      }
+      
+      const link = document.createElement("a");
+      link.download = `screenshot_${selectedCameraId || 'camera'}_${Date.now()}.jpg`;
+      link.href = targetCanvas.toDataURL("image/jpeg", 0.9);
+      link.click();
+      toast("Đã chụp và tải ảnh màn hình thành công!");
+    }
+
+    function toggleFullscreen() {
+      const container = document.querySelector(".cam.live-detail .cam-view");
+      if (!container) return;
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch(err => {
+          alert(`Không thể chuyển sang chế độ toàn màn hình: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function triggerRealtimeFallAlert(alertItem) {
+      if (currentUser.role === "Admin") return;
+      
+      playAlarmSound();
+      
+      let imgSrc = "";
+      if (alertItem.media && alertItem.media.startsWith("data:image")) {
+        imgSrc = alertItem.media;
+      } else if (alertItem.cloud_img_url) {
+        imgSrc = alertItem.cloud_img_url;
+      } else {
+        imgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
+      }
+      
+      const popupHtml = `
+        <div style="text-align: center; font-family: inherit;">
+          <div style="font-size: 56px; margin-bottom: 12px; animation: blink 1s infinite;">🚨</div>
+          <h2 style="color: var(--red); font-size: 24px; font-weight: 800; margin: 0 0 16px; letter-spacing: -0.5px;">⚠️ CẢNH BÁO TÉ NGÃ KHẨN CẤP</h2>
+          
+          <div style="background: #fff5f5; border: 1px solid #fee2e2; border-radius: 12px; padding: 16px; margin-bottom: 16px; display: inline-block; width: 100%; text-align: left;">
+            <div style="font-size: 15px; margin-bottom: 6px; display:flex; justify-content:space-between;">
+              <span style="color: var(--muted); font-weight:550;">Thời gian:</span>
+              <strong style="color: var(--ink);">${esc(alertItem.time.split(" ")[1] || alertItem.time)}</strong>
+            </div>
+            <div style="font-size: 15px; margin-bottom: 6px; display:flex; justify-content:space-between;">
+              <span style="color: var(--muted); font-weight:550;">Camera:</span>
+              <strong style="color: var(--ink);">${esc(cameraRoomName(cameraById(alertItem.camera) || {id: alertItem.camera}, 0))}</strong>
+            </div>
+            <div style="font-size: 15px; display:flex; justify-content:space-between;">
+              <span style="color: var(--muted); font-weight:550;">Độ tin cậy:</span>
+              <strong style="color: var(--red); font-weight: 800;">${esc(alertItem.confidence)}%</strong>
+            </div>
+          </div>
+          
+          <div style="border-radius: 8px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px; aspect-ratio: 16/10; background: #000;">
+            <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';">
+          </div>
+          
+          <div style="font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 16px;">
+            Hệ thống phát âm thanh cảnh báo và gửi tin nhắn khẩn cấp cho người thân. Hãy xác nhận tình trạng của người thân ngay lập tức!
+          </div>
+        </div>
+      `;
+      
+      openModal("⚠️ CẢNH BÁO TÉ NGÃ KHẨN CẤP!", popupHtml, `
+        <button class="btn danger block" onclick="stopAlarmSound(); closeModal();" style="box-shadow: 0 4px 15px rgba(244,63,94,0.4); font-size: 15px; padding: 12px; width: 100%;">ĐÃ XÁC NHẬN & TẮT CÒI</button>
+      `);
+      
+      if (!document.getElementById("alert-blink-style")) {
+        const style = document.createElement("style");
+        style.id = "alert-blink-style";
+        style.textContent = `
+          @keyframes blink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+
+    window.filterUserAlertsTable = function() {
+      const search = $("userAlertsSearch").value.toLowerCase();
+      const dateVal = $("userAlertsDate").value;
+      let dateStr = "";
+      if (dateVal) {
+        const [yyyy, mm, dd] = dateVal.split("-");
+        dateStr = `${dd}/${mm}/${yyyy}`;
+      }
+      
+      const rows = document.querySelectorAll("#userAlertsTable tbody tr");
+      rows.forEach(row => {
+        if (row.cells.length < 2) return;
+        const cam = row.dataset.camera || "";
+        const time = row.dataset.time || "";
+        
+        const matchesSearch = !search || cam.includes(search) || row.cells[1].textContent.toLowerCase().includes(search);
+        const matchesDate = !dateStr || time.startsWith(dateStr);
+        
+        if (matchesSearch && matchesDate) {
+          row.style.display = "";
+        } else {
+          row.style.display = "none";
+        }
+      });
+    };
+    
+    window.resetUserAlertsFilters = function() {
+      $("userAlertsSearch").value = "";
+      $("userAlertsDate").value = "";
+      filterUserAlertsTable();
+    };
+
+    window.showUserAlertDetail = function(id) {
+      const alertItem = alerts.find(a => a.id === id);
+      if (!alertItem) return;
+      
+      const cam = cameraById(alertItem.camera);
+      const isMock = id.startsWith("AL-20260615-");
+      
+      let imgSrc = "";
+      if (alertItem.media && alertItem.media.startsWith("data:image")) {
+        imgSrc = alertItem.media;
+      } else if (alertItem.cloud_img_url) {
+        imgSrc = alertItem.cloud_img_url;
+      } else {
+        imgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
+      }
+      
+      let videoHtml = "";
+      if (hasVideo(alertItem)) {
+        let videoSrc = alertItem.cloud_video_url || `${apiBaseUrl()}/media/${alertItem.id}.mp4`;
+        if (isMock) {
+          videoHtml = `
+            <div style="background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; margin-top:12px;">
+              <div style="color:#fff; text-align:center; padding:20px;">
+                <div style="font-size:36px; margin-bottom:8px; cursor:pointer;">▶</div>
+                <div style="font-size:13px;">Video sự kiện té ngã ${alertItem.id}</div>
+                <div class="hint" style="color:#94a3b8; font-size:11px;">(Độ dài 12 giây - Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          videoHtml = `
+            <div style="margin-top: 12px;">
+              <strong style="display:block; margin-bottom: 6px; font-size:13px; color:var(--ink);">Video clip sự kiện:</strong>
+              <video src="${videoSrc}" controls style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;"></video>
+            </div>
+          `;
+        }
+      } else {
+        videoHtml = `
+          <div style="margin-top: 12px; padding: 16px; text-align:center; background:#f8fafc; border-radius:8px; border:1px dashed var(--line); font-size:13px; color:var(--muted);">
+            🎥 Không có video ghi hình sự kiện cho cảnh báo này.
+          </div>
+        `;
+      }
+      
+      const content = `
+        <div style="display:flex; flex-direction:column; gap:16px; font-family: inherit;">
+          <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
+            <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';">
+          </div>
+          
+          <div class="card" style="padding:16px; margin-top: 0; background:rgba(244,63,94,0.02); border-color:#fee2e2;">
+            <h4 style="margin:0 0 12px; color:var(--red); font-size:15px; font-weight:800;">Thông số chi tiết sự kiện</h4>
+            <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:6px; font-size:13px;">
+              <span>Mã cảnh báo</span><strong>${esc(alertItem.id)}</strong>
+            </div>
+            <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:6px; font-size:13px;">
+              <span>Thời gian xảy ra</span><strong>${esc(alertItem.time)}</strong>
+            </div>
+            <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:6px; font-size:13px;">
+              <span>Thiết bị ghi nhận</span><strong>${esc(cam ? cam.name : alertItem.camera)} (${esc(alertItem.camera)})</strong>
+            </div>
+            <div class="metric-row" style="display:flex; justify-content:space-between; font-size:13px;">
+              <span>Độ tin cậy AI</span><strong style="color:var(--red); font-size:15px;">${esc(alertItem.confidence)}%</strong>
+            </div>
+          </div>
+          
+          ${videoHtml}
+        </div>
+      `;
+      
+      openModal(`Chi tiết sự kiện cảnh báo ${alertItem.id}`, content, `<button class="btn line block" onclick="closeModal()">Đóng</button>`);
+    };
+
+    window.filterUserHistory = function() {
+      const dateVal = $("historyDate").value;
+      const monthVal = $("historyMonth").value;
+      const cameraVal = $("historyCamera").value;
+      
+      let dateStr = "";
+      if (dateVal) {
+        const [yyyy, mm, dd] = dateVal.split("-");
+        dateStr = `${dd}/${mm}/${yyyy}`;
+      }
+      
+      const cards = document.querySelectorAll("#userHistoryGrid .history-item-card");
+      cards.forEach(card => {
+        const cam = card.dataset.camera || "";
+        const time = card.dataset.time || "";
+        
+        const parts = time.split("/");
+        const cardMonth = parts[1] || "";
+        
+        const matchesDate = !dateStr || time.startsWith(dateStr);
+        const matchesMonth = !monthVal || cardMonth === monthVal;
+        const matchesCamera = !cameraVal || cam === cameraVal;
+        
+        if (matchesDate && matchesMonth && matchesCamera) {
+          card.style.display = "flex";
+        } else {
+          card.style.display = "none";
+        }
+      });
+    };
+    
+    window.resetUserHistoryFilters = function() {
+      $("historyDate").value = "";
+      $("historyMonth").value = "";
+      $("historyCamera").value = "";
+      filterUserHistory();
+    };
+
+    function dayStatsHtml() {
+      return `
+        ${card("Biểu đồ té ngã theo các ngày trong tuần", `
+          <div class="chart">${[2,1,0,3,1,4,2].map((v,i)=>`<div class="bar red" style="height:${v*35}px"><span>${v}</span></div>`).join("")}</div>
+          <div class="chart-labels">${["T2","T3","T4","T5","T6","T7","CN"].map(d=>`<div>${d}</div>`).join("")}</div>
+        `)}
+        ${card("Phân bố cảnh báo theo thời gian trong ngày", `
+          <div style="display:flex; flex-direction:column; gap:12px; margin-top: 10px;">
+            ${[["00:00 - 06:00 (Đêm)", 0], ["06:00 - 12:00 (Sáng)", 3], ["12:00 - 18:00 (Chiều)", 7], ["18:00 - 24:00 (Tối)", 2]].map(([k, v]) => `
+              <div class="hbar" style="margin: 0;">
+                <div style="font-weight:600; width:150px;">${k}</div>
+                <div class="track"><div class="fill" style="width:${v * 10}%; background:var(--red);"></div></div>
+                <strong>${v}</strong>
+              </div>
+            `).join("")}
+          </div>
+        `)}
+      `;
+    }
+    
+    function weekStatsHtml() {
+      return `
+        ${card("Biểu đồ té ngã theo các tuần trong tháng", `
+          <div class="chart">${[5,3,8,2].map((v,i)=>`<div class="bar red" style="height:${v*18}px"><span>${v}</span></div>`).join("")}</div>
+          <div class="chart-labels" style="grid-template-columns: repeat(4, 1fr);">${["Tuần 1","Tuần 2","Tuần 3","Tuần 4"].map(d=>`<div>${d}</div>`).join("")}</div>
+        `)}
+        ${card("Phân tích tuần nguy hiểm nhất", `
+          <div style="padding:15px; background:rgba(244,63,94,0.05); border:1px solid #fee2e2; border-radius:12px; font-size:14px; line-height:1.6;">
+            <strong>Khuyên dùng từ hệ thống:</strong><br>
+            Số vụ té ngã trong <strong>Tuần 3</strong> đạt mức cao nhất (8 vụ). Hầu hết các vụ xảy ra ở khu vực <strong>Hành lang</strong> vào khung giờ chiều tối. Vui lòng tăng cường kiểm tra và dọn dẹp vật cản ở khu vực này để tăng an toàn cho người thân.
+          </div>
+        `)}
+      `;
+    }
+    
+    function monthStatsHtml() {
+      return `
+        ${card("Biểu đồ té ngã theo các tháng trong năm", `
+          <div class="chart">${[8,12,6,10,4,7,3,2,5,9,4,3].map((v,i)=>`<div class="bar red" style="height:${v*12}px"><span>${v}</span></div>`).join("")}</div>
+          <div class="chart-labels" style="grid-template-columns: repeat(12, 1fr); font-size: 9px;">${["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12"].map(d=>`<div>${d}</div>`).join("")}</div>
+        `)}
+        ${card("So sánh nửa đầu và cuối năm", `
+          <div style="display:flex; flex-direction:column; gap:12px; margin-top: 10px;">
+            ${[["6 tháng đầu năm", 47], ["6 tháng cuối năm", 26]].map(([k, v]) => `
+              <div class="hbar" style="margin: 0;">
+                <div style="font-weight:600; width:150px;">${k}</div>
+                <div class="track"><div class="fill" style="width:${v}%; background:var(--blue);"></div></div>
+                <strong>${v}</strong>
+              </div>
+            `).join("")}
+          </div>
+        `)}
+      `;
+    }
+    
+    window.switchStatsPeriod = function(period) {
+      const container = $("statsChartsContainer");
+      if (!container) return;
+      
+      const buttons = document.querySelectorAll("#statsFilterButtons button");
+      buttons.forEach(btn => {
+        if (btn.textContent.includes(period === 'day' ? 'ngày' : period === 'week' ? 'tuần' : 'tháng')) {
+          btn.className = "btn small primary";
+        } else {
+          btn.className = "btn small line";
+        }
+      });
+      
+      if (period === 'day') {
+        container.innerHTML = dayStatsHtml();
+      } else if (period === 'week') {
+        container.innerHTML = weekStatsHtml();
+      } else if (period === 'month') {
+        container.innerHTML = monthStatsHtml();
+      }
+    };
+
+    window.editMonitoredProfileModal = function() {
+      openModal("Chỉnh sửa hồ sơ người thân", `
+        <form id="editProfileForm">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(monitoredProfile.name)}" required></label>
+            <label class="field"><span>Tuổi</span><input class="control" name="age" type="number" value="${esc(monitoredProfile.age)}" required></label>
+            <label class="field"><span>Giới tính</span>
+              <select class="control" name="gender">
+                <option ${monitoredProfile.gender === 'Nam' ? 'selected' : ''}>Nam</option>
+                <option ${monitoredProfile.gender === 'Nữ' ? 'selected' : ''}>Nữ</option>
+              </select>
+            </label>
+            <label class="field"><span>Người liên hệ khẩn cấp</span><input class="control" name="emergencyContact" value="${esc(monitoredProfile.emergencyContact)}" required></label>
+          </div>
+          <label class="field" style="margin-top:14px;"><span>Địa chỉ</span><textarea class="control" name="address" required>${esc(monitoredProfile.address)}</textarea></label>
+        </form>
+      `, `
+        <button class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" class="btn primary" form="editProfileForm" onclick="const f = document.getElementById('editProfileForm'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }">Lưu thay đổi</button>
+      `);
+      
+      $("editProfileForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        monitoredProfile = {
+          name: data.name,
+          age: Number(data.age),
+          gender: data.gender,
+          address: data.address,
+          emergencyContact: data.emergencyContact
+        };
+        saveStore("fg_monitored_profile", monitoredProfile);
+        closeModal();
+        render("user_profile");
+        toast("Đã cập nhật thông tin hồ sơ người thân thành công!");
+      });
+    };
+
+    window.addEmergencyContactModal = function() {
+      openModal("Thêm liên hệ khẩn cấp", `
+        <form id="addContactForm">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" type="email" required></label>
+          </div>
+        </form>
+      `, `
+        <button class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" class="btn primary" form="addContactForm" onclick="const f = document.getElementById('addContactForm'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }">Thêm</button>
+      `);
+      
+      $("addContactForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        emergencyContacts.push({
+          name: data.name,
+          relationship: data.relationship,
+          phone: data.phone,
+          email: data.email
+        });
+        saveStore("fg_emergency_contacts", emergencyContacts);
+        closeModal();
+        render("user_contacts");
+        toast("Đã thêm liên hệ khẩn cấp thành công!");
+      });
+    };
+    
+    window.deleteEmergencyContact = function(idx) {
+      if (confirm("Bạn có chắc chắn muốn xóa liên hệ khẩn cấp này?")) {
+        emergencyContacts.splice(idx, 1);
+        saveStore("fg_emergency_contacts", emergencyContacts);
+        render("user_contacts");
+        toast("Đã xóa liên hệ khẩn cấp!");
+      }
+    };
+    
+    window.sendEmergencyAlertMsg = function(phone) {
+      toast(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+    };
+
+    window.toggleReadNotification = function(idx) {
+      userNotifications[idx].read = !userNotifications[idx].read;
+      saveStore("fg_user_notifications", userNotifications);
+      render("user_notifications");
+      updateNotificationsBadge();
+    };
+    
+    window.deleteNotification = function(idx) {
+      userNotifications.splice(idx, 1);
+      saveStore("fg_user_notifications", userNotifications);
+      render("user_notifications");
+      updateNotificationsBadge();
+    };
+    
+    window.markAllNotificationsAsRead = function() {
+      userNotifications.forEach(notif => notif.read = true);
+      saveStore("fg_user_notifications", userNotifications);
+      render("user_notifications");
+      updateNotificationsBadge();
+      toast("Đã đánh dấu tất cả thông báo là đã đọc.");
+    };
+    
+    window.updateNotificationsBadge = function() {
+      const unreadCount = userNotifications.filter(n => !n.read).length;
+      const badge = document.getElementById("notifNavBadge");
+      if (badge) {
+        badge.textContent = unreadCount;
+        badge.style.display = unreadCount > 0 ? "inline-block" : "none";
+      }
+    };
+
+    window.uploadUserAvatar = function(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const base64Data = e.target.result;
+          localStorage.setItem(`avatar_${currentUser.email}`, base64Data);
+          
+          const container = $("userAvatarContainer");
+          if (container) {
+            container.innerHTML = `<img src="${base64Data}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+          }
+          
+          const sidebarAvatar = $("sidebarAvatar");
+          if (sidebarAvatar) {
+            sidebarAvatar.innerHTML = `<img src="${base64Data}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+          }
+          
+          toast("Đã thay đổi ảnh đại diện thành công!");
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    };
+
     const views = {
       dashboard: () => {
-        if (currentUser.role === "Khachhang" || currentUser.role === "Khách hàng") {
-          return familyDashboardView();
+        if (currentUser.role === "Khachhang" || currentUser.role === "Khách hàng" || currentUser.role === "User") {
+          return views.user_dashboard();
         }
         return `${kpis()}`;
+      },
+      user_dashboard: () => {
+        const visCams = getVisibleCameras();
+        const onlineCount = visCams.filter(c => c.status === "online").length;
+        const myCamIds = visCams.map(c => c.id);
+        const myAlerts = alerts.filter(a => myCamIds.includes(a.camera));
+        
+        const todayDate = new Date();
+        const dd = String(todayDate.getDate()).padStart(2, '0');
+        const mm = String(todayDate.getMonth() + 1).padStart(2, '0');
+        const yyyy = todayDate.getFullYear();
+        const todayPrefix = `${dd}/${mm}/${yyyy}`;
+        const todayAlertsFiltered = myAlerts.filter(a => a.time.startsWith(todayPrefix));
+
+        const lastFall = myAlerts.length > 0 ? myAlerts[0] : null;
+        const lastFallText = lastFall ? `${lastFall.time} - Camera: ${cameraRoomName(cameraById(lastFall.camera) || {id: lastFall.camera}, 0)} (Độ tin cậy: ${lastFall.confidence}%)` : "Chưa ghi nhận lần té ngã nào";
+
+        let systemState = '<span class="status-dot-pulse online"></span> <span style="font-weight: 700; color: var(--green);">BÌNH THƯỜNG (AN TOÀN)</span>';
+        if (myAlerts.some(a => a.status === "Chưa xử lý")) {
+          systemState = '<span class="status-dot-pulse offline"></span> <span style="font-weight: 700; color: var(--red);">CÓ CẢNH BÁO CHƯA XỬ LÝ</span>';
+        }
+
+        return `
+          <div style="background: linear-gradient(135deg, #eef2f6 0%, #e0e7ff 100%); padding: 24px; border-radius: 16px; margin-bottom: 24px; border: 1px solid var(--line); box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
+            <h2 style="margin:0 0 8px; color: var(--blue); font-weight: 800;">Chào mừng quay trở lại, ${esc(currentUser.name)}!</h2>
+            <p style="margin:0; color: var(--muted); font-size:14px;">Hệ thống giám sát FallGuard AI đang hoạt động để bảo vệ người thân của bạn.</p>
+          </div>
+          
+          <div class="grid kpis" style="margin-bottom: 24px;">
+            <section class="card">
+              <h3>Trạng thái hệ thống</h3>
+              <div style="display:flex; align-items:center; gap:12px; margin-top: 10px;">
+                <div style="font-size: 28px;">🛡️</div>
+                <div>
+                  <div class="kpi-label">Trạng thái hiện tại</div>
+                  <div style="margin-top: 4px; font-size: 14px;">${systemState}</div>
+                </div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Camera giám sát</h3>
+              <div style="display:flex; align-items:center; gap:12px; margin-top: 10px;">
+                <div style="font-size: 28px; color: var(--blue)">📹</div>
+                <div>
+                  <div class="kpi-label">Đang hoạt động</div>
+                  <div class="kpi-value">${onlineCount} / ${visCams.length}</div>
+                </div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Cảnh báo hôm nay</h3>
+              <div style="display:flex; align-items:center; gap:12px; margin-top: 10px;">
+                <div style="font-size: 28px; color: var(--red)">⚠️</div>
+                <div>
+                  <div class="kpi-label">Tổng số sự kiện</div>
+                  <div class="kpi-value">${todayAlertsFiltered.length}</div>
+                </div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Lần té ngã gần nhất</h3>
+              <div style="display:flex; align-items:center; gap:12px; margin-top: 10px;">
+                <div style="font-size: 28px; color: var(--amber)">⏱️</div>
+                <div style="min-width: 0;">
+                  <div class="kpi-label">Thông tin gần nhất</div>
+                  <div style="font-size: 12px; font-weight:700; margin-top: 6px; color: var(--ink); word-break: break-word;" title="${esc(lastFallText)}">${esc(lastFallText)}</div>
+                </div>
+              </div>
+            </section>
+          </div>
+          
+          ${userLiveGridHtml()}
+        `;
+      },
+      user_live: () => userLiveView(),
+      user_alerts: () => {
+        const visCams = getVisibleCameras();
+        const myCamIds = visCams.map(c => c.id);
+        const myAlerts = alerts.filter(a => myCamIds.includes(a.camera));
+        
+        return `
+          <div class="card" style="padding: 20px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; margin-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom: 20px;">
+              <h3 style="margin: 0; font-size: 18px; font-weight: 800;">Danh sách cảnh báo té ngã</h3>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <input class="control" id="userAlertsSearch" placeholder="Tìm kiếm theo camera..." style="max-width:200px;" oninput="filterUserAlertsTable()">
+                <input class="control" id="userAlertsDate" type="date" style="max-width:180px;" onchange="filterUserAlertsTable()">
+                <button class="btn line" onclick="resetUserAlertsFilters()">Đặt lại</button>
+              </div>
+            </div>
+            
+            <div class="table-wrap">
+              <table id="userAlertsTable">
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Camera</th>
+                    <th>Trạng thái</th>
+                    <th>Độ tin cậy</th>
+                    <th>Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${myAlerts.map(a => `
+                    <tr data-camera="${esc(a.camera.toLowerCase())}" data-time="${esc(a.time)}">
+                      <td>${esc(a.time)}</td>
+                      <td>${esc(cameraRoomName(cameraById(a.camera) || {id: a.camera}, 0))} (${esc(a.camera)})</td>
+                      <td><span class="pill red">Té ngã</span></td>
+                      <td><strong>${esc(a.confidence)}%</strong></td>
+                      <td><button class="btn small primary" onclick="showUserAlertDetail('${esc(a.id)}')">Xem chi tiết</button></td>
+                    </tr>
+                  `).join("") || '<tr><td colspan="5" style="text-align:center; color:var(--muted);">Chưa có sự kiện cảnh báo nào được ghi nhận.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      },
+      user_history: () => {
+        const visCams = getVisibleCameras();
+        const myCamIds = visCams.map(c => c.id);
+        const myAlerts = alerts.filter(a => myCamIds.includes(a.camera));
+        
+        const cameraOptions = visCams.map(c => `<option value="${c.id}">${esc(c.name)} (${c.id})</option>`).join("");
+        
+        return `
+          <div class="card" style="padding: 20px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; margin-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom: 20px;">
+              <h3 style="margin: 0; font-size: 18px; font-weight: 800;">Lịch sử sự kiện té ngã cũ</h3>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%; justify-content: flex-end;">
+                <input class="control" id="historyDate" type="date" style="max-width:160px;" onchange="filterUserHistory()">
+                <select class="control" id="historyMonth" style="max-width:140px;" onchange="filterUserHistory()">
+                  <option value="">Tất cả các tháng</option>
+                  ${Array.from({length: 12}, (_, i) => `<option value="${String(i+1).padStart(2,'0')}">Tháng ${i+1}</option>`).join("")}
+                </select>
+                <select class="control" id="historyCamera" style="max-width:180px;" onchange="filterUserHistory()">
+                  <option value="">Tất cả Camera</option>
+                  ${cameraOptions}
+                </select>
+                <button class="btn line" onclick="resetUserHistoryFilters()">Đặt lại</button>
+              </div>
+            </div>
+            
+            <div class="grid three" id="userHistoryGrid" style="gap: 20px;">
+              ${myAlerts.map(a => {
+                let imgSrc = "";
+                if (a.media && a.media.startsWith("data:image")) {
+                  imgSrc = a.media;
+                } else if (a.cloud_img_url) {
+                  imgSrc = a.cloud_img_url;
+                } else {
+                  imgSrc = `${apiBaseUrl()}/media/${a.id}.jpg`;
+                }
+                const hasVid = hasVideo(a);
+                
+                return `
+                  <div class="history-item-card card" data-camera="${esc(a.camera)}" data-time="${esc(a.time)}" style="padding: 12px; display: flex; flex-direction: column; gap: 10px; margin-top: 0; background: #fff;">
+                    <div style="aspect-ratio: 16/10; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--line); position: relative;">
+                      <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';">
+                      ${hasVid ? `<span style="position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,0.7); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">🎥 VIDEO</span>` : ""}
+                    </div>
+                    <div>
+                      <h4 style="margin: 0 0 4px; font-size: 14px; font-weight: 800;">Camera: ${esc(cameraRoomName(cameraById(a.camera) || {id: a.camera}, 0))}</h4>
+                      <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">${esc(a.time)}</div>
+                      <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 8px;">
+                        <span class="pill red small" style="font-size: 10px; padding: 2px 6px;">Độ tin cậy: ${a.confidence}%</span>
+                        <button class="btn small line" onclick="showUserAlertDetail('${esc(a.id)}')">Xem lại</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join("") || '<div style="grid-column:1/-1; text-align:center; padding: 40px; color:var(--muted);">Chưa có dữ liệu lịch sử té ngã.</div>'}
+            </div>
+          </div>
+        `;
+      },
+      user_stats: () => {
+        const visCams = getVisibleCameras();
+        const myCamIds = visCams.map(c => c.id);
+        const myAlerts = alerts.filter(a => myCamIds.includes(a.camera));
+        
+        const totalFalls = myAlerts.length;
+        const lastFall = myAlerts.length > 0 ? myAlerts[0] : null;
+        const lastFallTime = lastFall ? lastFall.time : "Chưa ghi nhận";
+        
+        return `
+          <div class="grid three" style="margin-bottom: 20px;">
+            <section class="card">
+              <h3>Tổng số lần té ngã</h3>
+              <div style="display:flex; align-items:center; gap:16px; padding: 10px 0;">
+                <div style="font-size: 40px; color: var(--red);">🚨</div>
+                <div>
+                  <div class="kpi-label" style="font-size:14px;">Ghi nhận trên hệ thống</div>
+                  <div class="kpi-value" style="font-size:32px;">${totalFalls} lần</div>
+                </div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Thời gian lần gần nhất</h3>
+              <div style="display:flex; align-items:center; gap:16px; padding: 10px 0;">
+                <div style="font-size: 40px; color: var(--amber);">📅</div>
+                <div>
+                  <div class="kpi-label" style="font-size:14px;">Lần té ngã cuối</div>
+                  <div style="font-size:18px; font-weight:800; color:var(--ink); margin-top:4px;">${esc(lastFallTime)}</div>
+                </div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Tỷ lệ phân tích đúng AI</h3>
+              <div style="display:flex; align-items:center; gap:16px; padding: 10px 0;">
+                <div style="font-size: 40px; color: var(--green);">🤖</div>
+                <div>
+                  <div class="kpi-label" style="font-size:14px;">Độ tin cậy AI trung bình</div>
+                  <div class="kpi-value" style="font-size:32px; color:var(--green);">96.5%</div>
+                </div>
+              </div>
+            </section>
+          </div>
+          
+          <div style="display:flex; gap:12px; margin-bottom:15px;" id="statsFilterButtons">
+            <button class="btn small primary" onclick="switchStatsPeriod('day')">Theo ngày</button>
+            <button class="btn small line" onclick="switchStatsPeriod('week')">Theo tuần</button>
+            <button class="btn small line" onclick="switchStatsPeriod('month')">Theo tháng</button>
+          </div>
+          
+          <div class="grid two" id="statsChartsContainer">
+            ${dayStatsHtml()}
+          </div>
+        `;
+      },
+      user_contacts: () => {
+        return `
+          <div class="card" style="padding: 20px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; margin-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+              <h3 style="margin:0; font-size:18px; font-weight:800;">Thông tin liên hệ khẩn cấp</h3>
+              <button class="btn primary small" onclick="addEmergencyContactModal()">Thêm liên hệ</button>
+            </div>
+            
+            <div class="grid two" style="gap:20px;">
+              ${emergencyContacts.map((contact, idx) => `
+                <div class="card animate-hover" style="padding: 20px; background:#fff; border: 1px solid var(--line); display:flex; flex-direction:column; gap:12px; margin-top: 0;">
+                  <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <div>
+                      <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--ink);">${esc(contact.name)}</h4>
+                      <span class="pill blue small" style="margin-top: 4px; font-size:10px; padding: 2px 6px;">${esc(contact.relationship)}</span>
+                    </div>
+                    <button class="btn small line danger" onclick="deleteEmergencyContact(${idx})" style="padding:4px 8px; border:none; background:transparent;">❌</button>
+                  </div>
+                  
+                  <div style="font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                    <div>📞 Số điện thoại: <strong style="color:var(--ink);">${esc(contact.phone)}</strong></div>
+                    <div>📧 Email liên hệ: <strong style="color:var(--ink);">${esc(contact.email)}</strong></div>
+                  </div>
+                  
+                  <div style="display:flex; gap:8px; margin-top:12px; border-top:1px solid #f1f5f9; padding-top:12px;">
+                    <a href="tel:${esc(contact.phone)}" class="btn primary" style="flex:1; font-size:13px; text-decoration:none; height:38px; display:inline-flex; align-items:center; justify-content:center;">Gọi ngay</a>
+                    <button class="btn line" onclick="sendEmergencyAlertMsg('${esc(contact.phone)}')" style="flex:1; font-size:13px; height:38px;">Gửi cảnh báo</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      },
+      user_notifications: () => {
+        return `
+          <div class="card" style="padding: 20px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; margin-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+              <h3 style="margin:0; font-size:18px; font-weight:800;">Danh sách thông báo hệ thống</h3>
+              <button class="btn line small" onclick="markAllNotificationsAsRead()">Đánh dấu tất cả đã đọc</button>
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              ${userNotifications.map((notif, idx) => {
+                const borderLeft = notif.type === 'fall' ? '4px solid var(--red)' : notif.type === 'disconnect' ? '4px solid var(--amber)' : '4px solid var(--blue)';
+                const icon = notif.type === 'fall' ? '🚨' : notif.type === 'disconnect' ? '⚠️' : '🔧';
+                const bg = notif.read ? '#ffffff' : '#f0f5ff';
+                const readLabel = notif.read ? 'Đánh dấu chưa đọc' : 'Đánh dấu đã đọc';
+                
+                return `
+                  <div class="card" style="padding:16px; margin-top:0; border-left:${borderLeft}; background:${bg}; display:flex; justify-content:space-between; align-items:center; gap:16px;">
+                    <div style="display:flex; gap:12px; align-items:start;">
+                      <div style="font-size:24px; padding-top:4px;">${icon}</div>
+                      <div>
+                        <h4 style="margin:0 0 4px; font-size:15px; font-weight:850; color:var(--ink);">${esc(notif.title)} ${notif.read ? "" : '<span class="pill blue small" style="padding: 1px 5px; font-size: 9px; margin-left: 6px;">Mới</span>'}</h4>
+                        <p style="margin:0; font-size:13px; color:var(--gray-600); line-height:1.45;">${esc(notif.content)}</p>
+                        <div class="hint" style="margin-top:6px;">${esc(notif.time)}</div>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                      <button class="btn small line" onclick="toggleReadNotification(${idx})">${readLabel}</button>
+                      <button class="btn small danger line" onclick="deleteNotification(${idx})" style="border:none; color:var(--red);">Xóa</button>
+                    </div>
+                  </div>
+                `;
+              }).join("") || '<div style="text-align:center; padding: 40px; color:var(--muted);">Không có thông báo nào.</div>'}
+            </div>
+          </div>
+        `;
+      },
+      user_account: () => {
+        const avatarInitials = currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+        const savedAvatar = localStorage.getItem(`avatar_${currentUser.email}`);
+        const avatarHtml = savedAvatar 
+          ? `<img src="${savedAvatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` 
+          : `<div class="avatar" style="width:80px; height:80px; font-size:28px; border-radius:50%; margin: 0 auto; display:grid; place-items:center;">${avatarInitials}</div>`;
+          
+        return `
+          <div class="grid two" style="grid-template-columns: 1fr 1.5fr; gap: 20px; align-items: start;">
+            <div class="card" style="padding: 24px; text-align:center; background:#fff; border: 1px solid var(--line); display:flex; flex-direction:column; gap:16px; margin-top:0;">
+              <div style="position:relative; width:80px; height:80px; margin:0 auto;">
+                <div id="userAvatarContainer" style="width:100%; height:100%;">${avatarHtml}</div>
+                <label style="position:absolute; bottom:-4px; right:-4px; background:var(--blue); width:28px; height:28px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; color:#fff; border:2px solid #fff; font-size:12px;" title="Đổi ảnh đại diện">
+                  📷
+                  <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="uploadUserAvatar(this)">
+                </label>
+              </div>
+              
+              <div>
+                <h4 style="margin: 0; font-size:18px; font-weight:800; color:var(--ink);">${esc(currentUser.name)}</h4>
+                <div class="hint" style="margin-top:2px;">Vai trò: User (Khách hàng)</div>
+              </div>
+              
+              <div style="font-size:13px; text-align:left; display:flex; flex-direction:column; gap:10px; border-top:1px solid #f1f5f9; padding-top:16px; margin-top:10px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--muted)">Email:</span><strong>${esc(currentUser.email)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--muted)">Số điện thoại:</span><strong>${esc(currentUser.phone || "Chưa cập nhật")}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:var(--muted)">Trạng thái:</span><strong style="color:var(--green)">${esc(currentUser.status)}</strong>
+                </div>
+              </div>
+              
+              <button class="btn line danger block" style="margin-top: 10px;" onclick="performLogout()">Đăng xuất</button>
+            </div>
+            
+            <div class="card" style="padding: 24px; background:#fff; border: 1px solid var(--line); margin-top:0;">
+              <h3 style="margin:0 0 16px; font-size:16px; font-weight:800; color:var(--ink);">Đổi mật khẩu tài khoản</h3>
+              <form id="changePasswordForm">
+                <label class="field">
+                  <span>Mật khẩu cũ</span>
+                  <input class="control" type="password" name="oldPassword" required>
+                </label>
+                <label class="field">
+                  <span>Mật khẩu mới</span>
+                  <input class="control" type="password" name="newPassword" required>
+                </label>
+                <label class="field">
+                  <span>Xác nhận mật khẩu mới</span>
+                  <input class="control" type="password" name="confirmPassword" required>
+                </label>
+                <button class="btn primary" type="submit" style="margin-top: 10px;">Cập nhật mật khẩu</button>
+              </form>
+            </div>
+          </div>
+        `;
       },
       live: () => liveView(),
       detection: () => `<div class="grid two">
@@ -1733,11 +2762,11 @@
             ["fps", "FPS", cam.fps || 30],
             ["resolution", "Độ phân giải", cam.resolution || "1920x1080"],
             ["threshold", "Ngưỡng phát hiện", cam.threshold || 80],
-          ].map(([name, label, value]) => `<label class="field"><span>${label}</span><input class="control" name="${name}" value="${esc(value)}" required></label>`).join("")}
+          ].map(([name, label, value]) => `<label class="field"><span>${label}</span><input class="control" name="${name}" value="${esc(value)}" required ${name === 'id' && isEdit ? 'readonly style="background: rgba(241, 245, 249, 0.7); cursor: not-allowed;"' : ''}></label>`).join("")}
           <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${cam.status === "online" ? "selected" : ""}>online</option><option ${cam.status === "offline" ? "selected" : ""}>offline</option><option ${cam.status === "maintenance" ? "selected" : ""}>maintenance</option></select></label>
           <label class="field"><span>Nhãn AI</span><select class="control" name="state"><option value="normal" ${cam.state === "normal" ? "selected" : ""}>normal</option><option value="walking" ${cam.state === "walking" ? "selected" : ""}>walking</option><option value="sitting" ${cam.state === "sitting" ? "selected" : ""}>sitting</option><option value="lying" ${cam.state === "lying" ? "selected" : ""}>lying</option><option value="fallen" ${cam.state === "fallen" ? "selected" : ""}>fallen</option></select></label>
         </div>
-      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="cameraFormReal">Lưu camera</button>`);
+      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button type="submit" class="btn primary" form="cameraFormReal" onclick="const f = document.getElementById('cameraFormReal'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }">Lưu camera</button>`);
     }
 
     function cameraPermissionModal(email = "") {
@@ -1763,7 +2792,7 @@
             ${camerasCheckboxes || '<div style="color:var(--muted); text-align:center; padding: 10px;">Không có camera nào trên hệ thống.</div>'}
           </div>
         </div>
-      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="cameraPermissionFormReal">Lưu phân quyền</button>`);
+      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button type="submit" class="btn primary" form="cameraPermissionFormReal" onclick="const f = document.getElementById('cameraPermissionFormReal'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }">Lưu phân quyền</button>`);
     }
 
     function userModal(email = "") {
@@ -1799,7 +2828,7 @@
             ${camerasCheckboxes}
           </div>
         </div>
-      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button class="btn primary" form="userFormReal">Lưu tài khoản</button>`);
+      </form>`, `<button class="btn line" data-close-modal>Hủy</button><button type="submit" class="btn primary" form="userFormReal" onclick="const f = document.getElementById('userFormReal'); if (f) { if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }">Lưu tài khoản</button>`);
     }
 
     // Consolidated startTestCamera function that handles both modes globally
@@ -1807,6 +2836,10 @@
       stopTestCamera(false);
       
       const cam = cameraById(selectedCameraId);
+      if (cam && cam.status !== "online") {
+        alert(`Camera ${cam.name || selectedCameraId} hiện tại không hoạt động. Không thể mở luồng!`);
+        return;
+      }
       await checkBackendStatus();
       
       const hintEl = $("cameraTestHint");
@@ -2051,6 +3084,51 @@
             radius: 5
           });
         }
+
+        // Draw bounding box (Khung nhận diện người) and pose status
+        if (results.poseLandmarks) {
+          let minX = 1.0, maxX = 0.0, minY = 1.0, maxY = 0.0;
+          results.poseLandmarks.forEach(kp => {
+            if (kp.x < minX) minX = kp.x;
+            if (kp.x > maxX) maxX = kp.x;
+            if (kp.y < minY) minY = kp.y;
+            if (kp.y > maxY) maxY = kp.y;
+          });
+          
+          const padX = (maxX - minX) * 0.15;
+          const padY = (maxY - minY) * 0.15;
+          minX = Math.max(0, minX - padX);
+          maxX = Math.min(1, maxX + padX);
+          minY = Math.max(0, minY - padY);
+          maxY = Math.min(1, maxY + padY);
+          
+          const activeCam = cameraById(selectedCameraId) || { state: "normal" };
+          const isFallen = activeCam.state === "fallen" || activeCam.state === "alert" || aiFallTestOn;
+          canvasCtx.strokeStyle = isFallen ? "#f43f5e" : "#10b981";
+          canvasCtx.lineWidth = 3;
+          canvasCtx.strokeRect(
+            minX * canvasElement.width, 
+            minY * canvasElement.height, 
+            (maxX - minX) * canvasElement.width, 
+            (maxY - minY) * canvasElement.height
+          );
+          
+          // Draw label: Đứng / Ngồi / Đi / Nằm / Té ngã
+          let labelText = "ĐỨNG";
+          if (isFallen) {
+            labelText = "TÉ NGÃ";
+          } else if (activeCam.state === "lying" || activeCam.state === "possible_fall") {
+            labelText = "NẰM";
+          } else if (activeCam.state === "sitting") {
+            labelText = "NGỒI";
+          } else if (activeCam.state === "walking") {
+            labelText = "ĐI";
+          }
+          
+          canvasCtx.fillStyle = isFallen ? "#f43f5e" : "#10b981";
+          canvasCtx.font = "bold 16px Arial";
+          canvasCtx.fillText(labelText, minX * canvasElement.width, Math.max(20, minY * canvasElement.height - 8));
+        }
         
         // Run detection rules
         const detection = updateDetector(results.poseLandmarks);
@@ -2235,17 +3313,27 @@
       saveAll();
       updatePendingAlertsCount();
       
-      // Play Audio Alarm (Siren sweep)
-      playAlarmSound();
-      
-      // Show screen alert toast
-      toast(`🚨 CẢNH BÁO TÉ NGÃ: Phát hiện tại camera máy khách ${camName}!`);
+      // Show User Popup Alert or standard admin siren alert
+      if (currentUser.role !== "Admin") {
+        triggerRealtimeFallAlert(newAlert);
+      } else {
+        // Play Audio Alarm (Siren sweep)
+        playAlarmSound();
+        // Show screen alert toast
+        toast(`🚨 CẢNH BÁO TÉ NGÃ: Phát hiện tại camera máy khách ${camName}!`);
+      }
       
       // Web speech synthesis alert
       if (window.speechSynthesis) {
         try {
+          window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance("Cảnh báo. Phát hiện té ngã tại thiết bị máy khách. Vui lòng kiểm tra khẩn cấp!");
           utterance.lang = "vi-VN";
+          const voices = window.speechSynthesis.getVoices();
+          const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
+          if (viVoice) {
+            utterance.voice = viVoice;
+          }
           window.speechSynthesis.speak(utterance);
         } catch (e) {
           console.error("Speech Synthesis error:", e);
@@ -2696,8 +3784,14 @@
                 toast(`🚨 CẢNH BÁO TÉ NGÃ: Phát hiện tại camera máy chủ!`);
                 if (window.speechSynthesis) {
                   try {
+                    window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance("Cảnh báo. Phát hiện té ngã tại thiết bị máy chủ. Vui lòng kiểm tra khẩn cấp!");
                     utterance.lang = "vi-VN";
+                    const voices = window.speechSynthesis.getVoices();
+                    const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
+                    if (viVoice) {
+                      utterance.voice = viVoice;
+                    }
                     window.speechSynthesis.speak(utterance);
                   } catch (e) {
                     console.error("Speech Synthesis error:", e);
@@ -2837,6 +3931,10 @@
               if (localIndex < 0) {
                 alerts.unshift(backendAlert);
                 changed = true;
+                
+                if (backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
+                  triggerRealtimeFallAlert(backendAlert);
+                }
               } else {
                 const local = alerts[localIndex];
                 if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status) {
@@ -2848,7 +3946,7 @@
             if (changed) {
               saveAll();
               updatePendingAlertsCount();
-              if (currentView === "alerts" || currentView === "media") {
+              if (currentView === "alerts" || currentView === "media" || currentView === "user_alerts" || currentView === "user_history") {
                 render(currentView, false);
               }
             }
@@ -2902,7 +4000,7 @@
         badge.style.display = pendingCount > 0 ? "inline-flex" : "none";
       }
       
-      const navAlertBadge = document.querySelector("[data-view='alerts'] .badge");
+      const navAlertBadge = document.querySelector("[data-view='alerts'] .badge") || document.querySelector("[data-view='user_alerts'] .badge");
       if (navAlertBadge) {
         navAlertBadge.textContent = pendingCount;
         navAlertBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
@@ -2910,15 +4008,19 @@
     }
 
     function buildNav() {
-      const filteredMenu = menu.map(([section, items]) => {
-        const allowedItems = items.filter(([id]) => isMenuAllowed(id, currentUser.role));
-        return [section, allowedItems];
-      }).filter(([_, items]) => items.length > 0);
+      const isUser = currentUser.role !== "Admin";
+      const currentMenu = isUser ? userMenu : menu;
 
-      $("nav").innerHTML = filteredMenu.map(([section, items]) => 
-        `<div class="nav-section">${section}</div>${items.map(([id, icon, label]) => 
-          `<button data-view="${id}"><span>${icon}</span><span>${label}</span>${id === "alerts" ? '<span class="badge">3</span>' : ""}</button>`
-        ).join("")}`
+      $("nav").innerHTML = currentMenu.map(([section, items]) => 
+        `<div class="nav-section">${section}</div>${items.map(([id, icon, label]) => {
+          let badgeHtml = "";
+          if (id === "alerts" || id === "user_alerts") {
+            badgeHtml = '<span class="badge" id="alertNavBadge">0</span>';
+          } else if (id === "user_notifications") {
+            badgeHtml = '<span class="badge" id="notifNavBadge" style="background:var(--blue)">0</span>';
+          }
+          return `<button data-view="${id}"><span>${icon}</span><span>${label}</span>${badgeHtml}</button>`;
+        }).join("")}`
       ).join("");
       
       document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => {
@@ -2931,7 +4033,6 @@
     }
 
     function render(id = "dashboard", fetchSync = true) {
-      currentView = id;
       const vis = getVisibleCameras();
       if (vis.length > 0) {
         if (!vis.some(c => c.id === selectedCameraId)) {
@@ -2940,7 +4041,13 @@
       } else {
         selectedCameraId = "";
       }
-      const item = menu.flatMap(m => m[1]).find(i => i[0] === id) || menu[0][1][0];
+      
+      const isUser = currentUser.role !== "Admin";
+      const currentMenu = isUser ? userMenu : menu;
+      const item = currentMenu.flatMap(m => m[1]).find(i => i[0] === id) || currentMenu[0][1][0];
+      id = item[0];
+      currentView = id;
+      
       $("pageTitle").textContent = item[2];
       $("pageSub").textContent = item[3];
       $("content").innerHTML = views[id]();
@@ -2955,14 +4062,18 @@
       }
 
       // Sync alerts from backend automatically when viewing alerts or media
-      if (fetchSync && (id === "alerts" || id === "media")) {
+      if (fetchSync && (id === "alerts" || id === "media" || id === "user_alerts" || id === "user_history")) {
         syncAlertsAndEvents();
       }
       
       // Auto-start status polling on detection tab or user dashboard if stream is active
-      const shouldPoll = id === "detection" || (id === "dashboard" && (currentUser.role === "Người thân" || currentUser.role === "Nhân viên y tế"));
+      const shouldPoll = id === "detection" || (id === "user_live" && liveViewLevel === "stream");
       if (shouldPoll && (testCameraStream || (isBackendOnline && authToken))) {
         if (isBackendOnline) startStatusPolling(); else startSimulatedPolling();
+      }
+      
+      if (isUser) {
+        updateNotificationsBadge();
       }
     }
 
@@ -3370,26 +4481,20 @@
         let imgSrc = `${apiBaseUrl()}/media/${alertId}.jpg`;
         let videoSrc = `${apiBaseUrl()}/media/${alertId}.mp4`;
 
-        if (a && a.cloud_img_url) {
-          imgSrc = a.cloud_img_url;
-          cloudLinkHtml = `
-            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:13px; text-align:left;">
-              <div style="color:#22c55e; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
-                <span>☁️</span> Đã lưu trữ Cloudinary thành công
+        if (a) {
+          if (a.cloud_img_url) imgSrc = a.cloud_img_url;
+          if (a.cloud_video_url) videoSrc = a.cloud_video_url;
+          if (a.cloud_img_url || a.cloud_video_url) {
+            const activeUrl = a.cloud_video_url || a.cloud_img_url;
+            cloudLinkHtml = `
+              <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:13px; text-align:left;">
+                <div style="color:#22c55e; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                  <span>☁️</span> Đã lưu trữ Cloudinary thành công
+                </div>
+                <a href="${activeUrl}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">${activeUrl}</a>
               </div>
-              <a href="${a.cloud_img_url}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">${a.cloud_img_url}</a>
-            </div>
-          `;
-        } else if (a && a.cloud_video_url) {
-          videoSrc = a.cloud_video_url;
-          cloudLinkHtml = `
-            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:13px; text-align:left;">
-              <div style="color:#22c55e; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
-                <span>☁️</span> Đã lưu trữ Cloudinary thành công
-              </div>
-              <a href="${a.cloud_video_url}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">${a.cloud_video_url}</a>
-            </div>
-          `;
+            `;
+          }
         }
         
         if (type === "Video clip" || type.toLowerCase().includes("video")) {
@@ -3645,6 +4750,49 @@
         saveAll();
         toast("Đã lưu cài đặt hệ thống.");
         render("settings");
+      }
+      if (event.target.id === "changePasswordForm") {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.target).entries());
+        if (data.newPassword !== data.confirmPassword) {
+          alert("Xác nhận mật khẩu mới không khớp!");
+          return;
+        }
+        
+        const targetUserIdx = users.findIndex(u => u.email === currentUser.email);
+        if (targetUserIdx !== -1) {
+          const updatedUser = { 
+            ...users[targetUserIdx],
+            password: data.newPassword 
+          };
+          
+          if (isBackendOnline && authToken) {
+            try {
+              const res = await fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(currentUser.email)}`, {
+                method: "PUT",
+                headers: { 
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${authToken}`
+                },
+                body: JSON.stringify(updatedUser)
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                alert(errData.detail || "Không thể đồng bộ cập nhật mật khẩu lên máy chủ.");
+                return;
+              }
+            } catch (err) {
+              console.error("Change password sync failed:", err);
+              alert("Lỗi kết nối khi đồng bộ cập nhật mật khẩu.");
+              return;
+            }
+          }
+          
+          users[targetUserIdx] = updatedUser;
+          saveAll();
+          toast("Đã đổi mật khẩu thành công!");
+          event.target.reset();
+        }
       }
     });
 

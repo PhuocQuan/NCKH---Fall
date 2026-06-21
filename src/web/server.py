@@ -69,6 +69,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.endswith((".html", ".js", ".css")) or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     db_connected = False
@@ -263,26 +273,33 @@ def camera_snapshot(request: Request):
 def _async_upload_test_snapshot(alert_id: str, img_path: Path):
     cloud_img_url = None
     try:
-        from src.web.backend.cloudinary_uploader import upload_to_cloudinary
-        cloud_img_url = upload_to_cloudinary(str(img_path))
-    except Exception as e:
-        print(f"[Cloudinary Error] Loi upload test-snapshot async: {e}")
+        try:
+            from src.web.backend.cloudinary_uploader import upload_to_cloudinary
+            cloud_img_url = upload_to_cloudinary(str(img_path))
+        except Exception as e:
+            print(f"[Cloudinary Error] Loi upload test-snapshot async: {e}")
 
-    try:
-        from src.web.backend.db import get_db_client
-        with get_db_client() as client:
-            if cloud_img_url:
-                client.execute(
-                    "UPDATE alerts SET cloud_img_url = ? WHERE id = ?",
-                    [cloud_img_url, alert_id]
-                )
-                with pipeline._lock:
-                    for a in pipeline._recent_alerts:
-                        if a["id"] == alert_id:
-                            a["cloud_img_url"] = cloud_img_url
-                            break
-    except Exception as e:
-        print(f"[Database Error] Loi cap nhat test-snapshot async: {e}")
+        try:
+            from src.web.backend.db import get_db_client
+            with get_db_client() as client:
+                if cloud_img_url:
+                    client.execute(
+                        "UPDATE alerts SET cloud_img_url = ? WHERE id = ?",
+                        [cloud_img_url, alert_id]
+                    )
+                    with pipeline._lock:
+                        for a in pipeline._recent_alerts:
+                            if a["id"] == alert_id:
+                                a["cloud_img_url"] = cloud_img_url
+                                break
+        except Exception as e:
+            print(f"[Database Error] Loi cap nhat test-snapshot async: {e}")
+    finally:
+        try:
+            if img_path.exists():
+                img_path.unlink()
+        except Exception as cleanup_err:
+            print(f"[Media Cleanup Error] Không thể xóa file test snapshot: {cleanup_err}")
 
 
 @app.post("/api/camera/test-snapshot")
