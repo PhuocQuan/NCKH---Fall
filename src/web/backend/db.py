@@ -36,6 +36,10 @@ def log_action(log_type: str, user: str, content: str) -> None:
                 "INSERT INTO system_logs (time, type, user, content) VALUES (?, ?, ?, ?)",
                 [now_str, log_type, user, content]
             )
+            # Keep only the latest 50 logs in the database to prevent accumulation
+            client.execute(
+                "DELETE FROM system_logs WHERE id NOT IN (SELECT id FROM system_logs ORDER BY id DESC LIMIT 50)"
+            )
     except Exception as e:
         print(f"[Database Logging Error] {e}")
 

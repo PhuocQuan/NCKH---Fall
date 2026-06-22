@@ -223,7 +223,7 @@ def list_logs(user: str = Depends(require_user)) -> dict[str, Any]:
                     content TEXT
                 )
             """)
-            res = client.execute("SELECT time, type, user, content FROM system_logs ORDER BY id DESC LIMIT 100")
+            res = client.execute("SELECT time, type, user, content FROM system_logs ORDER BY id DESC LIMIT 50")
             logs_list = [[r[0], r[1], r[2], r[3]] for r in res.rows]
         return {"logs": logs_list}
     except Exception as e:
