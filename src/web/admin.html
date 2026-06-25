@@ -952,6 +952,8 @@ function loadStore(key, fallback) {
           alerts = resAlerts.alerts;
           saveStore("fg_alerts", alerts);
         }
+        
+        await syncAppStateFromBackend();
       } catch (err) {
         console.error("Error syncing data from backend:", err);
       }
@@ -964,6 +966,95 @@ function loadStore(key, fallback) {
       saveStore("fg_users", users);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_settings", settings);
+      if (typeof monitoredProfile !== 'undefined') saveStore("fg_monitored_profile", monitoredProfile);
+      if (typeof emergencyContacts !== 'undefined') saveStore("fg_emergency_contacts", emergencyContacts);
+      if (typeof userNotifications !== 'undefined') saveStore("fg_user_notifications", userNotifications);
+      if (typeof syncAppStateToBackend === 'function') {
+        syncAppStateToBackend();
+      }
+    }
+
+    async function syncAppStateFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/appstate`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          
+          if (typeof apiKeys !== 'undefined' && data.api_keys_json) {
+            const remote = JSON.parse(data.api_keys_json);
+            if (JSON.stringify(remote) !== JSON.stringify(apiKeys)) {
+              apiKeys = remote;
+              saveStore("fg_api_keys", apiKeys);
+              changed = true;
+            }
+          }
+          if (typeof settings !== 'undefined' && data.settings_json) {
+            const remote = JSON.parse(data.settings_json);
+            if (JSON.stringify(remote) !== JSON.stringify(settings)) {
+              settings = remote;
+              saveStore("fg_settings", settings);
+              changed = true;
+            }
+          }
+          if (typeof monitoredProfile !== 'undefined' && data.monitored_profile_json) {
+            const remote = JSON.parse(data.monitored_profile_json);
+            if (JSON.stringify(remote) !== JSON.stringify(monitoredProfile)) {
+              monitoredProfile = remote;
+              saveStore("fg_monitored_profile", monitoredProfile);
+              changed = true;
+            }
+          }
+          if (typeof emergencyContacts !== 'undefined' && data.emergency_contacts_json) {
+            const remote = JSON.parse(data.emergency_contacts_json);
+            if (JSON.stringify(remote) !== JSON.stringify(emergencyContacts)) {
+              emergencyContacts = remote;
+              saveStore("fg_emergency_contacts", emergencyContacts);
+              changed = true;
+            }
+          }
+          if (typeof userNotifications !== 'undefined' && data.user_notifications_json) {
+            const remote = JSON.parse(data.user_notifications_json);
+            if (JSON.stringify(remote) !== JSON.stringify(userNotifications)) {
+              userNotifications = remote;
+              saveStore("fg_user_notifications", userNotifications);
+              changed = true;
+            }
+          }
+          
+          if (changed && typeof render === 'function') {
+            render(currentView, false);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate từ backend:", e);
+      }
+    }
+
+    async function syncAppStateToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const payload = {};
+        if (typeof apiKeys !== 'undefined') payload.api_keys_json = JSON.stringify(apiKeys);
+        if (typeof settings !== 'undefined') payload.settings_json = JSON.stringify(settings);
+        if (typeof monitoredProfile !== 'undefined') payload.monitored_profile_json = JSON.stringify(monitoredProfile);
+        if (typeof emergencyContacts !== 'undefined') payload.emergency_contacts_json = JSON.stringify(emergencyContacts);
+        if (typeof userNotifications !== 'undefined') payload.user_notifications_json = JSON.stringify(userNotifications);
+        
+        await fetch(`${apiBaseUrl()}/api/appstate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate lên backend:", e);
+      }
     }
 
     function toast(message) {

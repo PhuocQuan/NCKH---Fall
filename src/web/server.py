@@ -19,7 +19,7 @@ from src.web.backend.auth import login as auth_login
 from src.web.backend.auth import logout as auth_logout
 from src.web.backend.auth import verify_token
 from src.web.backend.pipeline import FallDetectionPipeline
-from src.web.backend.db import log_action
+from src.web.backend.db import log_action, get_db_client
 
 WEB_ROOT = Path(__file__).resolve().parent
 pipeline = FallDetectionPipeline()
@@ -710,6 +710,88 @@ def delete_alert(id: str, user: str = Depends(require_user)) -> dict[str, Any]:
         
     log_action("Xóa cảnh báo", user, f"Đã xóa cảnh báo: {id}")
     return {"ok": True}
+
+
+class AppStateModel(BaseModel):
+    api_keys_json: str | None = None
+    settings_json: str | None = None
+    monitored_profile_json: str | None = None
+    emergency_contacts_json: str | None = None
+    user_notifications_json: str | None = None
+
+@app.get("/api/appstate")
+def get_app_state(user: str = Depends(require_user)):
+    try:
+        with get_db_client() as client:
+            client.execute("""
+                CREATE TABLE IF NOT EXISTS app_state (
+                    id TEXT PRIMARY KEY,
+                    api_keys_json TEXT NOT NULL DEFAULT '[]',
+                    settings_json TEXT NOT NULL DEFAULT '{}',
+                    monitored_profile_json TEXT NOT NULL DEFAULT '{}',
+                    emergency_contacts_json TEXT NOT NULL DEFAULT '[]',
+                    user_notifications_json TEXT NOT NULL DEFAULT '[]'
+                )
+            """)
+            res = client.execute("SELECT api_keys_json, settings_json, monitored_profile_json, emergency_contacts_json, user_notifications_json FROM app_state WHERE id = 'global'")
+            if not res.rows:
+                client.execute("INSERT INTO app_state (id) VALUES ('global')")
+                return {
+                    "api_keys_json": "[]",
+                    "settings_json": "{}",
+                    "monitored_profile_json": "{}",
+                    "emergency_contacts_json": "[]",
+                    "user_notifications_json": "[]"
+                }
+            r = res.rows[0]
+            return {
+                "api_keys_json": r[0],
+                "settings_json": r[1],
+                "monitored_profile_json": r[2],
+                "emergency_contacts_json": r[3],
+                "user_notifications_json": r[4]
+            }
+    except Exception as e:
+        print(f"[Database Error] Khong the doc app_state: {e}")
+        return {
+            "api_keys_json": "[]",
+            "settings_json": "{}",
+            "monitored_profile_json": "{}",
+            "emergency_contacts_json": "[]",
+            "user_notifications_json": "[]"
+        }
+
+@app.post("/api/appstate")
+def update_app_state(body: AppStateModel, user: str = Depends(require_user)):
+    print(f"[DEBUG AppState POST] User: {user}, payload: {body}")
+    try:
+        with get_db_client() as client:
+            updates = []
+            params = []
+            if body.api_keys_json is not None:
+                updates.append("api_keys_json = ?")
+                params.append(body.api_keys_json)
+            if body.settings_json is not None:
+                updates.append("settings_json = ?")
+                params.append(body.settings_json)
+            if body.monitored_profile_json is not None:
+                updates.append("monitored_profile_json = ?")
+                params.append(body.monitored_profile_json)
+            if body.emergency_contacts_json is not None:
+                updates.append("emergency_contacts_json = ?")
+                params.append(body.emergency_contacts_json)
+            if body.user_notifications_json is not None:
+                updates.append("user_notifications_json = ?")
+                params.append(body.user_notifications_json)
+            
+            if updates:
+                params.append("global")
+                query = f"UPDATE app_state SET {', '.join(updates)} WHERE id = ?"
+                client.execute(query, params)
+                log_action("Cấu hình hệ thống", user, "Cập nhật cấu hình ứng dụng (app state)")
+            return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Lỗi cập nhật cấu hình: {e}")
 
 
 

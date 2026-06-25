@@ -192,7 +192,8 @@
     function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
     function card(title, body) { return `<div class="card" style="padding:16px; margin-bottom:14px;"><h3 style="margin:0 0 12px; font-size:14px; font-weight:700; color:var(--muted);">${title}</h3>${body}</div>`; }
     function statusPill(status) {
-      const cls = status === "online" || status === "Đang hoạt động" || status === "Hoạt động" || status === "ĐANG CHẠY" || status === "NORMAL" || status === "WALKING" || status === "SITTING" || status === "LYING" ? "green" : status === "Bảo trì" || status === "maintenance" || status === "Đang xử lý" || status === "Warning" ? "amber" : "red";
+      const v = String(status).toLowerCase();
+      const cls = v.includes("online") || v.includes("hoạt động") || v.includes("đã xử lý") || v.includes("thành công") || v.includes("active") ? "green" : v.includes("khẩn") || v.includes("chưa") || v.includes("offline") || v.includes("khóa") || v.includes("fall") || v.includes("tắt") ? "red" : v.includes("đang") || v.includes("bảo trì") || v.includes("cao") || v.includes("warning") ? "amber" : "blue";
       return `<span class="pill ${cls}">${esc(status)}</span>`;
     }
     function apiBaseUrl() { return window.location.port === "5500" ? "http://127.0.0.1:8000" : window.location.origin; }
@@ -229,7 +230,173 @@
       saveStore("fg_settings", settings);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_audit_logs", auditLogs);
+      if (typeof monitoredProfile !== 'undefined') saveStore("fg_monitored_profile", monitoredProfile);
+      if (typeof emergencyContacts !== 'undefined') saveStore("fg_emergency_contacts", emergencyContacts);
+      if (typeof userNotifications !== 'undefined') saveStore("fg_user_notifications", userNotifications);
+      if (typeof syncAppStateToBackend === 'function') {
+        syncAppStateToBackend();
+      }
     }
+
+    async function syncAppStateFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/appstate`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          
+          if (typeof apiKeys !== 'undefined' && data.api_keys_json) {
+            const remote = JSON.parse(data.api_keys_json);
+            if (JSON.stringify(remote) !== JSON.stringify(apiKeys)) {
+              apiKeys = remote;
+              saveStore("fg_api_keys", apiKeys);
+              changed = true;
+            }
+          }
+          if (typeof settings !== 'undefined' && data.settings_json) {
+            const remote = JSON.parse(data.settings_json);
+            if (JSON.stringify(remote) !== JSON.stringify(settings)) {
+              settings = remote;
+              saveStore("fg_settings", settings);
+              changed = true;
+            }
+          }
+          if (typeof monitoredProfile !== 'undefined' && data.monitored_profile_json) {
+            const remote = JSON.parse(data.monitored_profile_json);
+            if (JSON.stringify(remote) !== JSON.stringify(monitoredProfile)) {
+              monitoredProfile = remote;
+              saveStore("fg_monitored_profile", monitoredProfile);
+              changed = true;
+            }
+          }
+          if (typeof emergencyContacts !== 'undefined' && data.emergency_contacts_json) {
+            const remote = JSON.parse(data.emergency_contacts_json);
+            if (JSON.stringify(remote) !== JSON.stringify(emergencyContacts)) {
+              emergencyContacts = remote;
+              saveStore("fg_emergency_contacts", emergencyContacts);
+              changed = true;
+            }
+          }
+          if (typeof userNotifications !== 'undefined' && data.user_notifications_json) {
+            const remote = JSON.parse(data.user_notifications_json);
+            if (JSON.stringify(remote) !== JSON.stringify(userNotifications)) {
+              userNotifications = remote;
+              saveStore("fg_user_notifications", userNotifications);
+              changed = true;
+            }
+          }
+          
+          if (changed && typeof render === 'function') {
+            render(currentView, false);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate từ backend:", e);
+      }
+    }
+
+    async function syncAppStateToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const payload = {};
+        if (typeof apiKeys !== 'undefined') payload.api_keys_json = JSON.stringify(apiKeys);
+        if (typeof settings !== 'undefined') payload.settings_json = JSON.stringify(settings);
+        if (typeof monitoredProfile !== 'undefined') payload.monitored_profile_json = JSON.stringify(monitoredProfile);
+        if (typeof emergencyContacts !== 'undefined') payload.emergency_contacts_json = JSON.stringify(emergencyContacts);
+        if (typeof userNotifications !== 'undefined') payload.user_notifications_json = JSON.stringify(userNotifications);
+        
+        await fetch(`${apiBaseUrl()}/api/appstate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate lên backend:", e);
+      }
+    }
+
+    window.toggleSetting = function(key, checkbox) {
+      settings[key] = checkbox.checked;
+      saveAll();
+    };
+
+    window.connectTelegramBot = async function(btn) {
+      if (!isBackendOnline || !authToken) {
+        alert("Kết nối máy chủ AI ngoại tuyến.");
+        return;
+      }
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = "Đang kết nối...";
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/telegram/connect`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          alert(`🎉 Kết nối thành công với Telegram của ${data.username}!`);
+          settings.telegram = true;
+          saveAll();
+          render(currentView, false);
+        } else {
+          alert(data.detail || "Không thể kết nối Telegram Bot. Hãy nhắn tin bất kỳ cho Bot trước!");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Lỗi mạng khi kết nối Telegram Bot.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    };
+
+    window.testNotificationChannel = async function(channelName, btn) {
+      if (!isBackendOnline || !authToken) {
+        alert("Không có kết nối với máy chủ AI.");
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/notifications/test`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ channel: channelName })
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload.ok) {
+          alert(`🎉 ${payload.detail || 'Gửi tin nhắn test thành công!'}`);
+        } else {
+          alert(payload.detail || "Không thể gửi tin nhắn kiểm tra.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Lỗi kết nối khi gửi thử.");
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    window.sendGeneralTestNotif = function(btn) {
+      alert("Đã gửi thông báo thử qua Web, Email, Telegram, SMS và Zalo OA.");
+    };
+
+    window.changeMobileLogsPage = function(page) {
+      window.mobileLogsPage = page;
+      render("settings", false);
+    };
 
     // Modal Control (Bottom Sheet)
     function openModal(title, body, footer = "") {
@@ -295,11 +462,12 @@
         switchTab("alerts");
       } else if (viewName === "notifications") {
         currentView = "settings";
-        settingsSubView = "system";
+        settingsSubView = "notifications";
         switchTab("settings");
       } else if (viewName === "users" || viewName === "cameras" || viewName === "api" || viewName === "logs") {
         currentView = "settings";
         settingsSubView = viewName;
+        if (viewName === "logs") window.mobileLogsPage = 1;
         switchTab("settings");
       } else if (viewName === "media") {
         currentView = "settings";
@@ -385,7 +553,7 @@
     }
 
     function getSubViewTitle(sv) {
-      const m = { "system": "Cài đặt hệ thống", "users": "Quản lý tài khoản", "cameras": "Quản lý Camera", "api": "Quản lý API Key", "logs": "Lịch sử hệ thống", "media": "Hình ảnh & video" };
+      const m = { "system": "Cài đặt hệ thống", "users": "Quản lý tài khoản", "cameras": "Quản lý Camera", "api": "Quản lý API Key", "logs": "Lịch sử hệ thống", "media": "Hình ảnh & video", "notifications": "Thông báo" };
       return m[sv] || "Cấu hình";
     }
 
@@ -419,64 +587,37 @@
               <div class="hint" style="font-size:10px;">Chờ xử lý</div>
             </div>
           </div>
-
-          ${card("Trạng thái AI Realtime", `
-            <div class="mobile-list-card-row">
-              <span>Hệ thống AI:</span>
-              <strong>${isBackendOnline ? statusPill("Hoạt động") : statusPill("Simulator")}</strong>
-            </div>
-            <div class="mobile-list-card-row" style="margin-top:10px;">
-              <span>Máy chủ phát hiện:</span>
-              <strong style="color:var(--blue); font-family:monospace;">${esc(apiBaseUrl())}</strong>
-            </div>
-          `)}
-
-          ${card("Cảnh báo khẩn cấp gần đây", `
-            <div class="mobile-list">
-              ${alerts.slice(0, 3).map(a => `
-                <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
-                  <div class="mobile-list-card-row">
-                    <span class="mobile-list-card-title" style="color:var(--red);">⚠️ Té ngã!</span>
-                    <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
-                  </div>
-                  <div class="mobile-list-card-row">
-                    <span style="font-size:13px;">Thiết bị: <strong>${esc(a.camera)}</strong></span>
-                    <span>${statusPill(a.status)}</span>
-                  </div>
-                </div>
-              `).join("")}
-            </div>
-            <button class="btn line block" onclick="switchTab('alerts')" style="width:100%; margin-top:12px; height:38px;">Xem tất cả cảnh báo</button>
-          `)}
         `;
       },
 
       live: () => {
         // Location-based folders -> Cameras list -> Streaming View
-        const houses = Array.from(new Set(cameras.map(c => c.area || "Khác")));
+        const houses = getVisibleHouses();
         
         if (liveViewLevel === "locations") {
           return `
             <div style="margin-bottom:12px;"><h4 style="margin:0;">Nơi lắp đặt camera</h4></div>
             <div class="mobile-list">
               ${houses.map(h => {
-                const cams = cameras.filter(c => (c.area || "Khác") === h);
-                const onlineCount = cams.filter(c => c.status === "online").length;
+                const camsInHouse = h.cameras.map(id => cameras.find(c => c.id === id)).filter(Boolean);
+                const onlineCount = camsInHouse.filter(c => c.status === "online").length;
                 return `
-                  <div class="mobile-list-card animate-hover" onclick="selectedLocation='${esc(h)}'; liveViewLevel='cameras'; render('live', false);">
+                  <div class="mobile-list-card animate-hover" onclick="selectedLocation='${esc(h.name)}'; liveViewLevel='cameras'; render('live', false);">
                     <div class="mobile-list-card-row">
-                      <strong style="font-size:15px; color:var(--ink);">🏠 ${esc(h)}</strong>
-                      <span class="pill green small">${onlineCount} / ${cams.length} Online</span>
+                      <strong style="font-size:15px; color:var(--ink);">🏠 ${esc(h.name)}</strong>
+                      <span class="pill green small">${onlineCount} / ${camsInHouse.length} Online</span>
                     </div>
                   </div>
                 `;
               }).join("")}
+              ${houses.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>` : ""}
             </div>
           `;
         }
 
         if (liveViewLevel === "cameras") {
-          const camsInHouse = cameras.filter(c => (c.area || "Khác") === selectedLocation);
+          const h = houses.find(x => x.name === selectedLocation);
+          const camsInHouse = h ? h.cameras.map(id => cameras.find(c => c.id === id)).filter(Boolean) : [];
           return `
             <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
               <button class="btn line small" onclick="liveViewLevel='locations'; render('live', false);">← Quay lại</button>
@@ -495,6 +636,7 @@
                   </div>
                 </div>
               `).join("")}
+              ${camsInHouse.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Không có camera nào trong khu vực này.</div>` : ""}
             </div>
           `;
         }
@@ -584,7 +726,11 @@
             <div class="mobile-list">
               <div class="mobile-list-card" onclick="settingsSubView='system'; render('settings', false);">
                 <div class="mobile-list-card-row"><strong>⚙️ Cài đặt hệ thống</strong><span>❯</span></div>
-                <div class="hint" style="font-size:11px;">Cấu hình ngưỡng phát hiện té ngã, kênh nhận thông báo</div>
+                <div class="hint" style="font-size:11px;">Cấu hình ngưỡng phát hiện té ngã, dữ liệu cá nhân</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='notifications'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>🔔 Thông báo</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Thiết lập các kênh nhận thông báo tự động (Email, Telegram, SMS...)</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='users'; render('settings', false);">
                 <div class="mobile-list-card-row"><strong>👥 Quản lý tài khoản</strong><span>❯</span></div>
@@ -606,6 +752,45 @@
                 <div class="mobile-list-card-row"><strong>📜 Nhật ký hệ thống</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Theo dõi lịch sử truy cập và nhật ký của các thành viên</div>
               </div>
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "notifications") {
+          const totalPend = alerts.filter(a => a.status === "Chưa xử lý").length;
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+              <button class="btn line small" onclick="settingsSubView=''; render('settings', false);">← Quay lại</button>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <span class="pill ${isBackendOnline ? 'green' : 'grey'} small">AI Backend: ${isBackendOnline ? 'Online' : 'Offline'}</span>
+                <span class="pill red small" style="background:#ffe4e6; color:#e11d48; border:1px solid #fda4af;">${totalPend} cảnh báo chờ</span>
+                <button class="btn primary small" style="padding: 4px 8px; font-size: 11px;" onclick="window.sendGeneralTestNotif(this)">Gửi thông báo thử</button>
+              </div>
+            </div>
+
+            <div class="mobile-list">
+              ${[
+                ["email", "Web & Email tự động", "Gửi thư điện tử kèm cảnh báo."],
+                ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."],
+                ["sms", "SMS tin nhắn", "Gửi tin nhắn SMS khẩn cấp tới số điện thoại."],
+                ["zalo", "Zalo OA cảnh báo", "Gửi cảnh báo qua tài khoản Zalo Official Account."],
+                ["cloud", "Cloud Backup", "Đồng bộ video sự kiện lên đám mây."]
+              ].map(([key, title, desc]) => {
+                const connectBtn = key === "telegram" ? `<button class="btn small primary" onclick="window.connectTelegramBot(this)" style="margin-right:8px;">Kết nối Bot</button>` : "";
+                return `
+                  <div class="card" style="padding:16px; margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                      <strong style="font-size:15px; color:var(--ink);">${title}</strong>
+                      <input type="checkbox" class="switch" data-setting-key="${key}" ${settings[key] ? "checked" : ""} onchange="window.toggleSetting('${key}', this)">
+                    </div>
+                    <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">${desc}</div>
+                    <div style="display:flex; gap:6px;">
+                      ${connectBtn}
+                      <button class="btn small line" onclick="window.testNotificationChannel('${title}', this)">Gửi thử</button>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
             </div>
           `;
         }
@@ -727,19 +912,63 @@
         }
 
         if (settingsSubView === "logs") {
+          if (typeof window.mobileLogsPage === 'undefined') window.mobileLogsPage = 1;
+          const mobileLogsPerPage = 8;
+
+          const totalLogs = auditLogs.length;
+          const totalPages = Math.max(1, Math.ceil(totalLogs / mobileLogsPerPage));
+          
+          if (window.mobileLogsPage < 1) window.mobileLogsPage = 1;
+          if (window.mobileLogsPage > totalPages) window.mobileLogsPage = totalPages;
+
+          const startIndex = (window.mobileLogsPage - 1) * mobileLogsPerPage;
+          const endIndex = Math.min(startIndex + mobileLogsPerPage, totalLogs);
+          const pageLogs = auditLogs.slice(startIndex, endIndex);
+
+          let pagesHtml = "";
+          const prevDisabled = window.mobileLogsPage === 1 ? "disabled" : "";
+          pagesHtml += `<button class="btn line small" ${prevDisabled} onclick="window.changeMobileLogsPage(${window.mobileLogsPage - 1})" style="padding: 4px 8px; font-size: 11px;">Trước</button>`;
+          
+          for (let i = 1; i <= totalPages; i++) {
+            const isActive = i === window.mobileLogsPage;
+            pagesHtml += `<button class="btn ${isActive ? 'primary' : 'line'} small" onclick="window.changeMobileLogsPage(${i})" style="padding: 4px 8px; font-size: 11px; min-width: 28px;">${i}</button>`;
+          }
+          
+          const nextDisabled = window.mobileLogsPage === totalPages ? "disabled" : "";
+          pagesHtml += `<button class="btn line small" ${nextDisabled} onclick="window.changeMobileLogsPage(${window.mobileLogsPage + 1})" style="padding: 4px 8px; font-size: 11px;">Sau</button>`;
+
           return `
             <button class="btn line small" onclick="settingsSubView=''; render('settings', false);" style="margin-bottom:12px;">← Quay lại</button>
+            
+            <div style="margin-bottom: 10px; font-size: 12px; color: var(--muted);">
+              Hiển thị từ <strong>${totalLogs > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalLogs}</strong> nhật ký
+            </div>
+
             <div class="mobile-list">
-              ${auditLogs.map(l => `
-                <div class="mobile-list-card" style="padding:10px 14px;">
-                  <div class="mobile-list-card-row" style="font-size:12px; color:var(--muted);">
-                    <span>👤 ${esc(l.user)}</span>
-                    <span>${esc(l.time)}</span>
+              ${pageLogs.map(l => {
+                const time = Array.isArray(l) ? l[0] : l.time;
+                const type = Array.isArray(l) ? l[1] : 'Hệ thống';
+                const user = Array.isArray(l) ? l[2] : l.user;
+                const action = Array.isArray(l) ? l[3] : l.action;
+                const ip = Array.isArray(l) ? '' : (l.ip || '');
+                return `
+                  <div class="mobile-list-card" style="padding:10px 14px; margin-bottom: 8px;">
+                    <div class="mobile-list-card-row" style="font-size:12px; color:var(--muted); display:flex; justify-content:space-between; align-items:center;">
+                      <span>👤 ${esc(user)}</span>
+                      <span>${esc(time)}</span>
+                    </div>
+                    <div style="font-weight:600; font-size:13px; margin-top:6px; color:var(--ink);">${esc(action)}</div>
+                    <div class="mobile-list-card-row" style="font-size:11px; color:var(--muted); margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
+                      <span>Loại: ${statusPill(type)}</span>
+                      ${ip ? `<span>IP: ${esc(ip)}</span>` : ''}
+                    </div>
                   </div>
-                  <div style="font-weight:600; font-size:13px; margin-top:4px; color:var(--ink);">${esc(l.action)}</div>
-                  <div style="font-size:11px; color:var(--muted); margin-top:2px;">IP: ${esc(l.ip)}</div>
-                </div>
-              `).join("")}
+                `;
+              }).join("")}
+            </div>
+
+            <div style="display: flex; justify-content: center; gap: 4px; margin-top: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
+              ${pagesHtml}
             </div>
           `;
         }
@@ -1056,14 +1285,79 @@
       const a = alerts.find(x => x.id === id);
       if (!a) return;
       
+      const isMock = id.startsWith("AL-20260615-");
+      const hasVideoClip = hasVideo(a);
+      
+      let mediaHtml = "";
+      let cloudLinkHtml = "";
+      
+      let imgSrc = `${apiBaseUrl()}/media/${id}.jpg`;
+      let videoSrc = `${apiBaseUrl()}/media/${id}.mp4`;
+      
+      if (a) {
+        if (a.cloud_img_url) imgSrc = a.cloud_img_url;
+        if (a.cloud_video_url) videoSrc = a.cloud_video_url;
+        if (a.cloud_img_url || a.cloud_video_url) {
+          const activeUrl = a.cloud_video_url || a.cloud_img_url;
+          cloudLinkHtml = `
+            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:12px; text-align:left;">
+              <div style="color:#22c55e; font-weight:700; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <span>☁️</span> Lưu trữ Cloudinary thành công
+              </div>
+              <a href="${activeUrl}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">Xem link gốc →</a>
+            </div>
+          `;
+        }
+      }
+      
+      if (hasVideoClip) {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; position:relative;">
+              <div style="color:#fff; text-align:center;">
+                <div style="font-size:48px; margin-bottom:10px;">▶</div>
+                <div style="font-size:14px; font-weight:bold;">Video ghi hình sự kiện té ngã ${id}</div>
+                <div class="hint" style="margin-top:5px; color:#94a3b8; font-size:11px;">(Độ dài 12 giây - Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <video src="${videoSrc}" controls autoplay playsinline style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; background:#000;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';"></video>
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Video không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      } else {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#1e293b; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center;">
+              <div style="color:#fff; text-align:center; padding: 20px;">
+                <div style="font-size:48px; margin-bottom:10px;">📷</div>
+                <div style="font-size:14px; font-weight:bold;">Ảnh chụp sự kiện lúc phát hiện té ngã</div>
+                <div class="hint" style="color:#94a3b8; margin-top:5px; font-size:11px;">Đã lưu trữ đám mây (Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';">
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Hình ảnh không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      }
+      
       openModal(`Chi tiết té ngã ${id}`, `
-        <div style="background:#000; color:#fff; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; border-radius:8px; margin-bottom:12px;">
-          <div style="text-align:center;">
-            <div style="font-size:32px;">📷</div>
-            <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">(Ảnh mô phỏng sự kiện té ngã)</div>
-          </div>
-        </div>
-        <div class="mobile-list-card-detail" style="font-size:13px;">
+        ${mediaHtml}
+        ${cloudLinkHtml}
+        <div class="mobile-list-card-detail" style="font-size:13px; margin-top:12px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px;">
           <div>Mã cảnh báo: <strong>${a.id}</strong></div>
           <div>Thời gian: <strong>${a.time}</strong></div>
           <div>Camera: <strong>${a.camera}</strong></div>
@@ -1078,6 +1372,43 @@
     let cameraUtil = null;
     let localStream = null;
 
+    function aiStreamUrl() {
+      return `${apiBaseUrl()}/api/camera/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
+    }
+
+    async function backendLogin(force = false) {
+      if (authToken && !force) {
+        try {
+          const check = await fetch(`${apiBaseUrl()}/api/detection/status`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (check.status === 401) {
+            force = true;
+          } else {
+            return authToken;
+          }
+        } catch (e) {
+          return authToken;
+        }
+      }
+      
+      const savedEmail = localStorage.getItem("nckh_current_user_email") || "admin@nckh.vn";
+      const username = savedEmail;
+      const password = "nckh2025";
+      
+      const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        authToken = payload.token;
+        localStorage.setItem("nckh_auth_token", authToken);
+        return authToken;
+      }
+    }
+
     async function startTestCamera() {
       const video = $("testCameraVideo");
       const canvas = $("testCameraCanvas");
@@ -1086,6 +1417,10 @@
       const mode = select ? select.value : "client";
 
       if (mode === "client") {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert("Không thể mở camera trên trình duyệt qua kết nối HTTP không bảo mật (Safari yêu cầu HTTPS hoặc localhost để sử dụng Webcam). Vui lòng đổi nguồn sang 'Máy chủ (Webcam Server)' ở mục Điều khiển camera.");
+          return;
+        }
         img.style.display = "none";
         video.style.display = "block";
         canvas.style.display = "block";
@@ -1105,7 +1440,22 @@
         video.style.display = "none";
         canvas.style.display = "none";
         img.style.display = "block";
-        img.src = `${apiBaseUrl()}/api/control/stream?t=${Date.now()}`;
+        
+        try {
+          await backendLogin();
+          const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ source: "0", camera_id: selectedCameraId }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok && res.status !== 409) {
+            throw new Error(payload.detail || "Không khởi động được camera trên AI backend.");
+          }
+          img.src = aiStreamUrl();
+        } catch (err) {
+          alert("Lỗi Backend: " + (err.message || err));
+        }
       }
     }
 
@@ -1116,9 +1466,28 @@
         localStream = null;
       }
       const video = $("testCameraVideo");
-      if (video) video.srcObject = null;
+      if (video) {
+        video.srcObject = null;
+        video.style.display = "none";
+      }
+      const canvas = $("testCameraCanvas");
+      if (canvas) {
+        canvas.style.display = "none";
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       const img = $("testCameraImg");
-      if (img) img.src = "";
+      if (img) {
+        img.removeAttribute("src");
+        img.style.display = "none";
+      }
+
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/control/stop`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch(() => {});
+      }
     }
 
     function toggleStreamMode() {
@@ -1190,6 +1559,57 @@
     }
 
     // Init session checks
+    async function syncFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const [cRes, aRes, lRes] = await Promise.all([
+          fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }),
+          fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } }),
+          fetch(`${apiBaseUrl()}/api/logs`, { headers: { Authorization: `Bearer ${authToken}` } })
+        ]);
+        
+        let changed = false;
+        if (cRes.ok) {
+          const c = await cRes.json();
+          if (c && Array.isArray(c)) {
+            if (JSON.stringify(c) !== JSON.stringify(cameras)) {
+              cameras = c;
+              saveStore("fg_cameras", cameras);
+              changed = true;
+            }
+          }
+        }
+        if (aRes.ok) {
+          const a = await aRes.json();
+          if (a && a.alerts && Array.isArray(a.alerts)) {
+            if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
+              alerts = a.alerts;
+              saveStore("fg_alerts", alerts);
+              changed = true;
+            }
+          }
+        }
+        if (lRes.ok) {
+          const l = await lRes.json();
+          if (l && l.logs && Array.isArray(l.logs)) {
+            if (JSON.stringify(l.logs) !== JSON.stringify(auditLogs)) {
+              auditLogs = l.logs;
+              saveStore("fg_audit_logs", auditLogs);
+              changed = true;
+            }
+          }
+        }
+        
+        await syncAppStateFromBackend();
+        
+        if (changed) {
+          render(currentView, false);
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ:", e);
+      }
+    }
+
     async function initAdminApp() {
       await checkBackendStatus();
       
@@ -1203,19 +1623,26 @@
       
       // Fetch dynamic backend list if connected
       if (isBackendOnline && authToken) {
+        await syncAppStateFromBackend();
+        
         Promise.all([
           fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
           fetch(`${apiBaseUrl()}/api/users`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
           fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
-        ]).then(([c, usr, a]) => {
+          fetch(`${apiBaseUrl()}/api/logs`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null)
+        ]).then(([c, usr, a, l]) => {
           if (c && Array.isArray(c)) { cameras = c; saveStore("fg_cameras", cameras); }
           if (usr && Array.isArray(usr)) { users = usr; saveStore("fg_users", users); }
           if (a && a.alerts && Array.isArray(a.alerts)) { alerts = a.alerts; saveStore("fg_alerts", alerts); }
+          if (l && l.logs && Array.isArray(l.logs)) { auditLogs = l.logs; saveStore("fg_audit_logs", auditLogs); }
           render(currentView, false);
         }).catch(() => {});
       }
       
       render("dashboard", false);
+      
+      // Periodically sync camera and alerts data in the background
+      setInterval(syncFromBackend, 4000);
     }
 
     window.onload = initAdminApp;

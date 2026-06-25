@@ -414,6 +414,24 @@
       background: #fee2e2;
       transform: scale(1.1);
     }
+    .contact-edit-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #eff6ff;
+      color: #3b82f6;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .contact-edit-btn:hover {
+      background: #dbeafe;
+      transform: scale(1.1);
+    }
     .contact-body {
       display: flex;
       flex-direction: column;
@@ -948,6 +966,8 @@ function loadStore(key, fallback) {
           alerts = resAlerts.alerts;
           saveStore("fg_alerts", alerts);
         }
+        
+        await syncAppStateFromBackend();
       } catch (err) {
         console.error("Error syncing data from backend:", err);
       }
@@ -960,6 +980,95 @@ function loadStore(key, fallback) {
       saveStore("fg_users", users);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_settings", settings);
+      if (typeof monitoredProfile !== 'undefined') saveStore("fg_monitored_profile", monitoredProfile);
+      if (typeof emergencyContacts !== 'undefined') saveStore("fg_emergency_contacts", emergencyContacts);
+      if (typeof userNotifications !== 'undefined') saveStore("fg_user_notifications", userNotifications);
+      if (typeof syncAppStateToBackend === 'function') {
+        syncAppStateToBackend();
+      }
+    }
+
+    async function syncAppStateFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/appstate`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          
+          if (typeof apiKeys !== 'undefined' && data.api_keys_json) {
+            const remote = JSON.parse(data.api_keys_json);
+            if (JSON.stringify(remote) !== JSON.stringify(apiKeys)) {
+              apiKeys = remote;
+              saveStore("fg_api_keys", apiKeys);
+              changed = true;
+            }
+          }
+          if (typeof settings !== 'undefined' && data.settings_json) {
+            const remote = JSON.parse(data.settings_json);
+            if (JSON.stringify(remote) !== JSON.stringify(settings)) {
+              settings = remote;
+              saveStore("fg_settings", settings);
+              changed = true;
+            }
+          }
+          if (typeof monitoredProfile !== 'undefined' && data.monitored_profile_json) {
+            const remote = JSON.parse(data.monitored_profile_json);
+            if (JSON.stringify(remote) !== JSON.stringify(monitoredProfile)) {
+              monitoredProfile = remote;
+              saveStore("fg_monitored_profile", monitoredProfile);
+              changed = true;
+            }
+          }
+          if (typeof emergencyContacts !== 'undefined' && data.emergency_contacts_json) {
+            const remote = JSON.parse(data.emergency_contacts_json);
+            if (JSON.stringify(remote) !== JSON.stringify(emergencyContacts)) {
+              emergencyContacts = remote;
+              saveStore("fg_emergency_contacts", emergencyContacts);
+              changed = true;
+            }
+          }
+          if (typeof userNotifications !== 'undefined' && data.user_notifications_json) {
+            const remote = JSON.parse(data.user_notifications_json);
+            if (JSON.stringify(remote) !== JSON.stringify(userNotifications)) {
+              userNotifications = remote;
+              saveStore("fg_user_notifications", userNotifications);
+              changed = true;
+            }
+          }
+          
+          if (changed && typeof render === 'function') {
+            render(currentView, false);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate từ backend:", e);
+      }
+    }
+
+    async function syncAppStateToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const payload = {};
+        if (typeof apiKeys !== 'undefined') payload.api_keys_json = JSON.stringify(apiKeys);
+        if (typeof settings !== 'undefined') payload.settings_json = JSON.stringify(settings);
+        if (typeof monitoredProfile !== 'undefined') payload.monitored_profile_json = JSON.stringify(monitoredProfile);
+        if (typeof emergencyContacts !== 'undefined') payload.emergency_contacts_json = JSON.stringify(emergencyContacts);
+        if (typeof userNotifications !== 'undefined') payload.user_notifications_json = JSON.stringify(userNotifications);
+        
+        await fetch(`${apiBaseUrl()}/api/appstate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate lên backend:", e);
+      }
     }
 
     function toast(message) {
@@ -1550,7 +1659,7 @@ function loadStore(key, fallback) {
           address: data.address,
           emergencyContact: data.emergencyContact
         };
-        saveStore("fg_monitored_profile", monitoredProfile);
+        saveAll();
         closeModal();
         render("user_profile");
         toast("Đã cập nhật thông tin hồ sơ người thân thành công!");
@@ -1581,17 +1690,48 @@ function loadStore(key, fallback) {
           phone: data.phone,
           email: data.email
         });
-        saveStore("fg_emergency_contacts", emergencyContacts);
+        saveAll();
         closeModal();
         render("user_contacts");
-        toast("Đã thêm liên hệ khẩn cấp thành công!");
+      });
+    };
+    
+    window.editEmergencyContactModal = function(idx) {
+      const contact = emergencyContacts[idx];
+      openModal("Sửa liên hệ khẩn cấp", `
+        <form id="editContactForm" onsubmit="event.preventDefault(); return false;">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(contact.name)}" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(contact.relationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(contact.phone)}" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(contact.email)}" type="email" required></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="editContactForm" class="btn primary">Lưu thay đổi</button>
+      `);
+      
+      $("editContactForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        emergencyContacts[idx] = {
+          name: data.name,
+          relationship: data.relationship,
+          phone: data.phone,
+          email: data.email
+        };
+        saveAll();
+        closeModal();
+        render("user_contacts");
+        toast("Đã cập nhật liên hệ khẩn cấp thành công!");
       });
     };
     
     window.deleteEmergencyContact = function(idx) {
       if (confirm("Bạn có chắc chắn muốn xóa liên hệ khẩn cấp này?")) {
         emergencyContacts.splice(idx, 1);
-        saveStore("fg_emergency_contacts", emergencyContacts);
+        saveAll();
         render("user_contacts");
         toast("Đã xóa liên hệ khẩn cấp!");
       }
@@ -1603,21 +1743,21 @@ function loadStore(key, fallback) {
 
     window.toggleReadNotification = function(idx) {
       userNotifications[idx].read = !userNotifications[idx].read;
-      saveStore("fg_user_notifications", userNotifications);
+      saveAll();
       render("user_notifications");
       updateNotificationsBadge();
     };
     
     window.deleteNotification = function(idx) {
       userNotifications.splice(idx, 1);
-      saveStore("fg_user_notifications", userNotifications);
+      saveAll();
       render("user_notifications");
       updateNotificationsBadge();
     };
     
     window.markAllNotificationsAsRead = function() {
       userNotifications.forEach(notif => notif.read = true);
-      saveStore("fg_user_notifications", userNotifications);
+      saveAll();
       render("user_notifications");
       updateNotificationsBadge();
       toast("Đã đánh dấu tất cả thông báo là đã đọc.");
@@ -1847,7 +1987,10 @@ function loadStore(key, fallback) {
                           <span class="contact-relation-pill">${esc(contact.relationship)}</span>
                         </div>
                       </div>
-                      <button class="contact-delete-btn" onclick="deleteEmergencyContact(${idx})" title="Xóa liên hệ">×</button>
+                      <div style="display: flex; gap: 6px; align-items: center;">
+                        <button class="contact-edit-btn" onclick="editEmergencyContactModal(${idx})" title="Sửa liên hệ">✏️</button>
+                        <button class="contact-delete-btn" onclick="deleteEmergencyContact(${idx})" title="Xóa liên hệ">×</button>
+                      </div>
                     </div>
                     
                     <div class="contact-body">
@@ -2229,9 +2372,15 @@ function loadStore(key, fallback) {
       stopTestCamera(false);
       
       const cam = cameraById(selectedCameraId);
-      if (cam && cam.status !== "online") {
-        alert(`Camera ${cam.name || selectedCameraId} hiện tại không hoạt động. Không thể mở luồng!`);
-        return;
+      if (cam) {
+        if (cam.status === "offline") {
+          alert(`Camera "${cam.name}" đang không hoạt động.`);
+          return;
+        }
+        if (cam.status === "maintenance" || cam.status === "Bảo trì") {
+          alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
+          return;
+        }
       }
       await checkBackendStatus();
       
@@ -3593,8 +3742,12 @@ function loadStore(key, fallback) {
         selectedCameraId = cameraCardEl.dataset.openCamera;
         const cam = cameraById(selectedCameraId);
         if (cam) {
-          if (cam.status !== "online") {
-            alert(`Camera ${cam.name || selectedCameraId} hiện tại không hoạt động!`);
+          if (cam.status === "offline") {
+            alert(`Camera "${cam.name}" đang không hoạt động.`);
+            return;
+          }
+          if (cam.status === "maintenance" || cam.status === "Bảo trì") {
+            alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
             return;
           }
           cameraStreamBackView = currentView;

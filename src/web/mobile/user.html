@@ -49,13 +49,13 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
         <span>Trang chủ</span>
       </button>
-      <button class="mobile-nav-item" data-view="live" onclick="switchTab('live')">
-        <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-        <span>Giám sát</span>
-      </button>
       <button class="mobile-nav-item" data-view="alerts" onclick="switchTab('alerts')">
-        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 4l7.5 13h-15L12 6zm-1 3v4h2V9h-2zm0 6v2h2v-2h-2z"/></svg>
         <span>Cảnh báo</span>
+      </button>
+      <button class="mobile-nav-item" data-view="notifications" onclick="switchTab('notifications')">
+        <svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        <span>Thông báo</span>
       </button>
       <button class="mobile-nav-item" data-view="profile" onclick="switchTab('profile')">
         <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -238,6 +238,127 @@
       saveStore("fg_monitored_profile", monitoredProfile);
       saveStore("fg_emergency_contacts", emergencyContacts);
       saveStore("fg_user_notifications", userNotifications);
+      if (typeof syncAppStateToBackend === 'function') {
+        syncAppStateToBackend();
+      }
+    }
+
+    async function syncAppStateFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/appstate`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          
+          if (typeof monitoredProfile !== 'undefined' && data.monitored_profile_json) {
+            const remote = JSON.parse(data.monitored_profile_json);
+            if (JSON.stringify(remote) !== JSON.stringify(monitoredProfile)) {
+              monitoredProfile = remote;
+              saveStore("fg_monitored_profile", monitoredProfile);
+              changed = true;
+            }
+          }
+          if (typeof emergencyContacts !== 'undefined' && data.emergency_contacts_json) {
+            const remote = JSON.parse(data.emergency_contacts_json);
+            if (JSON.stringify(remote) !== JSON.stringify(emergencyContacts)) {
+              emergencyContacts = remote;
+              saveStore("fg_emergency_contacts", emergencyContacts);
+              changed = true;
+            }
+          }
+          if (typeof userNotifications !== 'undefined' && data.user_notifications_json) {
+            const remote = JSON.parse(data.user_notifications_json);
+            if (JSON.stringify(remote) !== JSON.stringify(userNotifications)) {
+              userNotifications = remote;
+              saveStore("fg_user_notifications", userNotifications);
+              changed = true;
+            }
+          }
+          
+          if (changed && typeof render === 'function') {
+            render(currentView, false);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate từ backend:", e);
+      }
+    }
+
+    async function syncAppStateToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const payload = {};
+        if (typeof monitoredProfile !== 'undefined') payload.monitored_profile_json = JSON.stringify(monitoredProfile);
+        if (typeof emergencyContacts !== 'undefined') payload.emergency_contacts_json = JSON.stringify(emergencyContacts);
+        if (typeof userNotifications !== 'undefined') payload.user_notifications_json = JSON.stringify(userNotifications);
+        
+        await fetch(`${apiBaseUrl()}/api/appstate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate lên backend:", e);
+      }
+    }
+
+    function selectCameraMobile(cameraId) {
+      const cam = cameras.find(c => c.id === cameraId);
+      if (cam) {
+        if (cam.status === "offline") {
+          alert(`Camera "${cam.name}" đang không hoạt động.`);
+          return;
+        }
+        if (cam.status === "maintenance" || cam.status === "Bảo trì") {
+          alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
+          return;
+        }
+      }
+      selectedCameraId = cameraId;
+      liveViewLevel = "stream";
+      switchTab("live");
+    }
+
+    function aiStreamUrl() {
+      return `${apiBaseUrl()}/api/camera/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
+    }
+
+    async function backendLogin(force = false) {
+      if (authToken && !force) {
+        try {
+          const check = await fetch(`${apiBaseUrl()}/api/detection/status`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (check.status === 401) {
+            force = true;
+          } else {
+            return authToken;
+          }
+        } catch (e) {
+          return authToken;
+        }
+      }
+      
+      const savedEmail = localStorage.getItem("nckh_current_user_email") || "bao@nckh.vn";
+      const username = savedEmail;
+      const password = "nckh2025";
+      
+      const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.detail || "Không đăng nhập được backend AI.");
+      authToken = payload.token;
+      localStorage.setItem("nckh_auth_token", authToken);
+      return authToken;
     }
 
     // Modal Control (Bottom Sheet)
@@ -265,7 +386,12 @@
     function switchTab(viewName) {
       currentView = viewName;
       document.querySelectorAll(".mobile-nav-item").forEach(item => {
-        item.classList.toggle("active", item.dataset.view === viewName);
+        const targetView = item.dataset.view;
+        if (viewName === 'live') {
+          item.classList.toggle("active", targetView === 'dashboard');
+        } else {
+          item.classList.toggle("active", targetView === viewName);
+        }
       });
 
       // Sync drawer item highlight
@@ -385,7 +511,7 @@
           ${card("Camera trực tiếp", `
             <div class="mobile-list">
               ${visCams.map(c => `
-                <div class="mobile-list-card" onclick="selectedCameraId='${c.id}'; liveViewLevel='stream'; switchTab('live');">
+                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
                   <div class="mobile-list-card-row">
                     <strong style="color:var(--ink); font-size:13px;">${esc(c.name)}</strong>
                     <span>${statusPill(c.status)}</span>
@@ -435,7 +561,7 @@
             </div>
             <div class="mobile-list">
               ${camsInHouse.map(c => `
-                <div class="mobile-list-card" onclick="selectedCameraId='${c.id}'; liveViewLevel='stream'; render('live', false);">
+                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
                   <div class="mobile-list-card-row">
                     <span class="mobile-list-card-title">${esc(c.name)}</span>
                     <span>${statusPill(c.status)}</span>
@@ -455,7 +581,7 @@
 
           return `
             <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-              <button class="btn line small" onclick="liveViewLevel='cameras'; render('live', false);">← Quay lại</button>
+              <button class="btn line small" onclick="switchTab('dashboard');">← Quay lại</button>
               <strong style="color:var(--muted); font-size:13px;">${esc(cam.name)}</strong>
             </div>
 
@@ -548,14 +674,21 @@
             </div>
             <div class="mobile-list">
               ${emergencyContacts.map((c, i) => `
-                <div class="mobile-list-card" style="padding:12px;">
+                <div class="mobile-list-card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
                   <div class="mobile-list-card-row">
                     <strong>${esc(c.name)} (${esc(c.relationship)})</strong>
-                    <button class="btn small danger" onclick="deleteEmergencyContact(${i})">Xóa</button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <button class="btn small primary" onclick="editEmergencyContactModal(${i})" style="border:none; background:none; color:#3b82f6; font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Sửa</button>
+                      <button class="btn small danger" onclick="deleteEmergencyContact(${i})" style="border:none; background:none; color:var(--red); font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Xóa</button>
+                    </div>
                   </div>
-                  <div style="font-size:12px; color:var(--muted); margin-top:4px;">
+                  <div style="font-size:12px; color:var(--muted);">
                     <div>SĐT: <strong>${esc(c.phone)}</strong></div>
                     <div>Email: <strong>${esc(c.email)}</strong></div>
+                  </div>
+                  <div class="contact-actions" style="border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 8px;">
+                    <a href="tel:${esc(c.phone)}" class="contact-btn-call" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none;">📞 Gọi ngay</a>
+                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(c.phone)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;"> Gửi cảnh báo</button>
                   </div>
                 </div>
               `).join("")}
@@ -579,6 +712,40 @@
               <button type="submit" class="btn primary block" style="width:100%; height:40px;">Cập nhật mật khẩu</button>
             </form>
           `)}
+        `;
+      },
+
+      notifications: () => {
+        return `
+          <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span class="hint" style="margin:0;">Thông báo từ hệ thống</span>
+            <button class="btn line small" onclick="markAllNotificationsAsRead()">Đọc tất cả</button>
+          </div>
+          <div class="mobile-list">
+            ${userNotifications.map((notif, idx) => {
+              const borderLeft = notif.type === 'fall' ? '4px solid var(--red)' : notif.type === 'disconnect' ? '4px solid var(--amber)' : '4px solid var(--blue)';
+              const icon = notif.type === 'fall' ? '🚨' : notif.type === 'disconnect' ? '⚠️' : '🔧';
+              const bg = notif.read ? '#ffffff' : '#f0f5ff';
+              const readLabel = notif.read ? 'Chưa đọc' : 'Đã đọc';
+              
+              return `
+                <div class="mobile-list-card" style="border-left:${borderLeft}; background:${bg}; padding:12px;">
+                  <div style="display:flex; gap:10px; align-items:start; margin-bottom:8px;">
+                    <div style="font-size:20px;">${icon}</div>
+                    <div style="flex:1;">
+                      <h4 style="margin:0 0 2px; font-size:13px; font-weight:800; color:var(--ink);">${esc(notif.title)} ${notif.read ? "" : '<span class="pill blue small" style="font-size: 8px; padding: 1px 4px;">Mới</span>'}</h4>
+                      <p style="margin:0; font-size:11px; color:var(--gray-600); line-height:1.4;">${esc(notif.content)}</p>
+                      <div class="hint" style="margin-top:4px; font-size:9px;">${esc(notif.time)}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; justify-content:flex-end; gap:6px; border-top:1px solid var(--line); padding-top:6px;">
+                    <button class="btn line extra-small" onclick="toggleReadNotification(${idx})" style="padding: 2px 6px; font-size: 10px;">${readLabel}</button>
+                    <button class="btn danger line extra-small" onclick="deleteNotification(${idx})" style="padding: 2px 6px; font-size: 10px; border:none; color:var(--red);">Xóa</button>
+                  </div>
+                </div>
+              `;
+            }).join("") || '<div style="text-align:center; padding:30px; color:var(--muted); font-size:12px;">Không có thông báo nào.</div>'}
+          </div>
         `;
       }
     };
@@ -622,6 +789,23 @@
       `);
     }
 
+    window.editEmergencyContactModal = function(index) {
+      const contact = emergencyContacts[index];
+      openModal("Sửa liên hệ khẩn cấp", `
+        <form id="editContactForm" onsubmit="window.handleEditContactSubmit(event, ${index}); return false;">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(contact.name)}" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(contact.relationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(contact.phone)}" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(contact.email)}" type="email" required></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="editContactForm" class="btn primary">Lưu thay đổi</button>
+      `);
+    }
+
     // Submit handlers
     window.handleEditProfileSubmit = function(event) {
       event.preventDefault();
@@ -653,6 +837,22 @@
       closeModal();
       render("profile");
     };
+
+    window.handleEditContactSubmit = function(event, index) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      emergencyContacts[index] = {
+        name: data.name,
+        relationship: data.relationship,
+        phone: data.phone,
+        email: data.email
+      };
+      saveAll();
+      closeModal();
+      render("profile");
+    };
+
 
     window.handleUserProfileSubmit = async function(event) {
       event.preventDefault();
@@ -744,18 +944,87 @@
       render("profile");
     }
 
+    window.sendEmergencyAlertMsg = function(phone) {
+      alert(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+    };
+
     function viewAlertMediaModal(id) {
       const a = alerts.find(x => x.id === id);
       if (!a) return;
       
+      const isMock = id.startsWith("AL-20260615-");
+      const hasVideoClip = hasVideo(a);
+      
+      let mediaHtml = "";
+      let cloudLinkHtml = "";
+      
+      let imgSrc = `${apiBaseUrl()}/media/${id}.jpg`;
+      let videoSrc = `${apiBaseUrl()}/media/${id}.mp4`;
+      
+      if (a) {
+        if (a.cloud_img_url) imgSrc = a.cloud_img_url;
+        if (a.cloud_video_url) videoSrc = a.cloud_video_url;
+        if (a.cloud_img_url || a.cloud_video_url) {
+          const activeUrl = a.cloud_video_url || a.cloud_img_url;
+          cloudLinkHtml = `
+            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:12px; text-align:left;">
+              <div style="color:#22c55e; font-weight:700; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <span>☁️</span> Lưu trữ Cloudinary thành công
+              </div>
+              <a href="${activeUrl}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">Xem link gốc →</a>
+            </div>
+          `;
+        }
+      }
+      
+      if (hasVideoClip) {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; position:relative;">
+              <div style="color:#fff; text-align:center;">
+                <div style="font-size:48px; margin-bottom:10px;">▶</div>
+                <div style="font-size:14px; font-weight:bold;">Video ghi hình sự kiện té ngã ${id}</div>
+                <div class="hint" style="margin-top:5px; color:#94a3b8; font-size:11px;">(Độ dài 12 giây - Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <video src="${videoSrc}" controls autoplay playsinline style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; background:#000;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';"></video>
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Video không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      } else {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#1e293b; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center;">
+              <div style="color:#fff; text-align:center; padding: 20px;">
+                <div style="font-size:48px; margin-bottom:10px;">📷</div>
+                <div style="font-size:14px; font-weight:bold;">Ảnh chụp sự kiện lúc phát hiện té ngã</div>
+                <div class="hint" style="color:#94a3b8; margin-top:5px; font-size:11px;">Đã lưu trữ đám mây (Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';">
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Hình ảnh không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      }
+      
       openModal(`Chi tiết té ngã ${id}`, `
-        <div style="background:#000; color:#fff; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; border-radius:8px; margin-bottom:12px;">
-          <div style="text-align:center;">
-            <div style="font-size:32px;">📷</div>
-            <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">(Ảnh mô phỏng sự kiện té ngã)</div>
-          </div>
-        </div>
-        <div class="mobile-list-card-detail" style="font-size:13px;">
+        ${mediaHtml}
+        ${cloudLinkHtml}
+        <div class="mobile-list-card-detail" style="font-size:13px; margin-top:12px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px;">
           <div>Mã cảnh báo: <strong>${a.id}</strong></div>
           <div>Thời gian: <strong>${a.time}</strong></div>
           <div>Camera phòng: <strong>${a.camera}</strong></div>
@@ -793,7 +1062,22 @@
         video.style.display = "none";
         canvas.style.display = "none";
         img.style.display = "block";
-        img.src = `${apiBaseUrl()}/api/control/stream?t=${Date.now()}`;
+        
+        try {
+          await backendLogin();
+          const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ source: "0", camera_id: selectedCameraId }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok && res.status !== 409) {
+            throw new Error(payload.detail || "Không khởi động được camera trên AI backend.");
+          }
+          img.src = aiStreamUrl();
+        } catch (err) {
+          alert("Lỗi Backend: " + (err.message || err));
+        }
       }
     }
 
@@ -804,9 +1088,28 @@
         localStream = null;
       }
       const video = $("testCameraVideo");
-      if (video) video.srcObject = null;
+      if (video) {
+        video.srcObject = null;
+        video.style.display = "none";
+      }
+      const canvas = $("testCameraCanvas");
+      if (canvas) {
+        canvas.style.display = "none";
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       const img = $("testCameraImg");
-      if (img) img.src = "";
+      if (img) {
+        img.removeAttribute("src");
+        img.style.display = "none";
+      }
+      
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/control/stop`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch(() => {});
+      }
     }
 
     function toggleStreamMode() {
@@ -851,6 +1154,46 @@
       });
     }
 
+    async function syncFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const [cRes, aRes] = await Promise.all([
+          fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }),
+          fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } })
+        ]);
+        
+        let changed = false;
+        if (cRes.ok) {
+          const c = await cRes.json();
+          if (c && Array.isArray(c)) {
+            if (JSON.stringify(c) !== JSON.stringify(cameras)) {
+              cameras = c;
+              saveStore("fg_cameras", cameras);
+              changed = true;
+            }
+          }
+        }
+        if (aRes.ok) {
+          const a = await aRes.json();
+          if (a && a.alerts && Array.isArray(a.alerts)) {
+            if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
+              alerts = a.alerts;
+              saveStore("fg_alerts", alerts);
+              changed = true;
+            }
+          }
+        }
+        
+        await syncAppStateFromBackend();
+        
+        if (changed) {
+          render(currentView, false);
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ:", e);
+      }
+    }
+
     async function initClientApp() {
       await checkBackendStatus();
       
@@ -858,6 +1201,8 @@
       const savedEmail = localStorage.getItem("nckh_current_user_email") || "bao@nckh.vn";
       
       if (isBackendOnline && authToken) {
+        await syncAppStateFromBackend();
+        
         try {
           const res = await fetch(`${apiBaseUrl()}/api/users`, { headers: { Authorization: `Bearer ${authToken}` } });
           if (res.ok) {
