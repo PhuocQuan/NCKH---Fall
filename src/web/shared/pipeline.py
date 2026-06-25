@@ -286,7 +286,7 @@ class FallDetectionPipeline:
         self._recent_alerts = self._recent_alerts[:50]
 
         try:
-            from src.web.backend.db import get_db_client
+            from src.web.shared.db import get_db_client
             with get_db_client() as client:
                 client.execute(
                     "INSERT INTO alerts (id, time, camera, person, confidence, status, level, media, state, cloud_img_url, cloud_video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -335,7 +335,7 @@ class FallDetectionPipeline:
                 
                 # 3. Upload to Cloudinary if configured in db.json
                 try:
-                    from src.web.backend.cloudinary_uploader import upload_to_cloudinary
+                    from src.web.shared.cloudinary_uploader import upload_to_cloudinary
                     cloud_img_url = upload_to_cloudinary(str(img_path))
                     if video_written:
                         cloud_video_url = upload_to_cloudinary(str(video_path))
@@ -351,7 +351,7 @@ class FallDetectionPipeline:
                             a["media"] = f"{alert_id}_video" if video_written else f"{alert_id}_image"
                             break
                 try:
-                    from src.web.backend.db import get_db_client
+                    from src.web.shared.db import get_db_client
                     with get_db_client() as client:
                         media_val = f"{alert_id}_video" if video_written else f"{alert_id}_image"
                         client.execute(
@@ -363,7 +363,7 @@ class FallDetectionPipeline:
                 
                 # 4. Trigger actual notifications
                 try:
-                    from src.web.backend.notifications import send_all_alerts
+                    from src.web.shared.notifications import send_all_alerts
                     send_all_alerts(
                         alert_id=alert_id,
                         image_path=str(img_path),
@@ -421,3 +421,7 @@ def _draw_status(frame, result, ai_prediction, state_colors, cv2) -> None:
 def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int, int], cv2) -> None:
     cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
     cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2, cv2.LINE_AA)
+
+
+pipeline = FallDetectionPipeline()
+

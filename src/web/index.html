@@ -13,7 +13,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FallGuard AI - Dashboard NCKH</title>
-  <link rel="stylesheet" href="dashboard.css" />
+  <link rel="stylesheet" href="shared/dashboard.css" />
   <style>
     /* Keyframes and Animations */
     @keyframes pulse {
@@ -626,9 +626,9 @@
       localStorage.setItem("nckh_current_user_email", foundUser.email);
       
       if (foundUser.role === "Admin") {
-        window.location.replace("/admin.html");
+        window.location.replace("/admin/index.html");
       } else {
-        window.location.replace("/user.html");
+        window.location.replace("/user/index.html");
       }
     });
 
@@ -638,9 +638,9 @@
         const found = users.find(u => u.email.toLowerCase() === savedEmail.toLowerCase());
         if (found && found.status !== "Bị khóa") {
           if (found.role === "Admin") {
-            window.location.replace("/admin.html");
+            window.location.replace("/admin/index.html");
           } else {
-            window.location.replace("/user.html");
+            window.location.replace("/user/index.html");
           }
           return;
         }

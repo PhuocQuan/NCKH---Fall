@@ -33,7 +33,7 @@ def login(username: str, password: str) -> str:
         email = f"{email}@nckh.vn"
         
     try:
-        from src.web.backend.db import get_db_client
+        from src.web.shared.db import get_db_client
         with get_db_client() as client:
             result = client.execute("SELECT password FROM users WHERE email = ? AND status = 'Đang hoạt động'", [email])
         

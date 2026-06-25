@@ -4,7 +4,7 @@
   <script>
     function checkRedirectBack() {
       if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && window.innerWidth >= 768) {
-        window.location.replace("../user.html" + window.location.search);
+        window.location.replace("../user/index.html" + window.location.search);
       }
     }
     checkRedirectBack();
@@ -625,11 +625,24 @@
         const clientAlerts = alerts.filter(a => visCamIds.includes(a.camera));
 
         return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); background: white; margin-bottom: 10px; border-radius: 8px;">
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="checkbox" id="selectAllUserAlerts" onclick="toggleSelectAllUserAlerts(this)" style="cursor: pointer; width: 18px; height: 18px;">
+              <label for="selectAllUserAlerts" style="font-size: 13px; font-weight: bold; cursor: pointer; user-select: none;">Chọn tất cả</label>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn danger small" onclick="deleteSelectedUserAlerts()" style="font-size:11px; padding: 6px 12px; background: var(--red); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Xóa đã chọn</button>
+              <button class="btn danger small" onclick="deleteAllUserAlerts()" style="font-size:11px; padding: 6px 12px; background: var(--red); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Xóa tất cả</button>
+            </div>
+          </div>
           <div class="mobile-list">
             ${clientAlerts.map(a => `
               <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
                 <div class="mobile-list-card-row">
-                  <span class="mobile-list-card-title" style="color:var(--red);">⚠️ Cảnh báo ngã</span>
+                  <div style="display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="user-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 18px; height: 18px;">
+                    <span class="mobile-list-card-title" style="color:var(--red); font-size:14px; font-weight:700; margin:0;">⚠️ Cảnh báo ngã</span>
+                  </div>
                   <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
                 </div>
                 <div class="mobile-list-card-detail">
@@ -942,6 +955,79 @@
       emergencyContacts.splice(index, 1);
       saveAll();
       render("profile");
+    }
+
+    window.toggleSelectAllUserAlerts = function(master) {
+      const checkboxes = document.querySelectorAll(".user-alert-checkbox");
+      checkboxes.forEach(cb => cb.checked = master.checked);
+    }
+
+    window.deleteSelectedUserAlerts = async function() {
+      const checkboxes = document.querySelectorAll(".user-alert-checkbox:checked");
+      if (checkboxes.length === 0) {
+        alert("Vui lòng chọn ít nhất một cảnh báo để xóa.");
+        return;
+      }
+      if (!confirm(`Bạn có chắc chắn muốn xóa ${checkboxes.length} cảnh báo đã chọn?`)) {
+        return;
+      }
+      
+      const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ ids: ids, delete_all: false })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Lỗi khi xóa cảnh báo.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi xóa cảnh báo.");
+          return;
+        }
+      }
+      
+      alerts = alerts.filter(a => !ids.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+    }
+
+    window.deleteAllUserAlerts = async function() {
+      if (!confirm("Bạn có chắc chắn muốn xóa tất cả cảnh báo của bạn?")) {
+        return;
+      }
+      
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ delete_all: true })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Lỗi khi xóa tất cả cảnh báo.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi xóa tất cả cảnh báo.");
+          return;
+        }
+      }
+      
+      alerts = [];
+      saveStore("fg_alerts", alerts);
+      render(currentView);
     }
 
     window.sendEmergencyAlertMsg = function(phone) {
