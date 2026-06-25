@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from libsql_client.client import LibsqlError
 
 from src.web.backend.auth import login as auth_login
 from src.web.backend.auth import logout as auth_logout
@@ -60,6 +61,24 @@ def require_user(request: Request) -> str:
 
 
 app = FastAPI(title="FallGuard AI API", version="1.0.0")
+
+
+@app.exception_handler(LibsqlError)
+def libsql_exception_handler(request: Request, exc: LibsqlError):
+    from fastapi.responses import JSONResponse
+    msg = exc.explanation
+    if "UNIQUE constraint failed: users.email" in msg:
+        detail = "Địa chỉ email này đã tồn tại trên hệ thống."
+    elif "UNIQUE constraint failed: cameras.id" in msg:
+        detail = "Mã camera này đã tồn tại trên hệ thống."
+    else:
+        detail = f"Lỗi cơ sở dữ liệu online: {msg}"
+    return JSONResponse(
+        status_code=400,
+        content={"detail": detail},
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -537,16 +556,23 @@ def update_user(email: str, body: UserDB, user: str = Depends(require_user)) -> 
     import json
     assigned_json = json.dumps(body.assignedCameras)
     with get_db_client() as client:
-        if body.password:
+        res = client.execute("SELECT 1 FROM users WHERE email = ?", [email])
+        if not res.rows:
             client.execute(
-                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ? WHERE email = ?",
-                [body.email, body.name, body.role, body.status, assigned_json, body.password, body.phone, email]
+                "INSERT INTO users (email, password, name, role, status, assigned_cameras, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [body.email, body.password or "nckh2025", body.name, body.role, body.status, assigned_json, body.phone]
             )
         else:
-            client.execute(
-                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ? WHERE email = ?",
-                [body.email, body.name, body.role, body.status, assigned_json, body.phone, email]
-            )
+            if body.password:
+                client.execute(
+                    "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ? WHERE email = ?",
+                    [body.email, body.name, body.role, body.status, assigned_json, body.password, body.phone, email]
+                )
+            else:
+                client.execute(
+                    "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ? WHERE email = ?",
+                    [body.email, body.name, body.role, body.status, assigned_json, body.phone, email]
+                )
     return {"ok": True}
 
 
@@ -597,10 +623,17 @@ def create_camera(body: CameraDB, user: str = Depends(require_user)) -> dict[str
 def update_camera(id: str, body: CameraDB, user: str = Depends(require_user)) -> dict[str, Any]:
     from src.web.backend.db import get_db_client
     with get_db_client() as client:
-        client.execute(
-            "UPDATE cameras SET name = ?, ip = ?, rtsp = ?, area = ?, target = ?, state = ?, status = ?, fps = ?, resolution = ?, threshold = ? WHERE id = ?",
-            [body.name, body.ip, body.rtsp, body.area, body.target, body.state, body.status, body.fps, body.resolution, body.threshold, id]
-        )
+        res = client.execute("SELECT 1 FROM cameras WHERE id = ?", [id])
+        if not res.rows:
+            client.execute(
+                "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [body.id, body.name, body.ip, body.rtsp, body.area, body.target, body.state, body.status, body.fps, body.resolution, body.threshold]
+            )
+        else:
+            client.execute(
+                "UPDATE cameras SET id = ?, name = ?, ip = ?, rtsp = ?, area = ?, target = ?, state = ?, status = ?, fps = ?, resolution = ?, threshold = ? WHERE id = ?",
+                [body.id, body.name, body.ip, body.rtsp, body.area, body.target, body.state, body.status, body.fps, body.resolution, body.threshold, id]
+            )
     log_action("Quản lý camera", user, f"Cập nhật camera: {id} ({body.name})")
     return {"ok": True}
 
@@ -690,7 +723,7 @@ app.mount("/", StaticFiles(directory=str(WEB_ROOT), html=True), name="static")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="FallGuard dashboard + AI API server.")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--config", default="configs/default.yaml")
     return parser.parse_args()

@@ -1,6 +1,28 @@
 import json
 from pathlib import Path
 import libsql_client
+from libsql_client.client import LibsqlError
+
+# Monkey patch libsql_client to prevent KeyError: 'result' when queries fail on Turso HTTP API
+try:
+    import libsql_client.http
+    original_execute = libsql_client.http.HttpClient.execute
+
+    async def patched_execute(self, stmt, args=None):
+        request = {
+            "stmt": libsql_client.http._stmt_to_proto(stmt, args),
+        }
+        response = await self._send("POST", "v1/execute", request)
+        if "result" not in response:
+            if "message" in response:
+                raise LibsqlError(response["message"], response.get("code") or "UNKNOWN")
+            raise LibsqlError(f"Unexpected response format: {response}", "UNKNOWN")
+        proto_res = response["result"]
+        return libsql_client.http._result_set_from_proto(proto_res)
+
+    libsql_client.http.HttpClient.execute = patched_execute
+except Exception as patch_err:
+    print(f"[Monkey Patch Warning] Failed to patch libsql_client: {patch_err}")
 
 DB_CONFIG_PATH = Path("configs/db.json")
 

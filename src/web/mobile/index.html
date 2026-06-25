@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <script>
+    function checkRedirectBack() {
+      if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && window.innerWidth >= 768) {
+        window.location.replace("../index.html" + window.location.search);
+      }
+    }
+    checkRedirectBack();
+    window.addEventListener('resize', checkRedirectBack);
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FallGuard AI - Mobile Login</title>
+  <link rel="stylesheet" href="mobile.css" />
+  <style>
+    body {
+      padding-bottom: 0; /* Remove bottom nav space for login page */
+    }
+  </style>
+</head>
+<body>
+  <section class="login">
+    <form class="login-card" id="loginForm">
+      <div class="brand">
+        <div class="brand-mark flex center val-center">FG</div>
+        <div>
+          <h1 class="brand-title">FallGuard AI</h1>
+          <div class="brand-sub">Hệ thống phát hiện té ngã</div>
+        </div>
+      </div>
+      
+      <label class="field">
+        <span>Email đăng nhập</span>
+        <input class="control" id="loginUsername" type="text" placeholder="Ví dụ: admin@nckh.vn" required />
+      </label>
+      
+      <label class="field">
+        <span>Mật khẩu</span>
+        <div style="position: relative; display: flex; align-items: center; width: 100%;">
+          <input class="control" id="loginPassword" type="password" value="nckh2025" style="padding-right: 36px; width: 100%;" required />
+          <button type="button" class="password-toggle" onclick="const input = document.getElementById('loginPassword'); if(input.type === 'password') { input.type = 'text'; this.textContent = '👁️'; } else { input.type = 'password'; this.textContent = '🙈'; }">🙈</button>
+        </div>
+      </label>
+      
+      <div class="row" style="margin-bottom:14px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+        <label class="hint" style="color: #94a3b8; display: inline-flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" checked style="accent-color: var(--blue); width: 16px; height: 16px; margin-right: 6px;" /> Ghi nhớ
+        </label>
+        <button type="button" class="btn small line" id="forgotBtn" onclick="alert('Vui lòng liên hệ quản trị viên qua email admin@nckh.vn để được hỗ trợ cấp lại mật khẩu.')" style="color:#cbd5e1; background:none; border:none; padding:0; text-decoration:underline;">Quên mật khẩu</button>
+      </div>
+      
+      <button class="btn primary block" type="submit" style="width: 100%; height: 46px; font-weight: 700;">Đăng nhập</button>
+      <p class="hint" style="margin-top: 15px; text-align: center; color: #64748b; font-size: 11px;">Giao diện Web tối ưu riêng cho thiết bị di động.</p>
+    </form>
+  </section>
+
+  <script>
+    function loadStore(key, fallback) {
+      try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+    }
+    function saveStore(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    let users = loadStore("fg_users", [
+      { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "bao@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "nurse@nckh.vn", name: "Nhân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "family@nckh.vn", name: "Ân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "guest@nckh.vn", name: "Quân", role: "Khachhang", status: "Bị khóa", assignedCameras: [] }
+    ]);
+
+    const TOKEN_STORAGE_KEY = "nckh_auth_token";
+    let authToken = localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+    let isBackendOnline = false;
+
+    function apiBaseUrl() {
+      // Points to same server origin
+      return window.location.port === "5500" ? "http://127.0.0.1:8000" : window.location.origin;
+    }
+
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/health`);
+        const data = await res.json();
+        isBackendOnline = data.ok && data.db_connected;
+        return isBackendOnline;
+      } catch {
+        isBackendOnline = false;
+        return false;
+      }
+    }
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      let usernameInput = $("loginUsername")?.value?.trim() || "";
+      let passwordInput = $("loginPassword")?.value || "";
+      
+      const lowerUser = usernameInput.toLowerCase();
+      if (!lowerUser.includes("@")) {
+        if (lowerUser === "admin") usernameInput = "admin@nckh.vn";
+        else if (lowerUser === "manager" || lowerUser === "bao") usernameInput = "bao@nckh.vn";
+        else if (lowerUser === "nurse") usernameInput = "nurse@nckh.vn";
+        else if (lowerUser === "family") usernameInput = "family@nckh.vn";
+        else if (lowerUser === "guest") usernameInput = "guest@nckh.vn";
+        else usernameInput = usernameInput + "@nckh.vn";
+      }
+      
+      await checkBackendStatus();
+      
+      let authenticated = false;
+      if (isBackendOnline) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: usernameInput, password: passwordInput }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(payload.detail || "Sai tài khoản hoặc mật khẩu.");
+            return;
+          }
+          authToken = payload.token;
+          localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
+          localStorage.setItem("nckh_server_url", apiBaseUrl());
+          
+          // Fetch remote users
+          const usersRes = await fetch(`${apiBaseUrl()}/api/users`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (usersRes.ok) {
+            const remoteUsers = await usersRes.json();
+            if (Array.isArray(remoteUsers)) {
+              users = remoteUsers;
+              saveStore("fg_users", users);
+            }
+          }
+          authenticated = true;
+        } catch (err) {
+          console.error("Backend auth failed, trying local fallback:", err);
+        }
+      }
+      
+      const foundUser = users.find(u => u.email.toLowerCase() === usernameInput.toLowerCase());
+      if (!foundUser) {
+        alert("Tài khoản không tồn tại trên hệ thống.");
+        return;
+      }
+      if (foundUser.status === "Bị khóa" || foundUser.status === "Bị khóa") {
+        alert("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.");
+        return;
+      }
+      
+      if (!authenticated) {
+        if (passwordInput !== "nckh2025") {
+          alert("Sai mật khẩu. Vui lòng thử lại.");
+          return;
+        }
+      }
+      
+      localStorage.setItem("nckh_current_user_email", foundUser.email);
+      
+      if (foundUser.role === "Admin") {
+        window.location.replace("admin.html");
+      } else {
+        window.location.replace("user.html");
+      }
+    });
+
+    async function initSession() {
+      const savedEmail = localStorage.getItem("nckh_current_user_email");
+      if (authToken && savedEmail) {
+        const found = users.find(u => u.email.toLowerCase() === savedEmail.toLowerCase());
+        if (found && found.status !== "Bị khóa" && found.status !== "Bị khóa") {
+          if (found.role === "Admin") {
+            window.location.replace("admin.html");
+          } else {
+            window.location.replace("user.html");
+          }
+          return;
+        }
+      }
+    }
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    initSession();
+  </script>
+</body>
+</html>
