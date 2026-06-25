@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <script>
+    function checkRedirectBack() {
+      if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && window.innerWidth >= 768) {
+        window.location.replace("../admin.html" + window.location.search);
+      }
+    }
+    checkRedirectBack();
+    window.addEventListener('resize', checkRedirectBack);
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FallGuard AI - Mobile Admin</title>
+  <link rel="stylesheet" href="mobile.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <section class="app" id="app">
+    <header class="header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="hamburger-btn" onclick="openMenuDrawer()">☰</button>
+        <span style="font-weight: 850; font-size: 18px; color: var(--blue);">FG Admin</span>
+        <span class="pill blue small" id="backendStatusPill" style="font-size: 10px; padding: 2px 6px;">AI Backend</span>
+      </div>
+      <div class="user">
+        <span id="headerUserName" style="font-size: 12px; font-weight: 600;">Admin</span>
+        <button onclick="performLogout()" style="background: none; border: none; font-size: 16px; padding: 4px; cursor: pointer;" title="Đăng xuất">🚪</button>
+      </div>
+    </header>
+
+    <main class="main" style="flex: 1; overflow-y: auto;">
+      <div style="margin-bottom: 12px;">
+        <h2 id="pageTitle" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--ink);">Dashboard</h2>
+        <p id="pageSub" class="hint" style="margin: 4px 0 0 0; font-size: 12px; color: var(--muted);">Thống kê tổng quan camera và khách hàng</p>
+      </div>
+      
+      <div id="content">
+        <!-- View Content Injected Here -->
+      </div>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="mobile-nav">
+      <button class="mobile-nav-item active" data-view="dashboard" onclick="switchTab('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Trang chủ</span>
+      </button>
+      <button class="mobile-nav-item" data-view="live" onclick="switchTab('live')">
+        <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <span>Giám sát</span>
+      </button>
+      <button class="mobile-nav-item" data-view="alerts" onclick="switchTab('alerts')">
+        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>Cảnh báo</span>
+      </button>
+      <button class="mobile-nav-item" data-view="settings" onclick="switchTab('settings')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Cấu hình</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- Sidebar Menu Drawer (for mobile screen) -->
+  <div class="menu-drawer-backdrop" id="menuDrawerBackdrop" onclick="closeMenuDrawer()"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <div class="menu-drawer-header">
+      <div class="menu-drawer-title">FallGuard AI</div>
+      <button class="menu-drawer-close" onclick="closeMenuDrawer()">✕</button>
+    </div>
+    <div class="menu-drawer-content">
+      
+      <div>
+        <div class="menu-drawer-group-title">TỔNG QUAN</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item active" id="drawer-dashboard" onclick="selectMenuView('dashboard')">
+            <span class="num">01</span> Dashboard
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <div class="menu-drawer-group-title">VẬN HÀNH</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item" id="drawer-live" onclick="selectMenuView('live')">
+            <span class="num">02</span> Nơi lắp đặt
+          </button>
+          <button class="menu-drawer-item" id="drawer-alerts" onclick="selectMenuView('alerts')">
+            <span class="num">03</span> Hệ thống cảnh báo
+          </button>
+          <button class="menu-drawer-item" id="drawer-notifications" onclick="selectMenuView('notifications')">
+            <span class="num">04</span> Thông báo
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <div class="menu-drawer-group-title">QUẢN LÝ</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item" id="drawer-users" onclick="selectMenuView('users')">
+            <span class="num">05</span> Danh sách khách hàng
+          </button>
+          <button class="menu-drawer-item" id="drawer-media" onclick="selectMenuView('media')">
+            <span class="num">06</span> Hình ảnh & video
+          </button>
+          <button class="menu-drawer-item" id="drawer-cameras" onclick="selectMenuView('cameras')">
+            <span class="num">07</span> Quản lý camera
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <div class="menu-drawer-group-title">HỆ THỐNG</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item" id="drawer-settings" onclick="selectMenuView('settings')">
+            <span class="num">08</span> Cài đặt hệ thống
+          </button>
+          <button class="menu-drawer-item" id="drawer-api" onclick="selectMenuView('api')">
+            <span class="num">09</span> API Management
+          </button>
+          <button class="menu-drawer-item" id="drawer-logs" onclick="selectMenuView('logs')">
+            <span class="num">10</span> Lịch sử đăng nhập
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom Sheet / Modal Backdrop -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()"></div>
+
+  <script>
+    function loadStore(key, fallback) {
+      try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+    }
+    function saveStore(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    // Default mock data matching desktop version
+    let cameras = loadStore("fg_cameras", [
+      { id: "CAM-001", name: "Camera phòng 101", ip: "192.168.1.101", rtsp: "rtsp://192.168.1.101/live", area: "Khu A", target: "BN-001", state: "normal", status: "online", fps: 30, resolution: "1920x1080", threshold: 78 },
+      { id: "CAM-002", name: "Camera hành lang A", ip: "192.168.1.102", rtsp: "rtsp://192.168.1.102/live", area: "Khu A", target: "BN-002", state: "walking", status: "online", fps: 25, resolution: "1280x720", threshold: 76 },
+      { id: "CAM-003", name: "Camera phòng 203", ip: "192.168.1.103", rtsp: "rtsp://192.168.1.103/live", area: "Khu B", target: "BN-003", state: "fallen", status: "online", fps: 30, resolution: "1920x1080", threshold: 82 },
+      { id: "CAM-004", name: "Camera phòng phục hồi", ip: "192.168.1.104", rtsp: "rtsp://192.168.1.104/live", area: "Khu C", target: "BN-004", state: "sitting", status: "maintenance", fps: 20, resolution: "1280x720", threshold: 74 },
+      { id: "CAM-005", name: "Camera phòng 305", ip: "192.168.1.105", rtsp: "rtsp://192.168.1.105/live", area: "Khu C", target: "BN-005", state: "normal", status: "offline", fps: 0, resolution: "1920x1080", threshold: 80 },
+      { id: "CAM-006", name: "Camera phòng khách", ip: "192.168.1.106", rtsp: "rtsp://192.168.1.106/live", area: "Nhà riêng", target: "BN-006", state: "lying", status: "online", fps: 30, resolution: "1920x1080", threshold: 75 }
+    ]);
+
+    let alerts = loadStore("fg_alerts", [
+      { id: "AL-20260615-001", time: "15/06/2026 16:22", camera: "CAM-003", person: "Nguyễn Văn Minh", confidence: 94, status: "Chưa xử lý", level: "Khẩn cấp", media: "Ảnh + video 12s" },
+      { id: "AL-20260615-002", time: "15/06/2026 14:10", camera: "CAM-006", person: "Lê Thị Hoa", confidence: 81, status: "Đang xử lý", level: "Cao", media: "Ảnh" },
+      { id: "AL-20260615-003", time: "15/06/2026 09:40", camera: "CAM-002", person: "Trần Văn An", confidence: 68, status: "Báo động giả", level: "Trung bình", media: "Video 8s" }
+    ]);
+
+    let users = loadStore("fg_users", [
+      { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "bao@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "nurse@nckh.vn", name: "Nhân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "family@nckh.vn", name: "Ân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
+      { email: "guest@nckh.vn", name: "Quân", role: "Khachhang", status: "Bị khóa", assignedCameras: [] }
+    ]);
+
+    let settings = loadStore("fg_settings", { confidence: 75, fall: 60, confirmSeconds: 3, storageGb: 50, retentionDays: 30, email: true, telegram: true, sms: false, zalo: false, cloud: true });
+    let apiKeys = loadStore("fg_api_keys", [{ name: "Khu A IoT Gateway", desc: "Kết nối thiết bị báo động đầu giường", status: "Hoạt động", key: "fg_live_kpa_89237482" }]);
+    let auditLogs = loadStore("fg_audit_logs", [{ time: "25/06/2026 09:12", user: "admin@nckh.vn", action: "Đăng nhập hệ thống", ip: "127.0.0.1" }]);
+
+    let currentUser = { email: "admin@nckh.vn", name: "Admin", role: "Admin" };
+    let authToken = localStorage.getItem("nckh_auth_token") || "";
+    let isBackendOnline = false;
+    let currentView = "dashboard";
+    let selectedCameraId = cameras[0]?.id || "";
+    let settingsSubView = ""; // Submenu selection in Settings tab ("" means menu list)
+    
+    // Live Streaming parameters
+    let liveViewLevel = "locations"; // "locations", "cameras", "stream"
+    let selectedLocation = "";
+    let testCameraStream = null;
+    let isPoseEstimating = false;
+    let aiFallTestOn = false;
+
+    // Media parameters
+    let mediaViewLevel = "locations";
+    let selectedMediaLocation = "";
+
+    // Helper functions
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    function card(title, body) { return `<div class="card" style="padding:16px; margin-bottom:14px;"><h3 style="margin:0 0 12px; font-size:14px; font-weight:700; color:var(--muted);">${title}</h3>${body}</div>`; }
+    function statusPill(status) {
+      const cls = status === "online" || status === "Đang hoạt động" || status === "Hoạt động" || status === "ĐANG CHẠY" || status === "NORMAL" || status === "WALKING" || status === "SITTING" || status === "LYING" ? "green" : status === "Bảo trì" || status === "maintenance" || status === "Đang xử lý" || status === "Warning" ? "amber" : "red";
+      return `<span class="pill ${cls}">${esc(status)}</span>`;
+    }
+    function apiBaseUrl() { return window.location.port === "5500" ? "http://127.0.0.1:8000" : window.location.origin; }
+
+    function performLogout() {
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
+      }
+      localStorage.removeItem("nckh_auth_token");
+      localStorage.removeItem("nckh_current_user_email");
+      window.location.replace("index.html");
+    }
+
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/health`);
+        if (res.ok) {
+          isBackendOnline = true;
+          const p = $("backendStatusPill");
+          if (p) { p.textContent = "AI Online"; p.className = "pill green small"; }
+          return true;
+        }
+      } catch (e) {}
+      isBackendOnline = false;
+      const p = $("backendStatusPill");
+      if (p) { p.textContent = "Simulator"; p.className = "pill grey small"; }
+      return false;
+    }
+
+    function saveAll() {
+      saveStore("fg_cameras", cameras);
+      saveStore("fg_alerts", alerts);
+      saveStore("fg_users", users);
+      saveStore("fg_settings", settings);
+      saveStore("fg_api_keys", apiKeys);
+      saveStore("fg_audit_logs", auditLogs);
+    }
+
+    // Modal Control (Bottom Sheet)
+    function openModal(title, body, footer = "") {
+      const b = $("modalBackdrop");
+      b.innerHTML = `
+        <div class="modal animate-slide-up">
+          <div class="modal-head">
+            <h3>${title}</h3>
+            <button onclick="closeModal()" style="background:none; border:none; font-size:16px; font-weight:bold; color:var(--muted);">✕</button>
+          </div>
+          <div class="modal-body">${body}</div>
+          ${footer ? `<div class="modal-foot">${footer}</div>` : ""}
+        </div>
+      `;
+      b.classList.add("open");
+    }
+
+    function closeModal() {
+      $("modalBackdrop").classList.remove("open");
+      stopTestCamera();
+    }
+
+    // Tab Switching
+    function switchTab(viewName) {
+      currentView = viewName;
+      if (viewName !== "settings") {
+        settingsSubView = "";
+      }
+      document.querySelectorAll(".mobile-nav-item").forEach(item => {
+        item.classList.toggle("active", item.dataset.view === viewName);
+      });
+
+      // Update drawer active state
+      let activeDrawerId = `drawer-${viewName}`;
+      if (viewName === "settings" && settingsSubView) {
+        activeDrawerId = `drawer-${settingsSubView}`;
+      }
+      document.querySelectorAll(".menu-drawer-item").forEach(item => {
+        item.classList.toggle("active", item.id === activeDrawerId);
+      });
+
+      render(viewName);
+    }
+
+    function openMenuDrawer() {
+      $("menuDrawer").classList.add("open");
+      $("menuDrawerBackdrop").classList.add("open");
+    }
+
+    function closeMenuDrawer() {
+      $("menuDrawer").classList.remove("open");
+      $("menuDrawerBackdrop").classList.remove("open");
+    }
+
+    function selectMenuView(viewName) {
+      closeMenuDrawer();
+      if (viewName === "dashboard") {
+        switchTab("dashboard");
+      } else if (viewName === "live") {
+        liveViewLevel = "locations";
+        switchTab("live");
+      } else if (viewName === "alerts") {
+        switchTab("alerts");
+      } else if (viewName === "notifications") {
+        currentView = "settings";
+        settingsSubView = "system";
+        switchTab("settings");
+      } else if (viewName === "users" || viewName === "cameras" || viewName === "api" || viewName === "logs") {
+        currentView = "settings";
+        settingsSubView = viewName;
+        switchTab("settings");
+      } else if (viewName === "media") {
+        currentView = "settings";
+        settingsSubView = "media";
+        mediaViewLevel = "locations";
+        switchTab("settings");
+      } else if (viewName === "settings") {
+        currentView = "settings";
+        settingsSubView = "system";
+        switchTab("settings");
+      }
+    }
+
+    function hasVideo(a) {
+      if (!a) return false;
+      const isMock = a.id === "AL-20260615-001" || a.id === "AL-20260615-002" || a.id === "AL-20260615-003";
+      if (isMock) {
+        return a.media && a.media.toLowerCase().includes("video");
+      }
+      if (a.cloud_video_url) return true;
+      if (a.media && a.media.toLowerCase().includes("video")) return true;
+      return false;
+    }
+
+    function getVisibleHouses() {
+      const isPrivileged = currentUser.role === "Admin";
+      if (isPrivileged) {
+        const customerHouses = users
+          .filter(u => u.role !== "Admin")
+          .map(u => ({
+            name: `Nhà ${u.name}`,
+            ownerEmail: u.email,
+            cameras: u.assignedCameras || []
+          }));
+          
+        const assignedCamIds = new Set(users.filter(u => u.role !== "Admin").flatMap(u => u.assignedCameras || []));
+        const unassignedCams = cameras.filter(c => !assignedCamIds.has(c.id));
+        if (unassignedCams.length > 0) {
+          customerHouses.push({
+            name: "Thiết bị chưa gán",
+            ownerEmail: "",
+            cameras: unassignedCams.map(c => c.id)
+          });
+        }
+        return customerHouses;
+      } else {
+        return [
+          {
+            name: `Nhà ${currentUser.name}`,
+            ownerEmail: currentUser.email,
+            cameras: currentUser.assignedCameras || []
+          }
+        ];
+      }
+    }
+
+    function render(view, sync = true) {
+      if (sync) checkBackendStatus();
+      
+      const titleEl = $("pageTitle");
+      const subEl = $("pageSub");
+      const contentEl = $("content");
+
+      // Update page header info
+      if (view === "dashboard") {
+        titleEl.textContent = "Trang chủ";
+        subEl.textContent = "Thống kê tổng quan hệ thống";
+        contentEl.innerHTML = views.dashboard();
+      } else if (view === "live") {
+        titleEl.textContent = "Giám sát camera";
+        subEl.textContent = "Xem trực tiếp camera AI theo khu vực";
+        contentEl.innerHTML = views.live();
+        attachTestCameraStream();
+      } else if (view === "alerts") {
+        titleEl.textContent = "Cảnh báo ngã";
+        subEl.textContent = "Danh sách cảnh báo té ngã";
+        contentEl.innerHTML = views.alerts();
+      } else if (view === "settings") {
+        titleEl.textContent = settingsSubView === "" ? "Cấu hình" : getSubViewTitle(settingsSubView);
+        subEl.textContent = settingsSubView === "" ? "Cấu hình tham số và quản lý danh sách" : "Chi tiết cấu hình hệ thống";
+        contentEl.innerHTML = views.settings();
+      }
+    }
+
+    function getSubViewTitle(sv) {
+      const m = { "system": "Cài đặt hệ thống", "users": "Quản lý tài khoản", "cameras": "Quản lý Camera", "api": "Quản lý API Key", "logs": "Lịch sử hệ thống", "media": "Hình ảnh & video" };
+      return m[sv] || "Cấu hình";
+    }
+
+    const views = {
+      dashboard: () => {
+        const total = cameras.length;
+        const active = cameras.filter(c => c.status === "online").length;
+        const inactive = cameras.filter(c => c.status === "offline").length;
+        const pend = alerts.filter(a => a.status === "Chưa xử lý").length;
+
+        return `
+          <div class="grid kpis" style="margin-bottom:14px;">
+            <div class="kpi card">
+              <span class="ico blue flex center val-center" style="background:rgba(79, 70, 229, 0.1); color:var(--blue); font-weight:bold;">CAM</span>
+              <div class="kpi-value">${total}</div>
+              <div class="hint" style="font-size:10px;">Camera kết nối</div>
+            </div>
+            <div class="kpi card">
+              <span class="ico green flex center val-center" style="background:rgba(16, 185, 129, 0.1); color:var(--green); font-weight:bold;">ON</span>
+              <div class="kpi-value">${active}</div>
+              <div class="hint" style="font-size:10px;">Hoạt động</div>
+            </div>
+            <div class="kpi card">
+              <span class="ico red flex center val-center" style="background:rgba(244, 63, 94, 0.1); color:var(--red); font-weight:bold;">OFF</span>
+              <div class="kpi-value">${inactive}</div>
+              <div class="hint" style="font-size:10px;">Lỗi mạng</div>
+            </div>
+            <div class="kpi card">
+              <span class="ico amber flex center val-center" style="background:rgba(245, 158, 11, 0.1); color:var(--amber); font-weight:bold;">AL</span>
+              <div class="kpi-value">${pend}</div>
+              <div class="hint" style="font-size:10px;">Chờ xử lý</div>
+            </div>
+          </div>
+
+          ${card("Trạng thái AI Realtime", `
+            <div class="mobile-list-card-row">
+              <span>Hệ thống AI:</span>
+              <strong>${isBackendOnline ? statusPill("Hoạt động") : statusPill("Simulator")}</strong>
+            </div>
+            <div class="mobile-list-card-row" style="margin-top:10px;">
+              <span>Máy chủ phát hiện:</span>
+              <strong style="color:var(--blue); font-family:monospace;">${esc(apiBaseUrl())}</strong>
+            </div>
+          `)}
+
+          ${card("Cảnh báo khẩn cấp gần đây", `
+            <div class="mobile-list">
+              ${alerts.slice(0, 3).map(a => `
+                <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
+                  <div class="mobile-list-card-row">
+                    <span class="mobile-list-card-title" style="color:var(--red);">⚠️ Té ngã!</span>
+                    <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
+                  </div>
+                  <div class="mobile-list-card-row">
+                    <span style="font-size:13px;">Thiết bị: <strong>${esc(a.camera)}</strong></span>
+                    <span>${statusPill(a.status)}</span>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+            <button class="btn line block" onclick="switchTab('alerts')" style="width:100%; margin-top:12px; height:38px;">Xem tất cả cảnh báo</button>
+          `)}
+        `;
+      },
+
+      live: () => {
+        // Location-based folders -> Cameras list -> Streaming View
+        const houses = Array.from(new Set(cameras.map(c => c.area || "Khác")));
+        
+        if (liveViewLevel === "locations") {
+          return `
+            <div style="margin-bottom:12px;"><h4 style="margin:0;">Nơi lắp đặt camera</h4></div>
+            <div class="mobile-list">
+              ${houses.map(h => {
+                const cams = cameras.filter(c => (c.area || "Khác") === h);
+                const onlineCount = cams.filter(c => c.status === "online").length;
+                return `
+                  <div class="mobile-list-card animate-hover" onclick="selectedLocation='${esc(h)}'; liveViewLevel='cameras'; render('live', false);">
+                    <div class="mobile-list-card-row">
+                      <strong style="font-size:15px; color:var(--ink);">🏠 ${esc(h)}</strong>
+                      <span class="pill green small">${onlineCount} / ${cams.length} Online</span>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `;
+        }
+
+        if (liveViewLevel === "cameras") {
+          const camsInHouse = cameras.filter(c => (c.area || "Khác") === selectedLocation);
+          return `
+            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <button class="btn line small" onclick="liveViewLevel='locations'; render('live', false);">← Quay lại</button>
+              <span style="font-weight:700; color:var(--muted);">${esc(selectedLocation)}</span>
+            </div>
+            <div class="mobile-list">
+              ${camsInHouse.map(c => `
+                <div class="mobile-list-card" onclick="selectedCameraId='${c.id}'; liveViewLevel='stream'; render('live', false);">
+                  <div class="mobile-list-card-row">
+                    <span class="mobile-list-card-title">${esc(c.name)} (${c.id})</span>
+                    <span>${statusPill(c.status)}</span>
+                  </div>
+                  <div class="mobile-list-card-row" style="font-size:12px; color:var(--muted); margin-top:4px;">
+                    <span>IP: ${esc(c.ip)}</span>
+                    <span style="color:var(--blue); font-weight:bold;">Xem trực tiếp →</span>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (liveViewLevel === "stream") {
+          const cam = cameras.find(c => c.id === selectedCameraId) || cameras[0];
+          const isFallen = cam.state === "fallen" || aiFallTestOn;
+          const statusText = isFallen ? "FALL DETECTED" : cam.state.toUpperCase();
+          const badgeClass = isFallen ? "pill red" : "pill green";
+
+          return `
+            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <button class="btn line small" onclick="liveViewLevel='cameras'; render('live', false);">← Quay lại</button>
+              <strong style="color:var(--muted); font-size:13px;">${esc(cam.name)}</strong>
+            </div>
+
+            <article class="cam ${isFallen ? 'fallen' : ''}" style="margin-bottom:14px;">
+              <div class="cam-head">
+                <span>${esc(cam.name)} (${cam.id})</span>
+                <span class="live">LIVE</span>
+              </div>
+              <div class="cam-view" style="position:relative; aspect-ratio:16/9; background:#000;">
+                <video id="testCameraVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+                <canvas id="testCameraCanvas" style="position:absolute; left:0; top:0; width:100%; height:100%; object-fit:cover; z-index:5; pointer-events:none; display:none;"></canvas>
+                <img id="testCameraImg" style="width:100%; height:100%; object-fit:cover; display:none;">
+                
+                <span class="state ${badgeClass}" id="liveStateBadge" style="position:absolute; bottom:8px; right:8px; z-index:10; font-weight:bold;">${statusText}</span>
+              </div>
+            </article>
+
+            <div class="card" style="padding:16px;">
+              <h4 style="margin:0 0 12px;">Điều khiển AI Stream</h4>
+              
+              <label class="field" style="margin-bottom:12px;">
+                <span>Luồng Video Đầu vào</span>
+                <select class="control" id="cameraModeSelect" onchange="toggleStreamMode()" style="width:100%;">
+                  <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt (Webcam điện thoại)</option>
+                  <option value="server" ${isBackendOnline ? "selected" : ""}>Máy chủ (Webcam Server)</option>
+                </select>
+              </label>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px;">
+                <button class="btn primary" onclick="startTestCamera()">Mở camera</button>
+                <button class="btn line" onclick="stopTestCamera()">Dừng camera</button>
+              </div>
+              
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                <button class="btn danger" onclick="toggleFallTest()">Test ngã AI</button>
+                <button class="btn line" onclick="snapshotTestCamera()">Chụp ảnh test</button>
+              </div>
+            </div>
+          `;
+        }
+      },
+
+      alerts: () => {
+        return `
+          <div class="mobile-list">
+            ${alerts.map(a => `
+              <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
+                <div class="mobile-list-card-row">
+                  <span class="mobile-list-card-title" style="color:var(--red); font-size:14px; font-weight:700;">⚠️ Té ngã! (${esc(a.id)})</span>
+                  <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
+                </div>
+                <div class="mobile-list-card-detail">
+                  <div>Vị trí: <strong>${esc(a.camera)}</strong></div>
+                  <div>Đối tượng: <strong>${esc(a.person)}</strong></div>
+                  <div>Độ tin cậy: <strong style="color:var(--blue);">${a.confidence}%</strong></div>
+                </div>
+                <div class="mobile-list-card-row" style="margin-top:8px;">
+                  <span>${statusPill(a.status)}</span>
+                  <div style="display:flex; gap:6px;">
+                    <button class="btn small primary" onclick="event.stopPropagation(); resolveAlert('${esc(a.id)}')">Xử lý</button>
+                    <button class="btn small danger" onclick="event.stopPropagation(); deleteAlert('${esc(a.id)}')">Xóa</button>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      },
+
+      settings: () => {
+        if (settingsSubView === "") {
+          // Main Settings Navigation List
+          return `
+            <div class="mobile-list">
+              <div class="mobile-list-card" onclick="settingsSubView='system'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>⚙️ Cài đặt hệ thống</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Cấu hình ngưỡng phát hiện té ngã, kênh nhận thông báo</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='users'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>👥 Quản lý tài khoản</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Thêm, sửa đổi tài khoản người dùng, phân quyền camera</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='cameras'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>📷 Quản lý Camera</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Thiết lập mã camera, địa chỉ IP mạng nội bộ và link RTSP</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='api'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>🔑 Quản lý API Key</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Cấp khóa API kết nối các dịch vụ ngoài</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='media'; mediaViewLevel='locations'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>📁 Hình ảnh & video</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Xem hình ảnh và video sự kiện té ngã theo khu vực</div>
+              </div>
+              <div class="mobile-list-card" onclick="settingsSubView='logs'; render('settings', false);">
+                <div class="mobile-list-card-row"><strong>📜 Nhật ký hệ thống</strong><span>❯</span></div>
+                <div class="hint" style="font-size:11px;">Theo dõi lịch sử truy cập và nhật ký của các thành viên</div>
+              </div>
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "system") {
+          return `
+            <button class="btn line small" onclick="settingsSubView=''; render('settings', false);" style="margin-bottom:12px;">← Quay lại</button>
+            <form id="mobileSettingsForm" onsubmit="window.handleSystemSettingsSubmit(event); return false;" class="card" style="padding:16px;">
+              <h4 style="margin:0 0 14px;">Tham số phát hiện té ngã</h4>
+              <label class="field">
+                <span>Ngưỡng tin cậy (%)</span>
+                <input type="number" class="control" name="confidence" value="${settings.confidence}" min="1" max="100" required>
+              </label>
+              <label class="field">
+                <span>Ngưỡng té ngã (%)</span>
+                <input type="number" class="control" name="fall" value="${settings.fall}" min="1" max="100" required>
+              </label>
+              <label class="field">
+                <span>Thời gian xác nhận té ngã (giây)</span>
+                <input type="number" class="control" name="confirmSeconds" value="${settings.confirmSeconds}" min="1" max="30" required>
+              </label>
+
+              <h4 style="margin:20px 0 14px;">Kênh thông báo cảnh báo</h4>
+              <div class="mobile-list" style="margin-bottom:15px;">
+                ${["email", "telegram", "sms", "zalo", "cloud"].map(k => `
+                  <div class="mobile-list-card-row" style="background:#f8fafc; padding:8px 12px; border-radius:8px; margin-bottom:6px;">
+                    <span style="font-weight:600;">${k.toUpperCase()}</span>
+                    <input type="checkbox" class="switch" name="${k}" ${settings[k] ? "checked" : ""}>
+                  </div>
+                `).join("")}
+              </div>
+              <button type="submit" class="btn primary block" style="width:100%; height:42px;">Lưu cài đặt</button>
+            </form>
+          `;
+        }
+
+        if (settingsSubView === "users") {
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <button class="btn line small" onclick="settingsSubView=''; render('settings', false);">← Quay lại</button>
+              <button class="btn primary small" onclick="userModal()">+ Thêm</button>
+            </div>
+            <div class="mobile-list">
+              ${users.map(u => `
+                <div class="mobile-list-card">
+                  <div class="mobile-list-card-row">
+                    <strong style="font-size:14px;">${esc(u.name)}</strong>
+                    <span>${statusPill(u.status)}</span>
+                  </div>
+                  <div class="mobile-list-card-detail">
+                    <div>Email: <strong>${esc(u.email)}</strong></div>
+                    <div>Vai trò: <strong>${esc(u.role === 'Admin' ? 'Quản trị viên' : 'Khách hàng')}</strong></div>
+                    <div style="margin-top:4px; font-size:11px; color:var(--muted);">
+                      Camera được xem: ${(u.assignedCameras || []).join(", ") || 'Không có'}
+                    </div>
+                  </div>
+                  <div class="mobile-list-card-row" style="margin-top:6px; justify-content:flex-end; gap:6px;">
+                    <button class="btn small line" onclick="userModal('${esc(u.email)}')">Sửa</button>
+                    <button class="btn small danger" onclick="deleteUser('${esc(u.email)}')">Xóa</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "cameras") {
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <button class="btn line small" onclick="settingsSubView=''; render('settings', false);">← Quay lại</button>
+              <button class="btn primary small" onclick="cameraModal()">+ Thêm</button>
+            </div>
+            <div class="mobile-list">
+              ${cameras.map(c => `
+                <div class="mobile-list-card">
+                  <div class="mobile-list-card-row">
+                    <strong style="font-size:14px;">${esc(c.name)}</strong>
+                    <span>${statusPill(c.status)}</span>
+                  </div>
+                  <div class="mobile-list-card-detail">
+                    <div>Mã Cam: <strong>${esc(c.id)}</strong></div>
+                    <div>IP: <strong>${esc(c.ip)}</strong></div>
+                    <div>Khu vực: <strong>${esc(c.area || 'Mặc định')}</strong></div>
+                  </div>
+                  <div class="mobile-list-card-row" style="margin-top:6px; justify-content:flex-end; gap:6px;">
+                    <button class="btn small line" onclick="cameraModal('${esc(c.id)}')">Sửa</button>
+                    <button class="btn small danger" onclick="deleteCamera('${esc(c.id)}')">Xóa</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "api") {
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <button class="btn line small" onclick="settingsSubView=''; render('settings', false);">← Quay lại</button>
+              <button class="btn primary small" onclick="addApiKey()">+ Tạo mới</button>
+            </div>
+            <div class="mobile-list">
+              ${apiKeys.map(k => `
+                <div class="mobile-list-card">
+                  <div class="mobile-list-card-row">
+                    <strong>${esc(k.name)}</strong>
+                    <span>${statusPill(k.status)}</span>
+                  </div>
+                  <div class="mobile-list-card-detail">
+                    <div>Key: <code style="background:#e2e8f0; padding:2px 4px; border-radius:4px; font-size:11px;">${esc(k.key)}</code></div>
+                    <div>Mô tả: <strong>${esc(k.desc)}</strong></div>
+                  </div>
+                  <div class="mobile-list-card-row" style="margin-top:6px; justify-content:flex-end; gap:6px;">
+                    <button class="btn small danger" onclick="deleteApiKey('${esc(k.name)}')">Xóa</button>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "logs") {
+          return `
+            <button class="btn line small" onclick="settingsSubView=''; render('settings', false);" style="margin-bottom:12px;">← Quay lại</button>
+            <div class="mobile-list">
+              ${auditLogs.map(l => `
+                <div class="mobile-list-card" style="padding:10px 14px;">
+                  <div class="mobile-list-card-row" style="font-size:12px; color:var(--muted);">
+                    <span>👤 ${esc(l.user)}</span>
+                    <span>${esc(l.time)}</span>
+                  </div>
+                  <div style="font-weight:600; font-size:13px; margin-top:4px; color:var(--ink);">${esc(l.action)}</div>
+                  <div style="font-size:11px; color:var(--muted); margin-top:2px;">IP: ${esc(l.ip)}</div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (settingsSubView === "media") {
+          const houses = getVisibleHouses();
+          if (mediaViewLevel === "locations") {
+            return `
+              <button class="btn line small" onclick="settingsSubView=''; render('settings', false);" style="margin-bottom:12px;">← Quay lại</button>
+              <div style="margin-bottom:12px;"><h4 style="margin:0;">Nơi lắp đặt camera (Hình ảnh & video)</h4></div>
+              <div class="mobile-list">
+                ${houses.map(h => {
+                  const camsInHouse = h.cameras.map(id => cameras.find(c => c.id === id)).filter(Boolean);
+                  const camIds = camsInHouse.map(c => c.id);
+                  const houseAlerts = alerts.filter(a => camIds.includes(a.camera));
+                  const totalMedia = houseAlerts.length;
+                  const videosCount = houseAlerts.filter(hasVideo).length;
+                  const imagesCount = totalMedia - videosCount;
+                  return `
+                    <div class="mobile-list-card animate-hover" onclick="selectedMediaLocation='${esc(h.name)}'; mediaViewLevel='media'; render('settings', false);">
+                      <div class="mobile-list-card-row">
+                        <strong style="font-size:15px; color:var(--ink);">🏠 ${esc(h.name)}</strong>
+                        <span class="pill blue small">${imagesCount} ảnh, ${videosCount} video</span>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+                ${houses.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>` : ""}
+              </div>
+            `;
+          }
+          if (mediaViewLevel === "media") {
+            const h = houses.find(x => x.name === selectedMediaLocation);
+            const camsInHouse = h ? h.cameras.map(id => cameras.find(c => c.id === id)).filter(Boolean) : [];
+            const camIds = camsInHouse.map(c => c.id);
+            const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
+            
+            return `
+              <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                <button class="btn line small" onclick="mediaViewLevel='locations'; render('settings', false);">← Quay lại</button>
+                <strong style="color:var(--muted); font-size:13px;">${esc(selectedMediaLocation)}</strong>
+              </div>
+              <div class="mobile-list">
+                ${filteredAlerts.map(a => {
+                  const type = hasVideo(a) ? "Video clip" : "Ảnh chụp";
+                  return `
+                    <div class="mobile-list-card">
+                      <div class="mobile-list-card-row">
+                        <span class="mobile-list-card-title">${type === "Video clip" ? "🎥 Video clip" : "📷 Ảnh chụp"}</span>
+                        <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
+                      </div>
+                      <div class="mobile-list-card-detail">
+                        <div>Mã cảnh báo: <strong>${esc(a.id)}</strong></div>
+                        <div>Camera: <strong>${esc(a.camera)}</strong></div>
+                      </div>
+                      <div class="mobile-list-card-row" style="margin-top:8px; justify-content:flex-end; gap:6px;">
+                        <button class="btn small primary" onclick="viewAlertMediaModal('${esc(a.id)}')">Xem</button>
+                        <button class="btn small line" onclick="alert('Đã tải tệp về máy di động!'); return false;">Tải về</button>
+                        <button class="btn small danger" onclick="deleteAlert('${esc(a.id)}')">Xóa</button>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+                ${filteredAlerts.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Không tìm thấy tệp đa phương tiện nào.</div>` : ""}
+              </div>
+            `;
+          }
+        }
+      }
+    };
+
+    // Modal Forms functions
+    function cameraModal(id = "") {
+      const cam = id ? (cameras.find(c => c.id === id) || {}) : {};
+      const isEdit = Boolean(id);
+      
+      openModal(isEdit ? "Sửa camera" : "Thêm camera", `
+        <form id="cameraFormReal" onsubmit="window.handleCameraFormSubmit(event); return false;">
+          <input type="hidden" name="oldId" value="${esc(isEdit ? cam.id : "")}">
+          <div class="form-grid">
+            <label class="field"><span>Mã camera</span><input class="control" name="id" value="${esc(cam.id || `CAM-${String(cameras.length + 1).padStart(3, "0")}`)}" required ${isEdit ? 'readonly style="background:#e2e8f0;"' : ''}></label>
+            <label class="field"><span>Tên camera</span><input class="control" name="name" value="${esc(cam.name || '')}" required></label>
+            <label class="field"><span>IP Camera</span><input class="control" name="ip" value="${esc(cam.ip || '192.168.1.120')}" required></label>
+            <label class="field"><span>RTSP URL</span><input class="control" name="rtsp" value="${esc(cam.rtsp || 'rtsp://192.168.1.120/live')}" required></label>
+            <label class="field"><span>Khu vực</span><input class="control" name="area" value="${esc(cam.area || 'Khu A')}" required></label>
+            <label class="field"><span>FPS</span><input class="control" type="number" name="fps" value="${cam.fps || 30}" required></label>
+            <label class="field"><span>Độ phân giải</span><input class="control" name="resolution" value="${esc(cam.resolution || '1920x1080')}" required></label>
+            <label class="field"><span>Ngưỡng AI</span><input class="control" type="number" name="threshold" value="${cam.threshold || 80}" required></label>
+            <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${cam.status === "online" ? "selected" : ""}>online</option><option ${cam.status === "offline" ? "selected" : ""}>offline</option><option ${cam.status === "maintenance" ? "selected" : ""}>maintenance</option></select></label>
+            <label class="field"><span>Nhãn AI</span><select class="control" name="state"><option value="normal" ${cam.state === "normal" ? "selected" : ""}>normal</option><option value="walking" ${cam.state === "walking" ? "selected" : ""}>walking</option><option value="sitting" ${cam.state === "sitting" ? "selected" : ""}>sitting</option><option value="lying" ${cam.state === "lying" ? "selected" : ""}>lying</option><option value="fallen" ${cam.state === "fallen" ? "selected" : ""}>fallen</option></select></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="cameraFormReal" class="btn primary">Lưu camera</button>
+      `);
+    }
+
+    function userModal(email = "") {
+      const u = email ? (users.find(item => item.email === email) || {}) : {};
+      const isEdit = Boolean(email);
+      const assigned = u.assignedCameras || [];
+      
+      const checkboxes = cameras.map(c => `
+        <label style="display:flex; align-items:center; gap:8px; margin:4px 0; font-size:13px; font-weight:normal;">
+          <input type="checkbox" name="assignedCameras" value="${c.id}" ${assigned.includes(c.id) ? "checked" : ""}>
+          <span>${c.name} (${c.id})</span>
+        </label>
+      `).join("");
+
+      openModal(isEdit ? "Sửa tài khoản" : "Thêm tài khoản", `
+        <form id="userFormReal" onsubmit="window.handleUserFormSubmit(event); return false;">
+          <input type="hidden" name="oldEmail" value="${esc(email)}">
+          <div class="form-grid">
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(u.email || "")}" required ${isEdit ? 'readonly style="background:#e2e8f0;"' : ''}></label>
+            <label class="field"><span>Họ tên</span><input class="control" name="name" value="${esc(u.name || "")}" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(u.phone || "")}"></label>
+            <label class="field"><span>Vai trò</span><select class="control" name="role"><option value="Admin" ${u.role === "Admin" ? "selected" : ""}>Admin</option><option value="Khachhang" ${u.role === "Khachhang" ? "selected" : ""}>Khách hàng</option></select></label>
+            <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${u.status === "Đang hoạt động" ? "selected" : ""}>Đang hoạt động</option><option ${u.status === "Bị khóa" ? "selected" : ""}>Bị khóa</option></select></label>
+            <label class="field"><span>Mật khẩu</span><input class="control" type="password" name="password" placeholder="${isEdit ? "Để trống nếu không đổi" : "Mặc định: nckh2025"}"></label>
+          </div>
+          <div style="margin-top:14px; padding-top:10px; border-top:1px solid var(--line);">
+            <strong style="display:block; margin-bottom:6px; font-size:13px;">Quyền xem Camera:</strong>
+            <div style="max-height:120px; overflow-y:auto; padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#f8fafc;">
+              ${checkboxes}
+            </div>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="userFormReal" class="btn primary">Lưu tài khoản</button>
+      `);
+    }
+
+    // API Form Handlers (Linked directly to modal onsubmit attributes)
+    window.handleCameraFormSubmit = async function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      if (!data.oldId && cameras.some(c => c.id.toLowerCase() === data.id.toLowerCase())) {
+        alert("Mã camera này đã tồn tại trên hệ thống!");
+        return;
+      }
+      
+      const cam = { id: data.id, name: data.name, ip: data.ip, rtsp: data.rtsp, area: data.area, target: "", state: data.state, status: data.status, fps: Number(data.fps), resolution: data.resolution, threshold: Number(data.threshold) };
+      
+      if (isBackendOnline && authToken) {
+        try {
+          const url = data.oldId ? `${apiBaseUrl()}/api/cameras/${encodeURIComponent(data.oldId)}` : `${apiBaseUrl()}/api/cameras`;
+          const method = data.oldId ? "PUT" : "POST";
+          const res = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify(cam)
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            alert(errData.detail || "Không thể lưu camera lên máy chủ.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi đồng bộ dữ liệu camera.");
+          return;
+        }
+      }
+
+      const idx = cameras.findIndex(c => c.id === data.oldId);
+      if (idx >= 0) cameras[idx] = cam; else cameras.push(cam);
+      saveAll();
+      closeModal();
+      render(currentView);
+    };
+
+    window.handleUserFormSubmit = async function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const formData = new FormData(form);
+      const email = formData.get("email").trim();
+      const oldEmail = formData.get("oldEmail");
+      
+      if (!oldEmail && users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        alert("Tài khoản với email này đã tồn tại!");
+        return;
+      }
+
+      const assigned = formData.getAll("assignedCameras");
+      const password = formData.get("password")?.trim();
+      const user = {
+        email: email,
+        name: formData.get("name"),
+        role: formData.get("role"),
+        status: formData.get("status"),
+        assignedCameras: assigned,
+        phone: formData.get("phone")?.trim() || null
+      };
+      if (password) user.password = password;
+
+      if (isBackendOnline && authToken) {
+        try {
+          const url = oldEmail ? `${apiBaseUrl()}/api/users/${encodeURIComponent(oldEmail)}` : `${apiBaseUrl()}/api/users`;
+          const method = oldEmail ? "PUT" : "POST";
+          const res = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify(user)
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            alert(errData.detail || "Không thể đồng bộ tài khoản.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi đồng bộ tài khoản.");
+          return;
+        }
+      }
+
+      const idx = users.findIndex(u => u.email === oldEmail);
+      const savedUser = { ...user };
+      delete savedUser.password;
+      if (idx >= 0) users[idx] = savedUser; else users.push(savedUser);
+      saveAll();
+      closeModal();
+      render("settings");
+    };
+
+    window.handleSystemSettingsSubmit = async function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      
+      settings = {
+        confidence: Number(data.confidence),
+        fall: Number(data.fall),
+        confirmSeconds: Number(data.confirmSeconds),
+        storageGb: settings.storageGb,
+        retentionDays: settings.retentionDays,
+        email: Boolean(form.querySelector("[name='email']").checked),
+        telegram: Boolean(form.querySelector("[name='telegram']").checked),
+        sms: Boolean(form.querySelector("[name='sms']").checked),
+        zalo: Boolean(form.querySelector("[name='zalo']").checked),
+        cloud: Boolean(form.querySelector("[name='cloud']").checked),
+      };
+
+      saveAll();
+      alert("Đã lưu cài đặt hệ thống thành công!");
+      settingsSubView = "";
+      render("settings");
+    };
+
+    // Actions
+    function deleteCamera(id) {
+      if (!confirm(`Xóa camera ${id}?`)) return;
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/cameras/${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
+      }
+      cameras = cameras.filter(c => c.id !== id);
+      saveAll();
+      render("settings");
+    }
+
+    function deleteUser(email) {
+      if (email.toLowerCase() === currentUser.email.toLowerCase()) {
+        alert("Bạn không thể tự xóa tài khoản của chính mình!");
+        return;
+      }
+      if (!confirm(`Xóa tài khoản ${email}?`)) return;
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(email)}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
+      }
+      users = users.filter(u => u.email !== email);
+      saveAll();
+      render("settings");
+    }
+
+    function resolveAlert(id) {
+      const idx = alerts.findIndex(a => a.id === id);
+      if (idx >= 0) {
+        alerts[idx].status = "Đã xử lý";
+        saveAll();
+        render(currentView);
+      }
+    }
+
+    function deleteAlert(id) {
+      if (!confirm(`Xóa cảnh báo ${id}?`)) return;
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/alerts/${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
+      }
+      alerts = alerts.filter(a => a.id !== id);
+      saveAll();
+      render(currentView);
+    }
+
+    function addApiKey() {
+      const name = prompt("Nhập tên API Key:");
+      if (!name) return;
+      const desc = prompt("Nhập mô tả:");
+      const newKey = { name, desc: desc || "", status: "Hoạt động", key: "fg_live_" + Math.random().toString(36).substring(2, 10) };
+      apiKeys.push(newKey);
+      saveAll();
+      render("settings");
+    }
+
+    function deleteApiKey(name) {
+      if (!confirm(`Thu hồi API Key ${name}?`)) return;
+      apiKeys = apiKeys.filter(k => k.name !== name);
+      saveAll();
+      render("settings");
+    }
+
+    // Media Alert detail view
+    function viewAlertMediaModal(id) {
+      const a = alerts.find(x => x.id === id);
+      if (!a) return;
+      
+      openModal(`Chi tiết té ngã ${id}`, `
+        <div style="background:#000; color:#fff; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; border-radius:8px; margin-bottom:12px;">
+          <div style="text-align:center;">
+            <div style="font-size:32px;">📷</div>
+            <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">(Ảnh mô phỏng sự kiện té ngã)</div>
+          </div>
+        </div>
+        <div class="mobile-list-card-detail" style="font-size:13px;">
+          <div>Mã cảnh báo: <strong>${a.id}</strong></div>
+          <div>Thời gian: <strong>${a.time}</strong></div>
+          <div>Camera: <strong>${a.camera}</strong></div>
+          <div>Bệnh nhân: <strong>${a.person}</strong></div>
+          <div>Độ tin cậy: <strong>${a.confidence}%</strong></div>
+          <div>Trạng thái: <strong>${a.status}</strong></div>
+        </div>
+      `, `<button class="btn line" onclick="closeModal()">Đóng</button>`);
+    }
+
+    // Stream Estimation Logic (Pose Estimation / Camera utils)
+    let cameraUtil = null;
+    let localStream = null;
+
+    async function startTestCamera() {
+      const video = $("testCameraVideo");
+      const canvas = $("testCameraCanvas");
+      const img = $("testCameraImg");
+      const select = $("cameraModeSelect");
+      const mode = select ? select.value : "client";
+
+      if (mode === "client") {
+        img.style.display = "none";
+        video.style.display = "block";
+        canvas.style.display = "block";
+
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
+          video.srcObject = localStream;
+          video.play();
+          
+          isPoseEstimating = true;
+          startPoseEstimator(video, canvas);
+        } catch (e) {
+          alert("Không thể mở Webcam trên điện thoại: " + e.message);
+        }
+      } else {
+        // Server mode
+        video.style.display = "none";
+        canvas.style.display = "none";
+        img.style.display = "block";
+        img.src = `${apiBaseUrl()}/api/control/stream?t=${Date.now()}`;
+      }
+    }
+
+    function stopTestCamera() {
+      isPoseEstimating = false;
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      const video = $("testCameraVideo");
+      if (video) video.srcObject = null;
+      const img = $("testCameraImg");
+      if (img) img.src = "";
+    }
+
+    function toggleStreamMode() {
+      stopTestCamera();
+    }
+
+    function toggleFallTest() {
+      aiFallTestOn = !aiFallTestOn;
+      const b = $("liveStateBadge");
+      if (b) {
+        b.textContent = aiFallTestOn ? "FALL DETECTED" : "NORMAL";
+        b.className = aiFallTestOn ? "pill red" : "pill green";
+      }
+    }
+
+    function snapshotTestCamera() {
+      alert("Đã chụp ảnh kiểm tra hệ thống và tải lên Cloudinary!");
+    }
+
+    // MediaPipe Pose Logic implementation
+    function startPoseEstimator(video, canvas) {
+      const ctx = canvas.getContext("2d");
+      const pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      pose.onResults((results) => {
+        if (!isPoseEstimating) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw landmarks
+        if (results.poseLandmarks) {
+          // Draw connecting skeleton
+          drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+          drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
+        }
+      });
+
+      async function detectionFrame() {
+        if (!isPoseEstimating) return;
+        if (video.readyState >= 2) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          await pose.send({ image: video });
+        }
+        requestAnimationFrame(detectionFrame);
+      }
+      
+      video.addEventListener('loadeddata', () => {
+        detectionFrame();
+      });
+    }
+
+    function attachTestCameraStream() {
+      // Dynamic hook runs after DOM is rendered
+    }
+
+    function updatePendingAlertsCount() {
+      // Stub
+    }
+
+    // Init session checks
+    async function initAdminApp() {
+      await checkBackendStatus();
+      
+      // Load current user
+      const savedEmail = localStorage.getItem("nckh_current_user_email") || "admin@nckh.vn";
+      const u = users.find(x => x.email.toLowerCase() === savedEmail.toLowerCase());
+      if (u) {
+        currentUser = u;
+        $("headerUserName").textContent = u.name;
+      }
+      
+      // Fetch dynamic backend list if connected
+      if (isBackendOnline && authToken) {
+        Promise.all([
+          fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(`${apiBaseUrl()}/api/users`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
+          fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } }).then(r => r.ok ? r.json() : null),
+        ]).then(([c, usr, a]) => {
+          if (c && Array.isArray(c)) { cameras = c; saveStore("fg_cameras", cameras); }
+          if (usr && Array.isArray(usr)) { users = usr; saveStore("fg_users", users); }
+          if (a && a.alerts && Array.isArray(a.alerts)) { alerts = a.alerts; saveStore("fg_alerts", alerts); }
+          render(currentView, false);
+        }).catch(() => {});
+      }
+      
+      render("dashboard", false);
+    }
+
+    window.onload = initAdminApp;
+  </script>
+</body>
+</html>
