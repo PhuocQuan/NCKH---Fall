@@ -3,7 +3,7 @@
 <head>
   <script>
     function checkRedirect() {
-      if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768) {
+      if (/Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768) {
         window.location.replace("../mobile/admin.html" + window.location.search);
       }
     }
@@ -493,6 +493,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 </head><body>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <section class="app" id="app">
     <aside class="sidebar">
       <div class="side-head">
@@ -518,9 +519,18 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div>
-          <h1 class="title" id="pageTitle">Dashboard</h1>
-          <p class="subtitle" id="pageSub">Tổng quan hệ thống</p>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button class="menu-toggle-btn" id="menuToggleBtn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div>
+            <h1 class="title" id="pageTitle">Dashboard</h1>
+            <p class="subtitle" id="pageSub">Tổng quan hệ thống</p>
+          </div>
         </div>
         <div class="top-actions">
           <span class="pill" id="backendStatusPill" style="background:#64748b;color:#fff">Checking...</span>
@@ -4512,6 +4522,22 @@ function loadStore(key, fallback) {
       }
       window.location.replace("/");
     }
+
+    // Responsive sidebar toggle logic
+    document.getElementById("menuToggleBtn").addEventListener("click", () => {
+      document.querySelector(".sidebar").classList.add("active");
+      document.getElementById("sidebarOverlay").classList.add("active");
+    });
+    document.getElementById("sidebarOverlay").addEventListener("click", () => {
+      document.querySelector(".sidebar").classList.remove("active");
+      document.getElementById("sidebarOverlay").classList.remove("active");
+    });
+    document.querySelector(".sidebar").addEventListener("click", (e) => {
+      if (e.target.closest("button")) {
+        document.querySelector(".sidebar").classList.remove("active");
+        document.getElementById("sidebarOverlay").classList.remove("active");
+      }
+    });
 
     initSession();
   </script>

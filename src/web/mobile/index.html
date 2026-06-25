@@ -3,7 +3,7 @@
 <head>
   <script>
     function checkRedirectBack() {
-      if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && window.innerWidth >= 768) {
+      if (!/Mobi|Android|iPhone/i.test(navigator.userAgent) && window.innerWidth >= 768) {
         window.location.replace("../index.html" + window.location.search);
       }
     }
