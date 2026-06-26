@@ -120,6 +120,33 @@ def update_app_state_db(updates: list[str], params: list[Any]) -> None:
         client.execute(query, params)
 
 
+def get_user_app_state_db(email: str) -> dict[str, str]:
+    with get_db_client() as client:
+        res = client.execute(
+            "SELECT monitored_profile_json, emergency_contacts_json, user_notifications_json "
+            "FROM users WHERE email = ?", [email]
+        )
+        if res.rows:
+            r = res.rows[0]
+            return {
+                "monitored_profile_json": r[0] or "{}",
+                "emergency_contacts_json": r[1] or "[]",
+                "user_notifications_json": r[2] or "[]"
+            }
+    return {
+        "monitored_profile_json": "{}",
+        "emergency_contacts_json": "[]",
+        "user_notifications_json": "[]"
+    }
+
+
+def update_user_app_state_db(email: str, updates: list[str], params: list[Any]) -> None:
+    with get_db_client() as client:
+        query = f"UPDATE users SET {', '.join(updates)} WHERE email = ?"
+        client.execute(query, params + [email])
+
+
+
 def get_user_assigned_cameras_db(email: str) -> list[str]:
     with get_db_client() as client:
         res = client.execute("SELECT assigned_cameras FROM users WHERE email = ?", [email])

@@ -180,20 +180,40 @@ def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, m
 
 
 def get_app_state(user: str) -> dict[str, str]:
-    return repo.get_app_state_db(user)
+    global_state = repo.get_app_state_db()
+    user_state = repo.get_user_app_state_db(user)
+    return {
+        "api_keys_json": global_state["api_keys_json"],
+        "settings_json": global_state["settings_json"],
+        "monitored_profile_json": user_state["monitored_profile_json"],
+        "emergency_contacts_json": user_state["emergency_contacts_json"],
+        "user_notifications_json": user_state["user_notifications_json"]
+    }
 
 
 def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
-    updates = []
-    params = []
+    global_updates = []
+    global_params = []
+    user_updates = []
+    user_params = []
     
-    for key in ["api_keys_json", "settings_json", "monitored_profile_json", "emergency_contacts_json", "user_notifications_json"]:
+    for key in ["api_keys_json", "settings_json"]:
         val = body_dict.get(key)
         if val is not None:
-            updates.append(f"{key} = ?")
-            params.append(val)
+            global_updates.append(f"{key} = ?")
+            global_params.append(val)
             
-    if updates:
-        params.append(user)
-        repo.update_app_state_db(updates, params)
-        log_action("Cấu hình hệ thống", user, "Cập nhật cấu hình ứng dụng (app state)")
+    for key in ["monitored_profile_json", "emergency_contacts_json", "user_notifications_json"]:
+        val = body_dict.get(key)
+        if val is not None:
+            user_updates.append(f"{key} = ?")
+            user_params.append(val)
+            
+    if global_updates:
+        global_params.append("global")
+        repo.update_app_state_db(global_updates, global_params)
+        
+    if user_updates:
+        repo.update_user_app_state_db(user, user_updates, user_params)
+        
+    log_action("Cấu hình hệ thống", user, "Cập nhật cấu hình ứng dụng (app state)")

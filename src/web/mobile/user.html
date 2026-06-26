@@ -13,7 +13,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FallGuard AI - Mobile User</title>
-  <link rel="stylesheet" href="mobile.css" />
+  <link rel="stylesheet" href="mobile_user.css" />
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -151,7 +151,7 @@
       { id: "NT-003", type: "maintenance", title: "Hội hệ thống bảo trì", content: "Hệ thống FallGuard AI sẽ tiến hành bảo trì nâng cấp thuật toán từ 01:00 đến 03:00 ngày 20/06/2026.", time: "14/06/2026 18:00", read: true }
     ]);
 
-    let currentUser = { email: "bao@nckh.vn", name: "Cao Đình Bảo", role: "Khachhang", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
+    let currentUser = { email: "bao@nckh.vn", name: "Cao Đình Bảo", role: "Khachhang", phone: "0987.654.321", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
     let authToken = localStorage.getItem("nckh_auth_token") || "";
     let isBackendOnline = false;
     let currentView = "dashboard";
@@ -163,6 +163,211 @@
     let localStream = null;
     let isPoseEstimating = false;
     let aiFallTestOn = false;
+
+    // MediaPipe & Client-side Pose FallDetector state
+    const DETECTOR_CONFIG = {
+      torso_fall_angle_deg: 62,
+      torso_upright_angle_deg: 35,
+      head_hip_height_ratio: 0.18,
+      hip_drop_velocity: 0.035,
+      angle_change_velocity_deg: 18,
+      min_fall_frames: 7,
+      warning_frames: 3,
+      alert_after_seconds: 10,
+      alert_on_long_lying_without_fall: false,
+      assumed_fps: 30,
+      cooldown_frames: 20
+    };
+    let prevHipY = null;
+    let prevTorsoAngle = null;
+    let abnormalFrames = 0;
+    let lyingFrames = 0;
+    let recentUprightFrames = 0;
+    let fallCandidate = false;
+    let alertActive = false;
+    let cooldown = 0;
+
+    let audioCtx = null;
+    let alarmInterval = null;
+
+    function resetDetector() {
+      prevHipY = null;
+      prevTorsoAngle = null;
+      abnormalFrames = 0;
+      lyingFrames = 0;
+      recentUprightFrames = 0;
+      fallCandidate = false;
+      alertActive = false;
+      cooldown = 0;
+    }
+
+    function angleFromVertical(shoulder, hip) {
+      const dx = shoulder.x - hip.x;
+      const dy = shoulder.y - hip.y;
+      return Math.abs(Math.atan2(Math.abs(dx), Math.abs(dy)) * (180 / Math.PI));
+    }
+
+    function playAlarmSound() {
+      if (!window.AudioContext && !window.webkitAudioContext) return;
+      stopAlarmSound();
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      
+      let beepCount = 0;
+      alarmInterval = setInterval(() => {
+        if (beepCount >= 10) { // beep 10 times then stop
+          stopAlarmSound();
+          return;
+        }
+        
+        try {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          
+          osc.type = "sine";
+          // Siren sound sweep from 600Hz to 1200Hz
+          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+          osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+          
+          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+          
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.5);
+        } catch (e) {
+          console.error("Lỗi phát âm thanh alarm:", e);
+        }
+        
+        beepCount++;
+      }, 600);
+    }
+
+    function stopAlarmSound() {
+      if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+      }
+    }
+
+    // JS Implementation of FallDetector rules
+    function updateDetector(landmarks) {
+      const nose = landmarks[0];
+      const lShoulder = landmarks[11];
+      const rShoulder = landmarks[12];
+      const lHip = landmarks[23];
+      const rHip = landmarks[24];
+      
+      if (!nose || !lShoulder || !rShoulder || !lHip || !rHip) {
+        return null;
+      }
+      
+      // Midpoints
+      const shoulder = {
+        x: (lShoulder.x + rShoulder.x) / 2.0,
+        y: (lShoulder.y + rShoulder.y) / 2.0
+      };
+      const hip = {
+        x: (lHip.x + rHip.x) / 2.0,
+        y: (lHip.y + rHip.y) / 2.0
+      };
+      
+      const torsoAngle = angleFromVertical(shoulder, hip);
+      const headHipDelta = hip.y - nose.y;
+      
+      const hipVelocity = prevHipY === null ? 0.0 : hip.y - prevHipY;
+      const angleVelocity = prevTorsoAngle === null ? 0.0 : torsoAngle - prevTorsoAngle;
+      
+      prevHipY = hip.y;
+      prevTorsoAngle = torsoAngle;
+      
+      const torsoIsHorizontal = torsoAngle >= DETECTOR_CONFIG.torso_fall_angle_deg;
+      const torsoIsUpright = torsoAngle <= DETECTOR_CONFIG.torso_upright_angle_deg;
+      const headIsLow = headHipDelta <= DETECTOR_CONFIG.head_hip_height_ratio;
+      const hipDroppedFast = hipVelocity >= DETECTOR_CONFIG.hip_drop_velocity;
+      const bodyRotatedFast = angleVelocity >= DETECTOR_CONFIG.angle_change_velocity_deg;
+      const lying = torsoIsHorizontal && headIsLow;
+      
+      if (torsoIsUpright) {
+        recentUprightFrames = Math.min(recentUprightFrames + 1, 30);
+      } else {
+        recentUprightFrames = Math.max(0, recentUprightFrames - 1);
+      }
+      
+      const fallLikeTransition = torsoIsHorizontal && (
+        hipDroppedFast || bodyRotatedFast || recentUprightFrames >= 2
+      );
+      
+      if (fallLikeTransition) {
+        fallCandidate = true;
+      }
+      
+      if (lying) {
+        lyingFrames++;
+      } else {
+        lyingFrames = 0;
+        fallCandidate = false;
+        alertActive = false;
+      }
+      
+      const abnormal = lying && (
+        fallCandidate || DETECTOR_CONFIG.alert_on_long_lying_without_fall
+      );
+      
+      if (abnormal) {
+        abnormalFrames++;
+      } else {
+        abnormalFrames = Math.max(0, abnormalFrames - 1);
+      }
+      
+      let state = "normal";
+      let eventStarted = false;
+      const lyingSeconds = lyingFrames / Math.max(DETECTOR_CONFIG.assumed_fps, 1.0);
+      
+      if (abnormalFrames >= DETECTOR_CONFIG.min_fall_frames && lyingSeconds >= DETECTOR_CONFIG.alert_after_seconds) {
+        state = "alert";
+        if (!alertActive && cooldown === 0) {
+          eventStarted = true;
+          alertActive = true;
+          cooldown = DETECTOR_CONFIG.cooldown_frames;
+        }
+      } else if (abnormalFrames >= DETECTOR_CONFIG.min_fall_frames) {
+        state = "fallen";
+      } else if (abnormalFrames >= DETECTOR_CONFIG.warning_frames) {
+        state = "possible_fall";
+      } else if (lying) {
+        state = "lying";
+      } else if (abnormalFrames >= DETECTOR_CONFIG.warning_frames) {
+        state = "warning";
+      } else {
+        state = "normal";
+      }
+      
+      if (cooldown > 0) {
+        cooldown--;
+      }
+      
+      return {
+        state,
+        torsoAngle,
+        headHipDelta,
+        hipVelocity,
+        angleVelocity,
+        abnormalFrames,
+        lyingSeconds,
+        fallLikeTransition,
+        eventStarted
+      };
+    }
+
 
     // Helpers
     function $(id) { return document.getElementById(id); }
@@ -215,6 +420,9 @@
       }
       localStorage.removeItem("nckh_auth_token");
       localStorage.removeItem("nckh_current_user_email");
+      localStorage.removeItem("fg_monitored_profile");
+      localStorage.removeItem("fg_emergency_contacts");
+      localStorage.removeItem("fg_user_notifications");
       window.location.replace("index.html");
     }
 
@@ -585,9 +793,12 @@
           const badgeClass = isFallen ? "pill red" : "pill green";
 
           return `
-            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap: 8px;">
               <button class="btn line small" onclick="stopTestCamera(false); switchTab('dashboard');">← Quay lại</button>
-              <strong style="color:var(--muted); font-size:13px;">${esc(cam.name)}</strong>
+              <select class="control" id="cameraModeSelect" onchange="startTestCamera()" style="width:auto; height:32px; padding:0 6px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:600; background-color:#fff;">
+                <option value="client" ${!isBackendOnline ? "selected" : ""}>Webcam thiết bị</option>
+                <option value="server" ${isBackendOnline ? "selected" : ""}>AI Server Stream</option>
+              </select>
             </div>
 
             <article class="cam ${isFallen ? 'fallen' : ''}" style="margin-bottom:14px;">
@@ -675,25 +886,41 @@
               <button class="btn primary small" onclick="addEmergencyContactModal()">+ Thêm</button>
             </div>
             <div class="mobile-list">
-              ${emergencyContacts.map((c, i) => `
+              ${emergencyContacts.map((c, i) => {
+                const isEmailMatch = c.email && currentUser.email && c.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                const isNameMatch = c.name && currentUser.name && c.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+                const isSelf = isEmailMatch || isNameMatch;
+                
+                const displayName = isSelf ? (currentUser.name || c.name) : c.name;
+                const displayPhone = isSelf ? (currentUser.phone || c.phone) : c.phone;
+                const displayEmail = isSelf ? (currentUser.email || c.email) : c.email;
+                
+                let displayRelationship = c.relationship;
+                if (isSelf) {
+                  displayRelationship = "Bản thân";
+                } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+                  displayRelationship = "Người giám sát";
+                }
+
+                return `
                 <div class="mobile-list-card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
                   <div class="mobile-list-card-row">
-                    <strong>${esc(c.name)} (${esc(c.relationship)})</strong>
+                    <strong>${esc(displayName)} (${esc(displayRelationship)})</strong>
                     <div style="display: flex; gap: 10px; align-items: center;">
                       <button class="btn small primary" onclick="editEmergencyContactModal(${i})" style="border:none; background:none; color:#3b82f6; font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Sửa</button>
                       <button class="btn small danger" onclick="deleteEmergencyContact(${i})" style="border:none; background:none; color:var(--red); font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Xóa</button>
                     </div>
                   </div>
                   <div style="font-size:12px; color:var(--muted);">
-                    <div>SĐT: <strong>${esc(c.phone)}</strong></div>
-                    <div>Email: <strong>${esc(c.email)}</strong></div>
+                    <div>SĐT: <strong>${esc(displayPhone)}</strong></div>
+                    <div>Email: <strong>${esc(displayEmail)}</strong></div>
                   </div>
                   <div class="contact-actions" style="border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 8px;">
-                    <a href="tel:${esc(c.phone)}" class="contact-btn-call" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none;">📞 Gọi ngay</a>
-                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(c.phone)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;"> Gửi cảnh báo</button>
+                    <a href="tel:${esc(displayPhone)}" class="contact-btn-call" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none;">📞 Gọi ngay</a>
+                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;"> Gửi cảnh báo</button>
                   </div>
                 </div>
-              `).join("")}
+              `}).join("")}
             </div>
           `)}
 
@@ -793,13 +1020,28 @@
 
     window.editEmergencyContactModal = function(index) {
       const contact = emergencyContacts[index];
+      const isEmailMatch = contact.email && currentUser.email && contact.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+      const isNameMatch = contact.name && currentUser.name && contact.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      const isSelf = isEmailMatch || isNameMatch;
+      
+      const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
+      const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
+      const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
+      
+      let displayRelationship = contact.relationship;
+      if (isSelf) {
+        displayRelationship = "Bản thân";
+      } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+        displayRelationship = "Người giám sát";
+      }
+
       openModal("Sửa liên hệ khẩn cấp", `
         <form id="editContactForm" onsubmit="window.handleEditContactSubmit(event, ${index}); return false;">
           <div class="form-grid">
-            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(contact.name)}" required></label>
-            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(contact.relationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(contact.phone)}" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(contact.email)}" type="email" required></label>
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(displayName)}" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(displayRelationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(displayEmail)}" type="email" required></label>
           </div>
         </form>
       `, `
@@ -1110,6 +1352,88 @@
       `, `<button class="btn line" onclick="closeModal()">Đóng</button>`);
     }
 
+    // Trigger local fall alert
+    function triggerLocalFallAlert(det) {
+      const cam = cameras.find(c => c.id === selectedCameraId);
+      const camName = cam ? cam.name : "Camera local";
+      const now = new Date();
+      const timeStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      // Auto-capture camera snapshot with skeleton overlay
+      let capturedMedia = "Ảnh (Browser)";
+      const video = $("testCameraVideo");
+      if (video && video.srcObject && video.videoWidth) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0);
+          
+          const overlayCanvas = $("testCameraCanvas");
+          if (overlayCanvas && overlayCanvas.style.display !== "none") {
+            ctx.drawImage(overlayCanvas, 0, 0);
+          }
+          capturedMedia = canvas.toDataURL("image/jpeg", 0.7); // compress to JPEG
+        } catch (e) {
+          console.error("Lỗi tự động chụp ảnh té ngã:", e);
+        }
+      }
+
+      const newAlert = {
+        id: `AL-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`,
+        time: timeStr,
+        camera: selectedCameraId || "CAM-LOCAL",
+        person: "Người dùng (Webcam khách)",
+        confidence: Math.round(70 + det.torsoAngle / 2),
+        status: "Chưa xử lý",
+        level: "Khẩn cấp",
+        media: capturedMedia
+      };
+      
+      alerts.unshift(newAlert);
+      saveStore("fg_alerts", alerts);
+      
+      // Play Audio Alarm (Siren sweep)
+      playAlarmSound();
+      
+      // Show custom popup alert for mobile
+      openModal("🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP", `
+        <div style="text-align: center; font-family: inherit; padding: 10px 0;">
+          <div style="font-size: 48px; margin-bottom: 12px; animation: pulse 1s infinite;">🚨</div>
+          <h3 style="color: var(--red); font-size: 18px; font-weight: 800; margin: 0 0 12px;">PHÁT HIỆN TÉ NGÃ</h3>
+          <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện té ngã tại <strong>${esc(camName)}</strong> lúc <strong>${timeStr.split(" ")[1]}</strong>.</p>
+          
+          ${capturedMedia.startsWith("data:image") ? `
+            <img src="${capturedMedia}" style="width: 100%; border-radius: 8px; border: 1px solid var(--line); aspect-ratio: 16/9; object-fit: cover; margin-bottom: 12px;">
+          ` : ""}
+          
+          <div style="background: #fff5f5; border: 1px solid #fee2e2; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
+            <strong>Thông tin chi tiết:</strong>
+            <ul style="margin: 6px 0 0; padding-left: 18px;">
+              <li>Độ tin cậy AI: ${Math.round(70 + det.torsoAngle / 2)}%</li>
+              <li>Góc nghiêng thân: ${Math.round(det.torsoAngle)}°</li>
+              <li>Thời gian nằm: ${Math.round(det.lyingSeconds)} giây</li>
+            </ul>
+          </div>
+        </div>
+      `, `
+        <button class="btn danger" onclick="stopAlarmSound(); closeModal();" style="width: 100%;">Tắt báo động & Đóng</button>
+      `);
+      
+      // Web speech synthesis alert
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          console.error("Speech Synthesis error:", e);
+        }
+      }
+    }
+
     // Camera Livestream Control
     async function startTestCamera() {
       const video = $("testCameraVideo");
@@ -1117,6 +1441,8 @@
       const img = $("testCameraImg");
       const select = $("cameraModeSelect");
       const mode = select ? select.value : "client";
+
+      resetDetector();
 
       if (mode === "client") {
         img.style.display = "none";
@@ -1158,6 +1484,7 @@
 
     function stopTestCamera() {
       isPoseEstimating = false;
+      stopAlarmSound();
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
@@ -1207,18 +1534,82 @@
 
       pose.onResults((results) => {
         if (!isPoseEstimating) return;
+        
+        if (canvas.width !== results.image.width || canvas.height !== results.image.height) {
+          canvas.width = results.image.width;
+          canvas.height = results.image.height;
+        }
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
         if (results.poseLandmarks) {
-          drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-          drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
+          drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+          drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2, radius: 4 });
+
+          // Run detection rules
+          const detection = updateDetector(results.poseLandmarks);
+          let localState = "normal";
+          if (detection) {
+            localState = detection.state;
+            if (detection.eventStarted) {
+              triggerLocalFallAlert(detection);
+            }
+          }
+
+          // Bounding Box
+          let minX = 1.0, maxX = 0.0, minY = 1.0, maxY = 0.0;
+          results.poseLandmarks.forEach(kp => {
+            if (kp.x < minX) minX = kp.x;
+            if (kp.x > maxX) maxX = kp.x;
+            if (kp.y < minY) minY = kp.y;
+            if (kp.y > maxY) maxY = kp.y;
+          });
+          
+          const padX = (maxX - minX) * 0.15;
+          const padY = (maxY - minY) * 0.15;
+          minX = Math.max(0, minX - padX);
+          maxX = Math.min(1, maxX + padX);
+          minY = Math.max(0, minY - padY);
+          maxY = Math.min(1, maxY + padY);
+
+          const isFallen = localState === "alert" || localState === "fallen" || aiFallTestOn;
+          ctx.strokeStyle = isFallen ? "#f43f5e" : "#10b981";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(
+            minX * canvas.width, 
+            minY * canvas.height, 
+            (maxX - minX) * canvas.width, 
+            (maxY - minY) * canvas.height
+          );
+          
+          // Draw label: Đứng / Nằm / Ngồi / Đi / Té ngã
+          let labelText = "ĐỨNG";
+          if (isFallen) {
+            labelText = "TÉ NGÃ";
+          } else if (localState === "lying" || localState === "possible_fall") {
+            labelText = "NẰM";
+          } else if (localState === "sitting") {
+            labelText = "NGỒI";
+          } else if (localState === "walking") {
+            labelText = "ĐI";
+          }
+          
+          ctx.fillStyle = isFallen ? "#f43f5e" : "#10b981";
+          ctx.font = "bold 16px Arial";
+          ctx.fillText(labelText, minX * canvas.width, Math.max(20, minY * canvas.height - 8));
+
+          // Update Mobile stream page status badge
+          const stateBadge = $("liveStateBadge");
+          if (stateBadge) {
+            stateBadge.textContent = isFallen ? "FALL DETECTED" : localState.toUpperCase();
+            stateBadge.className = `state pill ${isFallen ? 'red' : 'green'}`;
+          }
         }
       });
 
       async function detectionFrame() {
         if (!isPoseEstimating) return;
         if (video.readyState >= 2) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
           await pose.send({ image: video });
         }
         requestAnimationFrame(detectionFrame);

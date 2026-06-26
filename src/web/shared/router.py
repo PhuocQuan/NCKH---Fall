@@ -130,6 +130,7 @@ def get_app_state(user: str = Depends(require_user)):
     return service.get_app_state(user)
 
 
+
 @router.post("/api/appstate")
 def update_app_state(body: AppStateModel, user: str = Depends(require_user)):
     service.update_app_state(body.model_dump(), user)

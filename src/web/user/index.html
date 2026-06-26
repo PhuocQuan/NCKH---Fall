@@ -1780,13 +1780,28 @@ function loadStore(key, fallback) {
     
     window.editEmergencyContactModal = function(idx) {
       const contact = emergencyContacts[idx];
+      const isEmailMatch = contact.email && currentUser.email && contact.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+      const isNameMatch = contact.name && currentUser.name && contact.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      const isSelf = isEmailMatch || isNameMatch;
+      
+      const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
+      const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
+      const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
+      
+      let displayRelationship = contact.relationship;
+      if (isSelf) {
+        displayRelationship = "Bản thân";
+      } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+        displayRelationship = "Người giám sát";
+      }
+
       openModal("Sửa liên hệ khẩn cấp", `
         <form id="editContactForm" onsubmit="event.preventDefault(); return false;">
           <div class="form-grid">
-            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(contact.name)}" required></label>
-            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(contact.relationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(contact.phone)}" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(contact.email)}" type="email" required></label>
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(displayName)}" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(displayRelationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(displayEmail)}" type="email" required></label>
           </div>
         </form>
       `, `
@@ -2062,15 +2077,30 @@ function loadStore(key, fallback) {
             
             <div class="contact-grid">
               ${emergencyContacts.map((contact, idx) => {
-                const initials = contact.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+                const isEmailMatch = contact.email && currentUser.email && contact.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                const isNameMatch = contact.name && currentUser.name && contact.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+                const isSelf = isEmailMatch || isNameMatch;
+                
+                const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
+                const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
+                const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
+                
+                let displayRelationship = contact.relationship;
+                if (isSelf) {
+                  displayRelationship = "Bản thân";
+                } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+                  displayRelationship = "Người giám sát";
+                }
+
+                const initials = displayName.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
                 return `
                   <div class="contact-card-premium animate-hover">
                     <div class="contact-header">
                       <div class="contact-avatar-badge">
-                        <div class="contact-avatar" style="background: ${getContactGradient(contact.name)}; color: #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.08);">${initials}</div>
+                        <div class="contact-avatar" style="background: ${getContactGradient(displayName)}; color: #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.08);">${initials}</div>
                         <div class="contact-name-info">
-                          <h4>${esc(contact.name)}</h4>
-                          <span class="contact-relation-pill">${esc(contact.relationship)}</span>
+                          <h4>${esc(displayName)}</h4>
+                          <span class="contact-relation-pill">${esc(displayRelationship)}</span>
                         </div>
                       </div>
                       <div style="display: flex; gap: 6px; align-items: center;">
@@ -2083,18 +2113,18 @@ function loadStore(key, fallback) {
                       <div class="contact-info-row">
                         <span class="contact-info-icon">📞</span>
                         <span>Số điện thoại:</span>
-                        <strong class="contact-info-value">${esc(contact.phone)}</strong>
+                        <strong class="contact-info-value">${esc(displayPhone)}</strong>
                       </div>
                       <div class="contact-info-row">
                         <span class="contact-info-icon">📧</span>
                         <span>Email liên hệ:</span>
-                        <strong class="contact-info-value">${esc(contact.email)}</strong>
+                        <strong class="contact-info-value">${esc(displayEmail)}</strong>
                       </div>
                     </div>
                     
                     <div class="contact-actions">
-                      <a href="tel:${esc(contact.phone)}" class="contact-btn-call">📞 Gọi ngay</a>
-                      <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(contact.phone)}')"> Gửi cảnh báo</button>
+                      <a href="tel:${esc(displayPhone)}" class="contact-btn-call">📞 Gọi ngay</a>
+                      <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}')"> Gửi cảnh báo</button>
                     </div>
                   </div>
                 `;
@@ -2955,7 +2985,7 @@ function loadStore(key, fallback) {
       if (window.speechSynthesis) {
         try {
           window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("Cảnh báo. Phát hiện té ngã tại thiết bị máy khách. Vui lòng kiểm tra khẩn cấp!");
+          const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
           utterance.lang = "vi-VN";
           const voices = window.speechSynthesis.getVoices();
           const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
@@ -3413,7 +3443,7 @@ function loadStore(key, fallback) {
                 if (window.speechSynthesis) {
                   try {
                     window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance("Cảnh báo. Phát hiện té ngã tại thiết bị máy chủ. Vui lòng kiểm tra khẩn cấp!");
+                    const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
                     utterance.lang = "vi-VN";
                     const voices = window.speechSynthesis.getVoices();
                     const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
@@ -3772,6 +3802,9 @@ function loadStore(key, fallback) {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         localStorage.removeItem("nckh_current_user_email");
       }
+      localStorage.removeItem("fg_monitored_profile");
+      localStorage.removeItem("fg_emergency_contacts");
+      localStorage.removeItem("fg_user_notifications");
       window.location.replace("../index.html");
     }
 
