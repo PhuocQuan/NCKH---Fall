@@ -127,7 +127,7 @@ def delete_multiple_alerts(body: DeleteMultipleRequest, user: str = Depends(requ
 
 @router.get("/api/appstate")
 def get_app_state(user: str = Depends(require_user)):
-    return service.get_app_state()
+    return service.get_app_state(user)
 
 
 @router.post("/api/appstate")

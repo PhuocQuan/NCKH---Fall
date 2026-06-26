@@ -1988,12 +1988,11 @@ function loadStore(key, fallback) {
         const idx = Math.max(0, cameras.findIndex((item) => item.id === cam.id));
         const metrics = cameraMetrics(cam);
         const isTestable = currentUser.role === "Admin";
-        const testBtn = isTestable ? `<button class="btn danger" data-toggle-fall-test>Test té ngã AI</button>` : "";
         const owner = users.find(u => (u.assignedCameras || []).includes(cam.id));
         const ownerName = owner ? owner.name : "Chưa gán";
         
         const backText = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? "← Quay lại Trang chủ" : "← Quay lại Danh sách Camera";
-        const backAction = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? `liveViewLevel='cameras'; render('${cameraStreamBackView}', false);` : `liveViewLevel='cameras'; render('live', false);`;
+        const backAction = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? `stopTestCamera(false); liveViewLevel='cameras'; render('${cameraStreamBackView}', false);` : `stopTestCamera(false); liveViewLevel='cameras'; render('live', false);`;
         
         return `<div class="live-toolbar">
           <button class="btn line" onclick="${backAction}">${backText}</button>
@@ -2002,9 +2001,6 @@ function loadStore(key, fallback) {
               <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
               <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
             </select>
-            <button class="btn primary" data-start-test-camera>Mở camera</button>
-            ${testBtn}
-            <button class="btn line" data-stop-test-camera>Dừng camera</button>
             <button class="btn line" data-snapshot-test-camera>Chụp ảnh test</button>
           </div>
         </div>
@@ -2040,7 +2036,7 @@ function loadStore(key, fallback) {
             </div>
             
             <div id="cameraTestHint" class="hint" style="margin-top:auto; font-style:italic;">
-              Nhấn "Mở camera" để bắt đầu luồng dữ liệu trực tiếp.
+              Camera tự động kích hoạt.
             </div>
           </div>
         </div>`;
@@ -3661,6 +3657,12 @@ function loadStore(key, fallback) {
 
 
     function render(id = "dashboard", fetchSync = true) {
+      // Tắt camera khi rời khỏi màn hình giám sát trực tiếp
+      const isLiveView = (id === "user_dashboard" || id === "live");
+      if (!isLiveView || liveViewLevel !== "stream") {
+        stopTestCamera(false);
+      }
+
       const vis = getVisibleCameras();
       if (vis.length > 0) {
         if (!vis.some(c => c.id === selectedCameraId)) {
@@ -3762,7 +3764,7 @@ function loadStore(key, fallback) {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         localStorage.removeItem("nckh_current_user_email");
       }
-      window.location.replace("index.html");
+      window.location.replace("../index.html");
     }
 
     $("logoutBtn").addEventListener("click", performLogout);
@@ -3832,6 +3834,8 @@ function loadStore(key, fallback) {
           liveViewLevel = "stream";
           const isUser = currentUser.role !== "Admin";
           render(isUser ? "user_dashboard" : "live");
+          // Auto-start camera khi click vào camera card
+          setTimeout(() => startTestCamera(), 150);
         }
       }
       if (event.target.closest("[data-back-dashboard]")) render("dashboard");
@@ -4520,7 +4524,7 @@ function loadStore(key, fallback) {
           return;
         }
       }
-      window.location.replace("/");
+      window.location.replace("../index.html");
     }
 
     // Responsive sidebar toggle logic

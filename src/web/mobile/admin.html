@@ -419,8 +419,35 @@
       stopTestCamera();
     }
 
+    function selectCameraMobile(cameraId) {
+      const cam = cameras.find(c => c.id === cameraId);
+      if (cam) {
+        if (cam.status === "offline") {
+          alert(`Camera "${cam.name}" đang không hoạt động.`);
+          return;
+        }
+        if (cam.status === "maintenance" || cam.status === "Bảo trì") {
+          alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
+          return;
+        }
+      }
+      selectedCameraId = cameraId;
+      liveViewLevel = "stream";
+      render("live", false);
+      // Auto-start camera khi click vào camera card
+      setTimeout(() => startTestCamera(), 150);
+    }
+
     // Tab Switching
     function switchTab(viewName) {
+      if (viewName !== "live") {
+        stopTestCamera();
+      } else {
+        if (liveViewLevel === "stream") {
+          stopTestCamera();
+          liveViewLevel = "locations";
+        }
+      }
       currentView = viewName;
       if (viewName !== "settings") {
         settingsSubView = "";
@@ -625,7 +652,7 @@
             </div>
             <div class="mobile-list">
               ${camsInHouse.map(c => `
-                <div class="mobile-list-card" onclick="selectedCameraId='${c.id}'; liveViewLevel='stream'; render('live', false);">
+                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
                   <div class="mobile-list-card-row">
                     <span class="mobile-list-card-title">${esc(c.name)} (${c.id})</span>
                     <span>${statusPill(c.status)}</span>
@@ -649,7 +676,7 @@
 
           return `
             <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-              <button class="btn line small" onclick="liveViewLevel='cameras'; render('live', false);">← Quay lại</button>
+              <button class="btn line small" onclick="stopTestCamera(); liveViewLevel='cameras'; render('live', false);">← Quay lại</button>
               <strong style="color:var(--muted); font-size:13px;">${esc(cam.name)}</strong>
             </div>
 
@@ -678,15 +705,7 @@
                 </select>
               </label>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:10px;">
-                <button class="btn primary" onclick="startTestCamera()">Mở camera</button>
-                <button class="btn line" onclick="stopTestCamera()">Dừng camera</button>
-              </div>
-              
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                <button class="btn danger" onclick="toggleFallTest()">Test ngã AI</button>
-                <button class="btn line" onclick="snapshotTestCamera()">Chụp ảnh test</button>
-              </div>
+              <button class="btn line" onclick="snapshotTestCamera()" style="width:100%;">Chụp ảnh test</button>
             </div>
           `;
         }
@@ -1579,6 +1598,7 @@
 
     function toggleStreamMode() {
       stopTestCamera();
+      setTimeout(() => startTestCamera(), 150);
     }
 
     function toggleFallTest() {

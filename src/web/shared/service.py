@@ -179,8 +179,8 @@ def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, m
     return len(ids_to_process)
 
 
-def get_app_state() -> dict[str, str]:
-    return repo.get_app_state_db()
+def get_app_state(user: str) -> dict[str, str]:
+    return repo.get_app_state_db(user)
 
 
 def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
@@ -194,6 +194,6 @@ def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
             params.append(val)
             
     if updates:
-        params.append("global")
+        params.append(user)
         repo.update_app_state_db(updates, params)
         log_action("Cấu hình hệ thống", user, "Cập nhật cấu hình ứng dụng (app state)")

@@ -78,7 +78,7 @@ def solve_alert_db(alert_id: str) -> None:
         client.execute("UPDATE alerts SET status = 'Đã xử lý' WHERE id = ?", [alert_id])
 
 
-def get_app_state_db() -> dict[str, str]:
+def get_app_state_db(email: str = "global") -> dict[str, str]:
     with get_db_client() as client:
         client.execute("""
             CREATE TABLE IF NOT EXISTS app_state (
@@ -92,10 +92,11 @@ def get_app_state_db() -> dict[str, str]:
         """)
         res = client.execute(
             "SELECT api_keys_json, settings_json, monitored_profile_json, emergency_contacts_json, "
-            "user_notifications_json FROM app_state WHERE id = 'global'"
+            "user_notifications_json FROM app_state WHERE id = ?",
+            [email]
         )
         if not res.rows:
-            client.execute("INSERT INTO app_state (id) VALUES ('global')")
+            client.execute("INSERT INTO app_state (id) VALUES (?)", [email])
             return {
                 "api_keys_json": "[]",
                 "settings_json": "{}",

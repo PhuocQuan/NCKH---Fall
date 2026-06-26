@@ -151,7 +151,7 @@
       { id: "NT-003", type: "maintenance", title: "Hội hệ thống bảo trì", content: "Hệ thống FallGuard AI sẽ tiến hành bảo trì nâng cấp thuật toán từ 01:00 đến 03:00 ngày 20/06/2026.", time: "14/06/2026 18:00", read: true }
     ]);
 
-    let currentUser = { email: "bao@nckh.vn", name: "Đinh Ngọc Thế Nhân", role: "Khachhang", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
+    let currentUser = { email: "bao@nckh.vn", name: "Cao Đình Bảo", role: "Khachhang", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
     let authToken = localStorage.getItem("nckh_auth_token") || "";
     let isBackendOnline = false;
     let currentView = "dashboard";
@@ -323,6 +323,8 @@
       selectedCameraId = cameraId;
       liveViewLevel = "stream";
       switchTab("live");
+      // Auto-start camera khi click vào camera card
+      setTimeout(() => startTestCamera(), 150);
     }
 
     function aiStreamUrl() {
@@ -384,6 +386,9 @@
 
     // Tab view logic
     function switchTab(viewName) {
+      if (viewName !== "live") {
+        stopTestCamera();
+      }
       currentView = viewName;
       document.querySelectorAll(".mobile-nav-item").forEach(item => {
         const targetView = item.dataset.view;
@@ -581,7 +586,7 @@
 
           return `
             <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-              <button class="btn line small" onclick="switchTab('dashboard');">← Quay lại</button>
+              <button class="btn line small" onclick="stopTestCamera(false); switchTab('dashboard');">← Quay lại</button>
               <strong style="color:var(--muted); font-size:13px;">${esc(cam.name)}</strong>
             </div>
 
@@ -599,22 +604,6 @@
               </div>
             </article>
 
-            <div class="card" style="padding:16px;">
-              <h4 style="margin:0 0 12px;">Điều khiển camera</h4>
-              
-              <label class="field" style="margin-bottom:12px;">
-                <span>Nguồn luồng Video</span>
-                <select class="control" id="cameraModeSelect" onchange="toggleStreamMode()" style="width:100%;">
-                  <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt (Webcam điện thoại)</option>
-                  <option value="server" ${isBackendOnline ? "selected" : ""}>Máy chủ (Webcam Server)</option>
-                </select>
-              </label>
-
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                <button class="btn primary" onclick="startTestCamera()">Mở camera</button>
-                <button class="btn line" onclick="stopTestCamera()">Dừng camera</button>
-              </div>
-            </div>
           `;
         }
       },

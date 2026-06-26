@@ -1,10 +1,9 @@
-"""Xác thực đơn giản cho dashboard NCKH."""
+"""Xác thực đơn giản cho dashboard NCKH sử dụng JWT."""
 
 from __future__ import annotations
 
-import secrets
 import time
-from dataclasses import dataclass
+import jwt
 
 VALID_USERS = {
     "admin": "nckh2025",
@@ -15,15 +14,8 @@ VALID_USERS = {
 }
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12
-
-
-@dataclass
-class Session:
-    username: str
-    expires_at: float
-
-
-_sessions: dict[str, Session] = {}
+JWT_SECRET_KEY = "nckh-fallguard-secret-key-2026"
+JWT_ALGORITHM = "HS256"
 
 
 def login(username: str, password: str) -> str:
@@ -54,23 +46,29 @@ def login(username: str, password: str) -> str:
             raise ValueError("Sai tai khoan hoac mat khau.")
         logged_in_user = f"{prefix}@nckh.vn"
 
-    token = secrets.token_urlsafe(32)
-    _sessions[token] = Session(username=logged_in_user, expires_at=time.time() + TOKEN_TTL_SECONDS)
+    # Tạo JWT token thay vì session lưu trên RAM
+    payload = {
+        "sub": logged_in_user,
+        "exp": int(time.time() + TOKEN_TTL_SECONDS)
+    }
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
 
 
 def verify_token(token: str | None) -> str | None:
     if not token:
         return None
-    session = _sessions.get(token)
-    if not session:
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        print("[Auth] JWT Token đã hết hạn.")
         return None
-    if session.expires_at < time.time():
-        _sessions.pop(token, None)
+    except jwt.InvalidTokenError:
+        print("[Auth] JWT Token không hợp lệ.")
         return None
-    return session.username
 
 
 def logout(token: str | None) -> None:
-    if token:
-        _sessions.pop(token, None)
+    # JWT là Stateless nên logout phía Server không cần thao tác gì
+    pass
