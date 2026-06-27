@@ -183,7 +183,10 @@ def camera_stream(request: Request):
 
 @router.get("/api/camera/snapshot")
 def camera_snapshot(request: Request):
-    if not verify_token(_extract_token(request)):
+    t = _extract_token(request)
+    print(f"[DEBUG] Snapshot token: {t}")
+    if not verify_token(t):
+        print(f"[DEBUG] verify_token failed for token: {t}")
         raise HTTPException(status_code=401, detail="Token khong hop le.")
     placeholder = _placeholder_frame()
     frame = pipeline.get_jpeg_frame() or placeholder

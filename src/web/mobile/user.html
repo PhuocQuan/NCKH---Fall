@@ -1261,8 +1261,18 @@
       render(currentView);
     }
 
-    window.sendEmergencyAlertMsg = function(phone) {
+    function sendEmergencyAlertMsg(phone) {
       alert(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/camera/test-snapshot`, {
+          method: "POST",
+          headers: { 
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ camera_id: "SOS-" + phone.replace(/\s+/g, '') })
+        }).catch(() => {});
+      }
     };
 
     function viewAlertMediaModal(id) {
