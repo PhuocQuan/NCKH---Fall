@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/auth_service.dart';
 import 'core/app_state_service.dart';
+import 'core/navigator_key.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -32,6 +33,7 @@ class FallGuardApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: globalNavigatorKey,
       title: 'FallGuard AI',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),

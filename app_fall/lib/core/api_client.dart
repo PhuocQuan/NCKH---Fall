@@ -11,8 +11,10 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
-  String baseUrl = kIsWeb ? 'http://127.0.0.1:8000' : 'https://nckh-fall.onrender.com'; // Default based on platform
+  String baseUrl = 'https://nckh-fall.onrender.com'; // Sử dụng backend đã deploy
   String? _token;
+
+  void Function()? onUnauthorized;
 
   void setToken(String? token) => _token = token;
   void setBaseUrl(String url) => baseUrl = url.trimRight().replaceAll(RegExp(r'/$'), '');
@@ -25,10 +27,17 @@ class ApiClient {
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
+  void _check401(http.Response res) {
+    if (res.statusCode == 401) {
+      onUnauthorized?.call();
+      throw const ApiException('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+  }
+
   // GET /api/health
   Future<Map<String, dynamic>> healthCheck() async {
     try {
-      final res = await http.get(_uri('/api/health')).timeout(const Duration(seconds: 5));
+      final res = await http.get(_uri('/api/health')).timeout(const Duration(seconds: 120));
       if (res.statusCode == 200) {
         return jsonDecode(res.body) as Map<String, dynamic>;
       }
@@ -46,7 +55,7 @@ class ApiClient {
           headers: _headers,
           body: jsonEncode({'username': username, 'password': password}),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 120));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode != 200) {
       throw ApiException(body['detail'] ?? 'Đăng nhập thất bại.');
@@ -57,9 +66,10 @@ class ApiClient {
   // POST /api/auth/logout
   Future<void> logout() async {
     try {
-      await http
+      final res = await http
           .post(_uri('/api/auth/logout'), headers: _headers)
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 120));
+      _check401(res);
     } catch (_) {}
   }
 
@@ -67,20 +77,22 @@ class ApiClient {
   Future<Map<String, dynamic>> getAppState() async {
     final res = await http
         .get(_uri('/api/appstate'), headers: _headers)
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 120));
+    _check401(res);
     if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
     throw ApiException('Không lấy được appstate (${res.statusCode})');
   }
 
   // POST /api/appstate
   Future<void> postAppState(Map<String, dynamic> payload) async {
-    await http
+    final res = await http
         .post(
           _uri('/api/appstate'),
           headers: _headers,
           body: jsonEncode(payload),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 120));
+    _check401(res);
   }
 
   // GET /api/alerts
@@ -88,7 +100,8 @@ class ApiClient {
     try {
       final res = await http
           .get(_uri('/api/alerts'), headers: _headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 120));
+      _check401(res);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         return body['alerts'] as List<dynamic>;
@@ -102,7 +115,8 @@ class ApiClient {
     try {
       final res = await http
           .get(_uri('/api/cameras'), headers: _headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 120));
+      _check401(res);
       if (res.statusCode == 200) return jsonDecode(res.body) as List<dynamic>;
     } catch (_) {}
     return [];
@@ -113,7 +127,8 @@ class ApiClient {
     try {
       final res = await http
           .get(_uri('/api/users'), headers: _headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 120));
+      _check401(res);
       if (res.statusCode == 200) return jsonDecode(res.body) as List<dynamic>;
     } catch (_) {}
     return [];
@@ -127,7 +142,8 @@ class ApiClient {
           headers: _headers,
           body: jsonEncode(data),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 120));
+    _check401(res);
     if (res.statusCode != 200) {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       throw ApiException(body['detail'] ?? 'Không thể cập nhật thông tin.');
@@ -143,7 +159,8 @@ class ApiClient {
           headers: _headers,
           body: jsonEncode(payload),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 120));
+    _check401(res);
     if (res.statusCode != 200) {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       throw ApiException(body['detail'] ?? 'Lỗi khi xóa cảnh báo.');
@@ -153,22 +170,24 @@ class ApiClient {
   // POST /api/camera/test-snapshot (Send manual SOS alert from mobile)
   Future<void> sendEmergencySOS(String contactName) async {
     try {
-      await http.post(
+      final res = await http.post(
         _uri('/api/camera/test-snapshot'),
         headers: _headers,
         body: jsonEncode({'camera_id': 'SOS-$contactName'}),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 120));
+      _check401(res);
     } catch (_) {}
   }
 
   // POST /api/control/start
   Future<void> startCamera(String source, String cameraId) async {
     try {
-      await http.post(
+      final res = await http.post(
         _uri('/api/control/start'),
         headers: _headers,
         body: jsonEncode({'source': source, 'camera_id': cameraId}),
       ).timeout(const Duration(seconds: 5));
+      _check401(res);
     } catch (_) {}
   }
 
@@ -193,6 +212,7 @@ class ApiClient {
         _uri('/api/camera/snapshot'),
         headers: _headers,
       ).timeout(const Duration(seconds: 3));
+      _check401(res);
       if (res.statusCode == 200) return res.bodyBytes;
       throw Exception('HTTP ${res.statusCode}');
     } catch (e) {
