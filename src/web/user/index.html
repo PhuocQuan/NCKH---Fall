@@ -3698,7 +3698,7 @@ function loadStore(key, fallback) {
       // Tắt camera khi rời khỏi màn hình giám sát trực tiếp
       const isLiveView = (id === "user_dashboard" || id === "live");
       if (!isLiveView || liveViewLevel !== "stream") {
-        stopTestCamera(false);
+        stopTestCamera(false, true);
       }
 
       const vis = getVisibleCameras();

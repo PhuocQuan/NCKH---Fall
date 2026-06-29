@@ -595,7 +595,7 @@
     // Tab view logic
     function switchTab(viewName) {
       if (viewName !== "live") {
-        stopTestCamera();
+        stopTestCamera(true);
       }
       currentView = viewName;
       document.querySelectorAll(".mobile-nav-item").forEach(item => {

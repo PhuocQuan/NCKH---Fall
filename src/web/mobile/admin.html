@@ -441,10 +441,10 @@
     // Tab Switching
     function switchTab(viewName) {
       if (viewName !== "live") {
-        stopTestCamera();
+        stopTestCamera(true);
       } else {
         if (liveViewLevel === "stream") {
-          stopTestCamera();
+          stopTestCamera(true);
           liveViewLevel = "locations";
         }
       }
