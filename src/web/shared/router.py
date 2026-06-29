@@ -160,7 +160,7 @@ def _mjpeg_generator():
             b"--frame\r\n"
             b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
         )
-        time.sleep(0.04)
+        time.sleep(0.02)
 
 
 def _placeholder_frame() -> bytes:

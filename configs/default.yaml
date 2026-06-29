@@ -15,7 +15,7 @@ detector:
 app:
   camera_width: 640
   camera_height: 480
-  model_complexity: 1
+  model_complexity: 0
   draw_landmarks: true
   event_log_path: data/events.csv
 
