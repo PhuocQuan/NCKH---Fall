@@ -13,7 +13,7 @@ Voi logic nay, nguoi nam ngu san tren giuong/san se duoc gan `lying`, khong tao 
 Neu can demo nhanh tinh nang canh bao trong phong lab, co the dung:
 
 ```powershell
-python -m src.app --source 0 --alert-on-long-lying
+python -m src.core.app --source 0 --alert-on-long-lying
 ```
 
 Che do nay se canh bao khi nguoi nam lau hon `alert_after_seconds` du khong co chuyen dong giong te nga. No huu ich de test pipeline canh bao, nhung khong nen dung lam ket qua chinh khi danh gia kha nang phan biet nam ngu voi te nga.

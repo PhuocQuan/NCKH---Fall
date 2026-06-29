@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Update server URL if changed
       final serverUrl = _serverUrlCtrl.text.trim().isNotEmpty
           ? _serverUrlCtrl.text.trim()
-          : (kIsWeb ? 'http://127.0.0.1:8000' : 'https://nckh-fall.onrender.com');
+          : (kIsWeb ? 'http://127.0.0.1:8000' : 'https://outputs-try-highway-last.trycloudflare.com');
       await AuthService().setServerUrl(serverUrl);
 
       final username = _normalizeUsername(_usernameCtrl.text);
@@ -333,12 +333,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 6),
                           _buildTextField(
                             controller: _serverUrlCtrl,
-                            hint: kIsWeb ? 'http://127.0.0.1:8000' : 'https://nckh-fall.onrender.com',
+                            hint: kIsWeb ? 'http://127.0.0.1:8000' : 'https://outputs-try-highway-last.trycloudflare.com',
                             keyboardType: TextInputType.url,
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            '• Web (Chrome): http://127.0.0.1:8000\n• Emulator Android: https://nckh-fall.onrender.com\n• Thiết bị thật: https://nckh-fall.onrender.com',
+                            '• Web (Chrome): http://127.0.0.1:8000\n• Emulator Android: https://outputs-try-highway-last.trycloudflare.com\n• Thiết bị thật: https://outputs-try-highway-last.trycloudflare.com',
                             style: TextStyle(fontSize: 11, color: Color(0xFF94a3b8), height: 1.5),
                           ),
                         ],

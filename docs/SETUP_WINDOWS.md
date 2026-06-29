@@ -28,20 +28,20 @@ python -m pip install --upgrade pip
 
 ```powershell
 pip install -r requirements-camera.txt
-python -m src.check_camera --camera 0
+python -m src.camera.check_camera --camera 0
 ```
 
 Neu may co nhieu camera, thu:
 
 ```powershell
-python -m src.check_camera --camera 1
+python -m src.camera.check_camera --camera 1
 ```
 
 ## 4. Cai day du demo phat hien te nga
 
 ```powershell
 pip install -r requirements.txt
-python -m src.app --source 0
+python -m src.core.app --source 0
 ```
 
 ## 5. Neu MediaPipe khong cai duoc

@@ -1223,7 +1223,7 @@ function loadStore(key, fallback) {
             </div>
             <div class="row" style="gap:8px">
               <button class="btn small primary" onclick="startTestCamera()">Mở tất cả camera</button>
-              <button class="btn small line" onclick="stopTestCamera()">Dừng camera</button>
+              <button class="btn small line" onclick="stopTestCamera(true, true)">Dừng camera</button>
             </div>
           </div>
           <div class="grid camera-grid">
@@ -2511,7 +2511,7 @@ function loadStore(key, fallback) {
           const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-            body: JSON.stringify({ source: "0", camera_id: selectedCameraId }),
+            body: JSON.stringify({ source: (cam && cam.rtsp) ? cam.rtsp : "0", camera_id: selectedCameraId }),
           });
           const payload = await res.json().catch(() => ({}));
           if (!res.ok && res.status !== 409) {
@@ -3046,7 +3046,7 @@ function loadStore(key, fallback) {
       }
     }
 
-    function stopTestCamera(showMessage = true) {
+    function stopTestCamera(showMessage = true, stopBackend = false) {
       stopStatusPolling();
       isProcessingLocalCamera = false;
       
@@ -3086,7 +3086,7 @@ function loadStore(key, fallback) {
         hintEl.textContent = "Đã dừng camera.";
       }
       
-      if (isBackendOnline && authToken) {
+      if (stopBackend && isBackendOnline && authToken) {
         fetch(`${apiBaseUrl()}/api/control/stop`, {
           method: "POST",
           headers: { Authorization: `Bearer ${authToken}` },
@@ -3885,7 +3885,7 @@ function loadStore(key, fallback) {
       }
       if (event.target.closest("[data-back-dashboard]")) render("dashboard");
       if (event.target.closest("[data-start-test-camera]")) startTestCamera();
-      if (event.target.closest("[data-stop-test-camera]")) stopTestCamera();
+      if (event.target.closest("[data-stop-test-camera]")) stopTestCamera(true, true);
       if (event.target.closest("[data-snapshot-test-camera]")) snapshotTestCamera();
       if (event.target.closest("[data-toggle-fall-test]")) toggleFallTest();
       if (event.target.closest("[data-close-modal]")) closeModal();

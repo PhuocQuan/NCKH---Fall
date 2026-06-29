@@ -2,7 +2,6 @@
 // Quản lý token, server URL, session trong SharedPreferences
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'api_client.dart';
 import 'navigator_key.dart';
 
@@ -17,7 +16,7 @@ class AuthService {
 
   String? _token;
   String? _email;
-  String _serverUrl = 'https://nckh-fall.onrender.com';
+  String _serverUrl = 'https://outputs-try-highway-last.trycloudflare.com';
 
   String? get token => _token;
   String? get email => _email;
@@ -30,14 +29,8 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString(_keyToken);
     _email = prefs.getString(_keyEmail);
-    _serverUrl = prefs.getString(_keyServerUrl) ?? 'https://nckh-fall.onrender.com';
+    _serverUrl = prefs.getString(_keyServerUrl) ?? 'https://outputs-try-highway-last.trycloudflare.com';
     
-    // Fix cho bộ nhớ đệm: Nếu lỡ lưu URL local từ trước, hãy ép về lại Server Render
-    if (_serverUrl == 'http://127.0.0.1:8000') {
-      _serverUrl = 'https://nckh-fall.onrender.com';
-      await prefs.setString(_keyServerUrl, _serverUrl);
-    }
-
     // Sync vào ApiClient
     ApiClient().setBaseUrl(_serverUrl);
     ApiClient().setToken(_token);

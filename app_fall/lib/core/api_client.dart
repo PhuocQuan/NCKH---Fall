@@ -4,14 +4,14 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb;
+
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
   ApiClient._internal();
 
-  String baseUrl = 'https://nckh-fall.onrender.com'; // Sử dụng backend đã deploy
+  String baseUrl = 'https://outputs-try-highway-last.trycloudflare.com'; // Sử dụng Cloudflare Tunnel
   String? _token;
 
   void Function()? onUnauthorized;
@@ -21,6 +21,7 @@ class ApiClient {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         if (_token != null && _token!.isNotEmpty)
           'Authorization': 'Bearer $_token',
       };
@@ -37,7 +38,7 @@ class ApiClient {
   // GET /api/health
   Future<Map<String, dynamic>> healthCheck() async {
     try {
-      final res = await http.get(_uri('/api/health')).timeout(const Duration(seconds: 120));
+      final res = await http.get(_uri('/api/health'), headers: _headers).timeout(const Duration(seconds: 120));
       if (res.statusCode == 200) {
         return jsonDecode(res.body) as Map<String, dynamic>;
       }
@@ -186,6 +187,17 @@ class ApiClient {
         _uri('/api/control/start'),
         headers: _headers,
         body: jsonEncode({'source': source, 'camera_id': cameraId}),
+      ).timeout(const Duration(seconds: 5));
+      _check401(res);
+    } catch (_) {}
+  }
+
+  // POST /api/control/stop
+  Future<void> stopCamera() async {
+    try {
+      final res = await http.post(
+        _uri('/api/control/stop'),
+        headers: _headers,
       ).timeout(const Duration(seconds: 5));
       _check401(res);
     } catch (_) {}

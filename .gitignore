@@ -11,3 +11,8 @@ data/events.db
 .env
 .ipynb_checkpoints/
 configs/db.json
+
+# Cloudflare Tunnel local binary & config
+cloudflared.exe
+config.yml
+config.yaml

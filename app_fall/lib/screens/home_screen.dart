@@ -494,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showStreamSheet(CameraModel cam) {
     // Tự động bật pipeline server khi User mở cam (không cần Admin)
-    ApiClient().startCamera('0', cam.id);
+    ApiClient().startCamera(cam.rtsp.isNotEmpty ? cam.rtsp : '0', cam.id);
     
     showModalBottomSheet(
       context: context,
@@ -505,7 +505,10 @@ class _HomeScreenState extends State<HomeScreen> {
         streamUrl: ApiClient().mjpegUrl(),
         isBackendOnline: _isBackendOnline,
       ),
-    );
+    ).then((_) {
+      // Khi đóng BottomSheet, tự động gửi lệnh stop camera lên server để tắt webcam
+      ApiClient().stopCamera();
+    });
   }
 
   // ─── TAB 1: ALERTS ────────────────────────────────────────────────────────

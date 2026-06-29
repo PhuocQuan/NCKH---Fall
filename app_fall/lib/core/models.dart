@@ -82,6 +82,7 @@ class CameraModel {
   final int fps;
   final String resolution;
   final int threshold;
+  final String rtsp;
 
   const CameraModel({
     required this.id,
@@ -92,6 +93,7 @@ class CameraModel {
     this.fps = 0,
     this.resolution = '1280x720',
     this.threshold = 80,
+    this.rtsp = '',
   });
 
   factory CameraModel.fromJson(Map<String, dynamic> json) => CameraModel(
@@ -103,6 +105,7 @@ class CameraModel {
         fps: json['fps'] ?? 0,
         resolution: json['resolution'] ?? '1280x720',
         threshold: json['threshold'] ?? 80,
+        rtsp: json['rtsp'] ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -114,6 +117,7 @@ class CameraModel {
         'fps': fps,
         'resolution': resolution,
         'threshold': threshold,
+        'rtsp': rtsp,
       };
 
   bool get isOnline => status == 'online';

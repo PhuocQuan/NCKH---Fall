@@ -30,7 +30,7 @@ De bai NCKH nen tach ro `sleeping` hoac `lying` de model hoc phan biet nam ngu v
 ## Tao CSV dac trung
 
 ```powershell
-python -m src.build_feature_dataset --input data/videos --output data/features.csv
+python -m src.ai.build_feature_dataset --input data/videos --output data/features.csv
 ```
 
 CSV se gom cac dac trung nhu goc than, toc do roi cua hong, do cao dau so voi hong, do tin cay landmark.
@@ -38,7 +38,7 @@ CSV se gom cac dac trung nhu goc than, toc do roi cua hong, do cao dau so voi ho
 ## Train model AI
 
 ```powershell
-python -m src.train_ai_model --csv data/features.csv --output models/fall_classifier.joblib
+python -m src.ai.train_ai_model --csv data/features.csv --output models/fall_classifier.joblib
 ```
 
 Sau khi train, bat AI trong `configs/default.yaml`:
@@ -54,7 +54,7 @@ ai:
 Roi chay:
 
 ```powershell
-python -m src.app --source 0
+python -m src.core.app --source 0
 ```
 
 ## Bao cao NCKH nen trinh bay

@@ -547,7 +547,7 @@
       try {
         const res = await fetch(`${apiBaseUrl()}/api/health`);
         const data = await res.json();
-        isBackendOnline = data.ok && data.db_connected;
+        isBackendOnline = data.ok;
         return isBackendOnline;
       } catch {
         isBackendOnline = false;

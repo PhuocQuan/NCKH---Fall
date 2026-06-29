@@ -1549,10 +1549,11 @@
         
         try {
           await backendLogin();
+          const cam = cameras.find(c => c.id === selectedCameraId);
           const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-            body: JSON.stringify({ source: "0", camera_id: selectedCameraId }),
+            body: JSON.stringify({ source: (cam && cam.rtsp) ? cam.rtsp : "0", camera_id: selectedCameraId }),
           });
           const payload = await res.json().catch(() => ({}));
           if (!res.ok && res.status !== 409) {
@@ -1565,7 +1566,7 @@
       }
     }
 
-    function stopTestCamera() {
+    function stopTestCamera(stopBackend = false) {
       isPoseEstimating = false;
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
@@ -1588,7 +1589,7 @@
         img.style.display = "none";
       }
 
-      if (isBackendOnline && authToken) {
+      if (stopBackend && isBackendOnline && authToken) {
         fetch(`${apiBaseUrl()}/api/control/stop`, {
           method: "POST",
           headers: { Authorization: `Bearer ${authToken}` },
