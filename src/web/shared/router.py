@@ -67,6 +67,18 @@ def require_user(request: Request) -> str:
     user = verify_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Chua dang nhap hoac token het han.")
+    
+    try:
+        from src.web.shared.db import get_db_client
+        with get_db_client() as client:
+            res = client.execute("SELECT status FROM users WHERE email = ?", [user])
+            if not res.rows or res.rows[0][0] != 'Đang hoạt động':
+                raise HTTPException(status_code=401, detail="Tài khoản của bạn đã bị khóa.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Middleware Error] Khong the kiem tra status user: {e}")
+        
     return user
 
 

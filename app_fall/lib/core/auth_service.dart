@@ -16,7 +16,7 @@ class AuthService {
 
   String? _token;
   String? _email;
-  String _serverUrl = 'https://outputs-try-highway-last.trycloudflare.com';
+  String _serverUrl = 'https://repairs-outlined-scheduling-knowing.trycloudflare.com';
 
   String? get token => _token;
   String? get email => _email;
@@ -29,7 +29,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString(_keyToken);
     _email = prefs.getString(_keyEmail);
-    _serverUrl = prefs.getString(_keyServerUrl) ?? 'https://outputs-try-highway-last.trycloudflare.com';
+    _serverUrl = prefs.getString(_keyServerUrl) ?? 'https://repairs-outlined-scheduling-knowing.trycloudflare.com';
     
     // Sync vào ApiClient
     ApiClient().setBaseUrl(_serverUrl);

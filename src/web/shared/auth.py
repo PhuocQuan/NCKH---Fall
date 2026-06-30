@@ -27,12 +27,17 @@ def login(username: str, password: str) -> str:
     try:
         from src.web.shared.db import get_db_client
         with get_db_client() as client:
-            result = client.execute("SELECT password FROM users WHERE email = ? AND status = 'Đang hoạt động'", [email])
+            result = client.execute("SELECT password, status FROM users WHERE email = ?", [email])
         
         if not result.rows:
-            raise ValueError("Sai tài khoản hoặc mật khẩu, hoặc tài khoản đã bị khóa.")
+            raise ValueError("Sai tài khoản hoặc mật khẩu.")
             
         db_pwd = result.rows[0][0]
+        db_status = result.rows[0][1]
+        
+        if db_status != 'Đang hoạt động':
+            raise ValueError("Tài khoản của bạn đã bị khóa.")
+            
         if db_pwd != password:
             raise ValueError("Sai tài khoản hoặc mật khẩu.")
             

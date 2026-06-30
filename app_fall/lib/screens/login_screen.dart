@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Update server URL if changed
       final serverUrl = _serverUrlCtrl.text.trim().isNotEmpty
           ? _serverUrlCtrl.text.trim()
-          : (kIsWeb ? 'http://127.0.0.1:8000' : 'https://outputs-try-highway-last.trycloudflare.com');
+          : (kIsWeb ? 'http://127.0.0.1:8000' : 'https://repairs-outlined-scheduling-knowing.trycloudflare.com');
       await AuthService().setServerUrl(serverUrl);
 
       final username = _normalizeUsername(_usernameCtrl.text);
@@ -114,9 +114,16 @@ class _LoginScreenState extends State<LoginScreen> {
             orElse: () => <String, dynamic>{},
           );
           if (found.isNotEmpty) {
+            final userRole = (found['role'] ?? '').toString().toLowerCase();
+            if (userRole == 'admin') {
+              await AuthService().clearSession();
+              throw const ApiException('Tài khoản Admin không được hỗ trợ trên ứng dụng di động.');
+            }
             AppStateService().currentUser = UserModel.fromJson(found);
           }
-        } catch (_) {}
+        } catch (e) {
+          if (e is ApiException) rethrow;
+        }
         await AppStateService().syncFromBackend();
       }
 
@@ -152,12 +159,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withAlpha(40),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
+                          color: Colors.black.withAlpha(25),
+                          blurRadius: 32,
+                          offset: const Offset(0, 12),
                         ),
                       ],
                     ),
@@ -189,15 +196,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             fillColor: const Color(0xFFF8FAFC),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(color: Color(0xFF4f46e5), width: 2),
                             ),
                             suffixIcon: IconButton(
@@ -287,13 +294,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Login button
                         SizedBox(
                           width: double.infinity,
-                          height: 48,
+                          height: 52,
                           child: ElevatedButton(
                             onPressed: _loading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF4f46e5),
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               elevation: 0,
                             ),
                             child: _loading
@@ -333,12 +340,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 6),
                           _buildTextField(
                             controller: _serverUrlCtrl,
-                            hint: kIsWeb ? 'http://127.0.0.1:8000' : 'https://outputs-try-highway-last.trycloudflare.com',
+                            hint: kIsWeb ? 'http://127.0.0.1:8000' : 'https://repairs-outlined-scheduling-knowing.trycloudflare.com',
                             keyboardType: TextInputType.url,
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            '• Web (Chrome): http://127.0.0.1:8000\n• Emulator Android: https://outputs-try-highway-last.trycloudflare.com\n• Thiết bị thật: https://outputs-try-highway-last.trycloudflare.com',
+                            '• Web (Chrome): http://127.0.0.1:8000\n• Emulator Android: https://repairs-outlined-scheduling-knowing.trycloudflare.com\n• Thiết bị thật: https://repairs-outlined-scheduling-knowing.trycloudflare.com',
                             style: TextStyle(fontSize: 11, color: Color(0xFF94a3b8), height: 1.5),
                           ),
                         ],
@@ -427,15 +434,15 @@ class _LoginScreenState extends State<LoginScreen> {
         fillColor: const Color(0xFFF8FAFC),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFF4f46e5), width: 2),
         ),
       ),

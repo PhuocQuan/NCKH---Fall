@@ -442,9 +442,9 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: kCard,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: kLine),
-          boxShadow: [BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 4, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           children: [
@@ -479,12 +479,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openCameraStream(CameraModel cam) {
-    if (!cam.isOnline && !cam.isMaintenance) {
-      _showSnackbar('Camera "${cam.name}" đang không hoạt động.', isError: true);
-      return;
-    }
     if (cam.isMaintenance) {
       _showSnackbar('Camera "${cam.name}" đang trong thời gian bảo trì.', isError: false);
+      return;
+    }
+    if (!cam.isOnline) {
+      _showSnackbar('Camera "${cam.name}" đang không hoạt động.', isError: true);
+      return;
     }
     setState(() {
       _currentTab = 0; // keep on dashboard but show stream modal
@@ -602,9 +603,9 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: kCard,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: isSelected ? kBlue : kLine),
-          boxShadow: [BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 4, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -752,9 +753,9 @@ class _HomeScreenState extends State<HomeScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: notif.read ? kCard : const Color(0xFFF0F5FF),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border(left: BorderSide(color: borderColor, width: 4)),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(5), blurRadius: 4)],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       padding: const EdgeInsets.all(12),
       child: Column(

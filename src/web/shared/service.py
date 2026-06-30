@@ -34,6 +34,12 @@ def get_alerts(user: str) -> list[dict[str, Any]]:
     role = repo.get_user_role_db(user)
     all_alerts = repo.get_alerts_db()
     
+    assigned_cams = []
+    if role != "Admin":
+        assigned_cams = repo.get_user_assigned_cameras_db(user)
+        if not assigned_cams:
+            return []
+    
     filtered_alerts = []
     for a in all_alerts:
         deleted_by = a.pop("deleted_by_users")  # remove from response
@@ -42,8 +48,12 @@ def get_alerts(user: str) -> list[dict[str, Any]]:
         except Exception:
             deleted_list = []
             
-        if role != "Admin" and user in deleted_list:
-            continue
+        if role != "Admin":
+            if user in deleted_list:
+                continue
+            if a.get("camera") not in assigned_cams:
+                continue
+                
         filtered_alerts.append(a)
         
     return filtered_alerts

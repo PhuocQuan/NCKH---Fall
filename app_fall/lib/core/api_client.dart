@@ -11,7 +11,7 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
-  String baseUrl = 'https://outputs-try-highway-last.trycloudflare.com'; // Sử dụng Cloudflare Tunnel
+  String baseUrl = 'https://repairs-outlined-scheduling-knowing.trycloudflare.com'; // Sử dụng Cloudflare Tunnel
   String? _token;
 
   void Function()? onUnauthorized;

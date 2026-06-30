@@ -26,6 +26,8 @@ except Exception as patch_err:
 
 DB_CONFIG_PATH = Path("configs/db.json")
 
+_DB_INITIALIZED = False
+
 def get_db_client():
     if not DB_CONFIG_PATH.exists():
         raise RuntimeError("db.json not found!")
@@ -37,7 +39,91 @@ def get_db_client():
     if url.startswith("libsql://"):
         url = url.replace("libsql://", "https://")
     auth_token = config.get("auth_token")
-    return libsql_client.create_client_sync(url=url, auth_token=auth_token)
+    
+    client = libsql_client.create_client_sync(url=url, auth_token=auth_token)
+    
+    global _DB_INITIALIZED
+    if not _DB_INITIALIZED:
+        _DB_INITIALIZED = True
+        try:
+            _init_db_schema(client)
+        except Exception as e:
+            print(f"[DB Init Error] Khong the khoi tao DB schema: {e}")
+            
+    return client
+
+def _init_db_schema(client):
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            password TEXT,
+            name TEXT,
+            role TEXT,
+            status TEXT,
+            assigned_cameras TEXT,
+            phone TEXT,
+            monitored_profile_json TEXT DEFAULT '{}',
+            emergency_contacts_json TEXT DEFAULT '[]',
+            user_notifications_json TEXT DEFAULT '[]'
+        )
+    """)
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS cameras (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            ip TEXT,
+            rtsp TEXT,
+            area TEXT,
+            target TEXT,
+            state TEXT,
+            status TEXT,
+            fps INTEGER,
+            resolution TEXT,
+            threshold INTEGER
+        )
+    """)
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id TEXT PRIMARY KEY,
+            time TEXT,
+            camera TEXT,
+            person TEXT,
+            confidence INTEGER,
+            status TEXT,
+            level TEXT,
+            media TEXT,
+            state TEXT,
+            cloud_img_url TEXT,
+            cloud_video_url TEXT,
+            deleted_by_users TEXT DEFAULT '[]'
+        )
+    """)
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS app_state (
+            id TEXT PRIMARY KEY,
+            api_keys_json TEXT NOT NULL DEFAULT '[]',
+            settings_json TEXT NOT NULL DEFAULT '{}',
+            monitored_profile_json TEXT NOT NULL DEFAULT '{}',
+            emergency_contacts_json TEXT NOT NULL DEFAULT '[]',
+            user_notifications_json TEXT NOT NULL DEFAULT '[]'
+        )
+    """)
+    client.execute("""
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            time TEXT,
+            type TEXT,
+            user TEXT,
+            content TEXT
+        )
+    """)
+    # Tạo user admin mặc định nếu bảng users trống
+    res = client.execute("SELECT 1 FROM users LIMIT 1")
+    if not res.rows:
+        client.execute(
+            "INSERT INTO users (email, password, name, role, status, assigned_cameras, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ["admin@nckh.vn", "nckh2025", "Quản trị viên", "Admin", "Đang hoạt động", "[]", "0901234567"]
+        )
 
 
 def log_action(log_type: str, user: str, content: str) -> None:
