@@ -1,11 +1,11 @@
 {
   "turso": {
-    "url": "libsql://your-db-name-here.turso.io",
-    "auth_token": "YOUR_TURSO_JWT_AUTH_TOKEN"
+    "url": "libsql://nckh-fall-db-dinhbao.aws-ap-northeast-1.turso.io",
+    "auth_token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODE2NjAyMDgsImlkIjoiMDE5ZWQzMzgtYmQwMS03ODY0LWFlMzEtZGNmNzI0MjVmNWE4IiwicmlkIjoiOTZkYWY2MjItZmMzNC00OTM1LTkzYjAtZjdlOTQxZTZhMGY3In0.l9NbQNEieiy9Os3eBSBeiVIP9xJ78mBxuFpcUFQOBog7_CirCm21IlNuCfOqeJXdjHKQC4ErRikWfsCeBLLgCA"
   },
   "cloudinary": {
-    "cloud_name": "YOUR_CLOUD_NAME",
-    "api_key": "YOUR_API_KEY",
-    "api_secret": "YOUR_API_SECRET"
+    "cloud_name": "dahsdosfn",
+    "api_key": "188334484784436",
+    "api_secret": "ZMpzjyZ6TNtFOBoBoPZr37GTaHU"
   }
 }
