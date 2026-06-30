@@ -1,15 +1,15 @@
 {
   "telegram": {
-    "enabled": false,
-    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "chat_id": "YOUR_TELEGRAM_CHAT_ID"
+    "enabled": true,
+    "bot_token": "8169554639:AAGY0eo5ZC6Nd6-b0p7PPHxyZxOOLdQdqjk",
+    "chat_id": "8723679518"
   },
   "email": {
     "enabled": false,
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,
-    "sender_email": "your_email@gmail.com",
-    "sender_password": "your_app_password",
-    "receiver_email": "receiver_email@example.com"
+    "sender_email": "dinhbao2525@gmail.com",
+    "sender_password": "zopsgoxdfcuzzrdm",
+    "receiver_email": "bao105833@donga.edu.vn"
   }
 }
