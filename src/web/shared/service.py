@@ -15,9 +15,9 @@ from src.web.shared.cloudinary_uploader import delete_from_cloudinary
 import src.web.shared.repository as repo
 
 
-def login_user(username: str, password: str) -> dict[str, str]:
+def login_user(username: str, password: str, source: str = "web") -> dict[str, str]:
     try:
-        token = auth_login(username, password)
+        token = auth_login(username, password, source)
         log_action("Đăng nhập", username.strip().lower(), "Thành công")
         return {"token": token, "username": username.strip().lower()}
     except ValueError as exc:

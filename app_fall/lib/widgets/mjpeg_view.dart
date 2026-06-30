@@ -75,9 +75,13 @@ class _MjpegViewState extends State<MjpegView> {
     _buffer.clear();
   }
 
+  bool _isRequesting = false;
+
   void _startWebPolling() {
     setState(() { _loading = true; _error = null; });
     _webPollTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
+      if (_isRequesting) return;
+      _isRequesting = true;
       try {
         final bytes = await ApiClient().getSnapshotBytes();
         if (bytes != null && mounted) {
@@ -94,6 +98,8 @@ class _MjpegViewState extends State<MjpegView> {
             _error = e.toString().replaceAll('Exception: ', '');
           });
         }
+      } finally {
+        _isRequesting = false;
       }
     });
   }

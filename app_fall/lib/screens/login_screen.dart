@@ -71,6 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final username = _normalizeUsername(_usernameCtrl.text);
       final password = _passwordCtrl.text;
+      
+      // Chặn cứng tài khoản admin ở Client (kể cả khi Offline)
+      if (username.toLowerCase() == 'admin@nckh.vn' || username.toLowerCase().startsWith('admin@')) {
+        throw const ApiException('Tài khoản Admin không được hỗ trợ trên ứng dụng di động.');
+      }
 
       // Check health
       final isOnline = await AuthService().checkBackendOnline();

@@ -54,7 +54,7 @@ class ApiClient {
         .post(
           _uri('/api/auth/login'),
           headers: _headers,
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'username': username, 'password': password, 'source': 'app_fall'}),
         )
         .timeout(const Duration(seconds: 120));
     final body = jsonDecode(res.body) as Map<String, dynamic>;
@@ -223,7 +223,7 @@ class ApiClient {
       final res = await http.get(
         _uri('/api/camera/snapshot'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 10));
       _check401(res);
       if (res.statusCode == 200) return res.bodyBytes;
       throw Exception('HTTP ${res.statusCode}');

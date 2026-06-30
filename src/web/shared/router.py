@@ -30,6 +30,7 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 class LoginRequest(BaseModel):
     username: str
     password: str
+    source: str | None = "web"
 
 
 class ControlRequest(BaseModel):
@@ -98,7 +99,7 @@ def health() -> dict[str, Any]:
 @router.post("/api/auth/login")
 def api_login(body: LoginRequest) -> dict[str, str]:
     try:
-        return service.login_user(body.username, body.password)
+        return service.login_user(body.username, body.password, body.source)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 

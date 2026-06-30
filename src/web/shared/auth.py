@@ -18,7 +18,7 @@ JWT_SECRET_KEY = "nckh-fallguard-secret-key-2026"
 JWT_ALGORITHM = "HS256"
 
 
-def login(username: str, password: str) -> str:
+def login(username: str, password: str, source: str = "web") -> str:
     user = username.strip().lower()
     email = user
     if "@" not in email:
@@ -27,19 +27,23 @@ def login(username: str, password: str) -> str:
     try:
         from src.web.shared.db import get_db_client
         with get_db_client() as client:
-            result = client.execute("SELECT password, status FROM users WHERE email = ?", [email])
+            result = client.execute("SELECT password, status, role FROM users WHERE email = ?", [email])
         
         if not result.rows:
             raise ValueError("Sai tài khoản hoặc mật khẩu.")
             
         db_pwd = result.rows[0][0]
         db_status = result.rows[0][1]
+        db_role = result.rows[0][2]
         
         if db_status != 'Đang hoạt động':
             raise ValueError("Tài khoản của bạn đã bị khóa.")
             
         if db_pwd != password:
             raise ValueError("Sai tài khoản hoặc mật khẩu.")
+            
+        if source == "app_fall" and db_role.lower() == "admin":
+            raise ValueError("Tài khoản Admin không được hỗ trợ trên ứng dụng di động.")
             
         logged_in_user = email
     except Exception as exc:
