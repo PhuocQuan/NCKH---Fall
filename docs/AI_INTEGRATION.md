@@ -1,17 +1,17 @@
-# Tich hop AI cho phat hien te nga
+# Tích hợp AI cho phát hiện té ngã
 
-## AI hien co trong project
+## AI hiện có trong project
 
-Project co 2 lop:
+Project có 2 lớp:
 
-1. MediaPipe Pose: AI trich xuat khung xuong nguoi tu camera.
-2. Fall AI Classifier: model hoc may tuy chon de phan loai chuoi chuyen dong thanh `fall` hoac `non_fall`.
+1. MediaPipe Pose: AI trích xuất khung xương người từ camera.
+2. Fall AI Classifier: model học máy tùy chọn để phân loại chuỗi chuyển động thành `fall` hoặc `non_fall`.
 
-Lop rule-based van duoc giu lai de demo on dinh va giai thich duoc. Model AI se bo sung xac suat `fall`, giup cai thien khi co dataset rieng.
+Lớp rule-based vẫn được giữ lại để demo ổn định và giải thích được. Model AI sẽ bổ sung xác suất `fall`, giúp cải thiện khi có dataset riêng.
 
-## Cau truc du lieu video de train
+## Cấu trúc dữ liệu video để train
 
-Dat video vao cac thu muc theo nhan:
+Đặt video vào các thư mục theo nhãn:
 
 ```text
 data/videos/
@@ -25,15 +25,15 @@ data/videos/
     sleep_001.mp4
 ```
 
-De bai NCKH nen tach ro `sleeping` hoac `lying` de model hoc phan biet nam ngu voi te nga. Khi train nhi phan, co the gop `sleeping`, `lying`, `walk`, `sit` thanh `non_fall`.
+Đề tài NCKH nên tách rõ `sleeping` hoặc `lying` để model học phân biệt nằm ngủ với té ngã. Khi train nhị phân, có thể gộp `sleeping`, `lying`, `walk`, `sit` thành `non_fall`.
 
-## Tao CSV dac trung
+## Tạo CSV đặc trưng
 
 ```powershell
 python -m src.ai.build_feature_dataset --input data/videos --output data/features.csv
 ```
 
-CSV se gom cac dac trung nhu goc than, toc do roi cua hong, do cao dau so voi hong, do tin cay landmark.
+CSV sẽ gồm các đặc trưng như góc thân, tốc độ rơi của hông, độ cao đầu so với hông, độ tin cậy landmark.
 
 ## Train model AI
 
@@ -41,7 +41,7 @@ CSV se gom cac dac trung nhu goc than, toc do roi cua hong, do cao dau so voi ho
 python -m src.ai.train_ai_model --csv data/features.csv --output models/fall_classifier.joblib
 ```
 
-Sau khi train, bat AI trong `configs/default.yaml`:
+Sau khi train, bật AI trong `configs/default.yaml`:
 
 ```yaml
 ai:
@@ -51,16 +51,16 @@ ai:
   smoothing_frames: 5
 ```
 
-Roi chay:
+Rồi chạy:
 
 ```powershell
 python -m src.core.app --source 0
 ```
 
-## Bao cao NCKH nen trinh bay
+## Báo cáo NCKH nên trình bày
 
 - Baseline 1: rule-based detector.
 - Baseline 2: AI classifier.
-- He thong de xuat: rule-based + AI probability.
-- Chi so: Accuracy, Precision, Recall, F1-score, confusion matrix.
-- Kich ban rieng: te nga, nam ngu, ngoi xuong, cui nguoi, tre nho choi duoi san, nguoi gia di cham.
+- Hệ thống đề xuất: rule-based + AI probability.
+- Chỉ số: Accuracy, Precision, Recall, F1-score, confusion matrix.
+- Kịch bản riêng: té ngã, nằm ngủ, ngồi xuống, cúi người, trẻ nhỏ chơi dưới sàn, người già đi chậm.

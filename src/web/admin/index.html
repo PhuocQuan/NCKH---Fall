@@ -614,26 +614,25 @@ function loadStore(key, fallback) {
 
 
     const menu = [
-      ["Tổng quan", [["dashboard", "01", "Dashboard", "Thống kê tổng quan camera và khách hàng"]]],
+      ["Tổng quan", [["dashboard", "01", "Tổng quát", "Thống kê tổng quan camera, khách hàng và nơi lắp đặt"]]],
       ["Vận hành", [
-        ["live", "02", "Nơi lắp đặt", "Giám sát camera theo từng nhà, nơi đã lắp"],
-        ["alerts", "03", "Hệ thống cảnh báo", "Cảnh báo ngã và trạng thái xử lý"],
-        ["notifications", "04", "Thông báo", "Cài đặt các kênh thông báo tự động"]
+        ["alerts", "02", "Hệ thống cảnh báo", "Cảnh báo ngã và trạng thái xử lý"],
+        ["notifications", "03", "Thông báo", "Cài đặt các kênh thông báo tự động"]
       ]],
       ["Quản lý", [
-        ["users", "05", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
-        ["media", "06", "Hình ảnh & video", "Ảnh chụp và video sự kiện cảnh báo theo nơi lắp đặt"],
-        ["cameras", "07", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
+        ["users", "04", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
+        ["media", "05", "Hình ảnh & video", "Ảnh chụp và video sự kiện cảnh báo theo nơi lắp đặt"],
+        ["cameras", "06", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
       ]],
       ["Dữ liệu", [
-        ["logs", "08", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
+        ["logs", "07", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
       ]],
       ["Hệ thống", [
-        ["settings", "09", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
-        ["api", "10", "API Management", "Quản lý khóa API truy cập hệ thống"],
-        ["mobile", "11", "Ứng dụng điện thoại", "Tải ứng dụng di động hỗ trợ giám sát"]
+        ["settings", "08", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
+        ["api", "09", "API Management", "Quản lý khóa API truy cập hệ thống"]
       ]]
     ];
+
 
     let monitoredProfile = loadStore("fg_monitored_profile", {
       name: "Nguyễn Văn A",
@@ -1525,7 +1524,38 @@ function loadStore(key, fallback) {
         if (currentUser.role === "Khachhang" || currentUser.role === "Khách hàng" || currentUser.role === "User") {
           return views.user_dashboard();
         }
-        return `${kpis()}`;
+        if (liveViewLevel === "locations") {
+          const visCameras = getVisibleCameras();
+          const houses = getVisibleHouses();
+          const locationCardsHtml = houses.map(house => {
+            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const onlineCount = camsInHouse.filter(c => c.status === "online").length;
+            const offlineCount = camsInHouse.filter(c => c.status === "offline").length;
+            return `
+              <div class="location-card animate-hover" onclick="selectedLocation='${esc(house.name)}'; liveViewLevel='cameras'; render('dashboard', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+                <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+                <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
+                <div style="font-size: 13px; color: var(--gray-600);">
+                  <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
+                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                    <span class="pill green small" style="padding: 2px 6px; font-size: 11px;">${onlineCount} hoạt động</span>
+                    ${offlineCount > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${offlineCount} ko hoạt động</span>` : ''}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          return `${kpis()}
+            <div style="margin-top: 30px; margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt</h3>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách camera tại đó.</p>
+            </div>
+            <div class="grid three" style="gap: 20px;">
+              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+            </div>`;
+        }
+        return liveView();
       },
             live: () => liveView(),
             detection: () => `<div class="grid two">
@@ -1909,7 +1939,7 @@ function loadStore(key, fallback) {
           const onlineCount = camsInHouse.filter(c => c.status === "online").length;
           const offlineCount = camsInHouse.filter(c => c.status === "offline").length;
           return `
-            <div class="location-card animate-hover" onclick="selectedLocation='${esc(house.name)}'; liveViewLevel='cameras'; render('live', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+            <div class="location-card animate-hover" onclick="selectedLocation='${esc(house.name)}'; liveViewLevel='cameras'; render('dashboard', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
               <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
               <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
               <div style="font-size: 13px; color: var(--gray-600);">
@@ -1960,7 +1990,7 @@ function loadStore(key, fallback) {
 
         return `
           <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <button class="btn line" onclick="liveViewLevel='locations'; render('live', false);">← Quay lại Nơi lắp đặt</button>
+            <button class="btn line" onclick="liveViewLevel='locations'; render('dashboard', false);">← Quay lại Nơi lắp đặt</button>
             ${permissionBtn}
           </div>
           <div style="margin-bottom: 20px;">
@@ -1992,7 +2022,7 @@ function loadStore(key, fallback) {
         const ownerName = owner ? owner.name : "Chưa gán";
         
         const backText = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? "← Quay lại Trang chủ" : "← Quay lại Danh sách Camera";
-        const backAction = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? `stopTestCamera(false); liveViewLevel='cameras'; render('${cameraStreamBackView}', false);` : `stopTestCamera(false); liveViewLevel='cameras'; render('live', false);`;
+        const backAction = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? `stopTestCamera(false); liveViewLevel='cameras'; render('${cameraStreamBackView}', false);` : `stopTestCamera(false); liveViewLevel='cameras'; render('dashboard', false);`;
         
         return `<div class="live-toolbar">
           <button class="btn line" onclick="${backAction}">${backText}</button>
@@ -3646,9 +3676,11 @@ function loadStore(key, fallback) {
       
       document.querySelectorAll("[data-view]").forEach(btn => btn.addEventListener("click", () => {
         const viewId = btn.dataset.view;
-        if (viewId === "live") liveViewLevel = "locations";
         if (viewId === "user_dashboard") liveViewLevel = "cameras";
-        if (viewId === "dashboard") liveViewLevel = "cameras";
+        if (viewId === "dashboard") {
+          const isUser = currentUser.role !== "Admin";
+          liveViewLevel = isUser ? "cameras" : "locations";
+        }
         if (viewId === "alerts") alertsViewLevel = "locations";
         if (viewId === "media") mediaViewLevel = "locations";
         render(viewId);
@@ -3658,7 +3690,7 @@ function loadStore(key, fallback) {
 
     function render(id = "dashboard", fetchSync = true) {
       // Tắt camera khi rời khỏi màn hình giám sát trực tiếp
-      const isLiveView = (id === "user_dashboard" || id === "live");
+      const isLiveView = (id === "user_dashboard" || id === "dashboard");
       if (!isLiveView || liveViewLevel !== "stream") {
         stopTestCamera(false, true);
       }
@@ -3726,13 +3758,13 @@ function loadStore(key, fallback) {
               <span class="pulse-ring"></span>
               <span class="phone-icon">📞</span>
             </span>
-            <span class="phone-number">0987.654.321</span>
+            <span class="phone-number">0356 726 513</span>
           `;
           
           callBtn.addEventListener("click", () => {
-            const confirmed = confirm("Bạn có chắc chắn muốn gọi khẩn cấp tới số 0987.654.321?");
+            const confirmed = confirm("Bạn có chắc chắn muốn gọi tới số Hotline 0356 726 513?");
             if (confirmed) {
-              window.location.href = "tel:0987654321";
+              window.location.href = "tel:0356726513";
             }
           });
           
@@ -3784,7 +3816,7 @@ function loadStore(key, fallback) {
       if (event.target.matches("[data-action='notify']")) {
         toast("Đã gửi thông báo thử qua Web, Email, Telegram, SMS và Zalo OA.");
       }
-      if (event.target.matches("[data-view-shortcut='live']")) render("live");
+      if (event.target.matches("[data-view-shortcut='live']")) { liveViewLevel = "locations"; render("dashboard"); }
       if (event.target.matches("[data-action='test-notif-channel']")) {
         const btn = event.target;
         const channel = btn.dataset.channel;
@@ -3833,7 +3865,7 @@ function loadStore(key, fallback) {
           cameraStreamBackView = currentView;
           liveViewLevel = "stream";
           const isUser = currentUser.role !== "Admin";
-          render(isUser ? "user_dashboard" : "live");
+          render(isUser ? "user_dashboard" : "dashboard");
           // Auto-start camera khi click vào camera card
           setTimeout(() => startTestCamera(), 150);
         }

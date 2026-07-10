@@ -24,11 +24,23 @@
       <div style="display: flex; align-items: center; gap: 8px;">
         <button class="hamburger-btn" onclick="openMenuDrawer()">☰</button>
         <span style="font-weight: 850; font-size: 18px; color: var(--blue);">FG Client</span>
-        <span class="pill green small" id="backendStatusPill" style="font-size: 10px; padding: 2px 6px;">AI Online</span>
+        <span class="pill green small" id="backendStatusPill" style="font-size: 10px; padding: 2px 6px; display: none;"></span>
       </div>
-      <div class="user">
-        <span id="headerUserName" style="font-size: 12px; font-weight: 600;">Khách hàng</span>
-        <button onclick="performLogout()" style="background: none; border: none; font-size: 16px; padding: 4px; cursor: pointer;" title="Đăng xuất">🚪</button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <a href="tel:0356726513" class="mobile-hotline-btn" title="Gọi Hotline">
+          <span>📞</span>
+          <span>0356 726 513</span>
+        </a>
+        <div class="user">
+          <span id="headerUserName" style="display: none;"></span>
+          <button onclick="performLogout()" style="background: none; border: none; padding: 4px 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Đăng xuất">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 

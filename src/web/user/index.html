@@ -551,12 +551,12 @@
           </div>
         </div>
         <div class="top-actions">
-          <button id="callEmergencyBtn" class="emergency-hotline-btn">
+          <button id="callEmergencyBtn" class="emergency-hotline-btn" onclick="const c = confirm('Bạn có chắc chắn muốn gọi Hotline 0356 726 513?'); if (c) { window.location.href = 'tel:0356726513'; }">
             <span class="phone-icon-wrapper">
               <span class="pulse-ring"></span>
               <span class="phone-icon">📞</span>
             </span>
-            <span class="btn-text">GỌI KHẨN CẤP (115)</span>
+            <span class="btn-text">HOTLINE: 0356 726 513</span>
           </button>
         </div>
       </header>
@@ -645,6 +645,7 @@ function loadStore(key, fallback) {
       ["Cá nhân & Liên hệ", [
         ["user_contacts", "📞", "Liên hệ khẩn cấp", "Số điện thoại, email liên lạc khẩn cấp"],
         ["user_notifications", "🔔", "Thông báo", "Danh sách thông báo từ hệ thống giám sát"],
+        ["user_mobile", "📱", "Ứng dụng điện thoại", "Tải ứng dụng di động hỗ trợ giám sát"],
         ["user_account", "⚙️", "Thông tin cá nhân", "Đổi mật khẩu, ảnh đại diện, đăng xuất"]
       ]]
     ];
@@ -2169,7 +2170,73 @@ function loadStore(key, fallback) {
           </div>
         `;
       },
-            user_account: () => {
+      user_mobile: () => {
+        const downloadUrl = window.location.origin + "/downloads/fallguard-release.apk";
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(downloadUrl)}`;
+        
+        return `
+          <div class="card" style="padding: 40px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); width: 100%;">
+            <div style="text-align: center; margin-bottom: 40px;">
+              <div style="font-size: 64px; margin-bottom: 20px;">📱</div>
+              <h2 style="margin: 0 0 12px; font-size: 26px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px;">Tải ứng dụng FallGuard AI</h2>
+              <p style="color: var(--gray-600); font-size: 15px; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                Tải xuống ứng dụng di động chính thức để nhận cảnh báo té ngã thời gian thực, xem live stream camera và xác nhận tình trạng xử lý sự kiện ngay trên điện thoại của bạn.
+              </p>
+            </div>
+            
+            <div class="grid two" style="gap: 30px; margin: 0 auto; align-items: stretch; width: 100%; grid-template-columns: 1fr 1fr;">
+              <!-- Android Card -->
+              <div class="card animate-hover" style="padding: 30px; border: 1px solid var(--line); border-radius: 16px; background: #fff; display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 0; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.02); height: 560px;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; flex: 1;">
+                  <img src="android-logo.png" style="height: 52px; width: auto; object-fit: contain; margin-top: 9px; margin-bottom: 9px;" alt="Android Logo" />
+                  <h4 style="margin: 0; font-size: 19px; font-weight: 800; color: #1e293b;">Phiên bản Android (APK)</h4>
+                  <span class="pill green small" style="display: inline-block; font-weight: 700;">Đã hỗ trợ</span>
+                  <p class="hint" style="margin: 15px 0 20px; font-size: 13.5px; line-height: 1.5; color: var(--gray-600); max-width: 320px; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center;">
+                    Hỗ trợ hệ điều hành Android 8.0 trở lên. Quét mã QR bên dưới để tải trực tiếp về điện thoại hoặc click nút bên dưới để tải tệp cài đặt APK.
+                  </p>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; margin-top: 10px;">
+                  <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; width: 170px; height: 190px; justify-content: center; box-sizing: border-box;">
+                    <img src="${qrUrl}" alt="QR Code Android" style="width: 120px; height: 120px; border-radius: 6px; background: #fff;" />
+                    <span style="font-size: 11px; color: var(--gray-500); font-weight: 750; margin-top: 4px;">Quét mã để tải nhanh</span>
+                  </div>
+                  <a href="${downloadUrl}" download class="btn primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; justify-content: center; width: 100%; max-width: 260px; height: 44px; font-weight: 700; border-radius: 9999px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);">
+                    <span>📥</span> Tải trực tiếp APK
+                  </a>
+                </div>
+              </div>
+
+              <!-- iOS Card -->
+              <div class="card animate-hover" style="padding: 30px; border: 1px solid var(--line); border-radius: 16px; background: #fff; display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 0; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.02); height: 560px;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; flex: 1;">
+                  <img src="ios-logo.png" style="height: 70px; width: auto; object-fit: contain; margin-bottom: 0px;" alt="iOS Logo" />
+                  <h4 style="margin: 0; font-size: 19px; font-weight: 800; color: #1e293b;">Phiên bản iOS (iPhone)</h4>
+                  <span class="pill amber small" style="display: inline-block; font-weight: 700;">Đang thử nghiệm</span>
+                  <p class="hint" style="margin: 15px 0 20px; font-size: 13.5px; line-height: 1.5; color: var(--gray-600); max-width: 320px; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center;">
+                    Hỗ trợ hệ điều hành iOS 14.0 trở lên. Ứng dụng đang kiểm duyệt trên App Store. Liên hệ Admin để nhận lời mời TestFlight.
+                  </p>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; margin-top: 10px;">
+                  <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; width: 170px; height: 190px; justify-content: center; box-sizing: border-box;">
+                    <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 6px; font-size: 32px; border: 1px solid var(--line);">🔒</div>
+                    <span style="font-size: 11px; color: var(--gray-500); font-weight: 750; margin-top: 4px;">Mã QR sắp ra mắt</span>
+                  </div>
+                  <button onclick="alert('Hệ thống đang cấu hình mời TestFlight. Vui lòng liên hệ Admin qua hotline để được cấp quyền thử nghiệm!')" class="btn line" style="display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; max-width: 260px; height: 44px; font-weight: 700; border-radius: 9999px;">
+                    App Store (Sắp ra mắt)
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--gray-500); text-align: center;">
+              Để cấu hình nhận thông báo qua Telegram hoặc Zalo, quý khách vui lòng liên hệ Admin hệ thống để được hỗ trợ liên kết thiết bị.
+            </div>
+          </div>
+        `;
+      },
+      user_account: () => {
         const avatarInitials = currentUser.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
         const savedAvatar = localStorage.getItem(`avatar_${currentUser.email}`);
         const avatarHtml = savedAvatar 
@@ -3764,13 +3831,13 @@ function loadStore(key, fallback) {
               <span class="pulse-ring"></span>
               <span class="phone-icon">📞</span>
             </span>
-            <span class="phone-number">0987.654.321</span>
+            <span class="phone-number">HOTLINE: 0356 726 513</span>
           `;
           
           callBtn.addEventListener("click", () => {
-            const confirmed = confirm("Bạn có chắc chắn muốn gọi khẩn cấp tới số 0987.654.321?");
+            const confirmed = confirm("Bạn có chắc chắn muốn gọi tới số Hotline 0356 726 513?");
             if (confirmed) {
-              window.location.href = "tel:0987654321";
+              window.location.href = "tel:0356726513";
             }
           });
           

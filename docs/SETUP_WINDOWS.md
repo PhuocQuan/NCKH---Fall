@@ -1,21 +1,21 @@
-# Cai dat moi truong tren Windows
+# Cài đặt môi trường trên Windows
 
-## 1. Kiem tra Python
+## 1. Kiểm tra Python
 
-Mo PowerShell trong thu muc project va chay:
+Mở PowerShell trong thư mục project và chạy:
 
 ```powershell
 python --version
 ```
 
-Neu PowerShell bao khong tim thay `python`, hay mo lai installer Python va chon:
+Nếu PowerShell báo không tìm thấy `python`, hãy mở lại installer Python và chọn:
 
 - `Add python.exe to PATH`
 - `Install launcher for all users`
 
-Sau khi cai xong, dong PowerShell hien tai va mo lai PowerShell moi.
+Sau khi cài xong, đóng PowerShell hiện tại và mở lại PowerShell mới.
 
-## 2. Tao moi truong ao
+## 2. Tạo môi trường ảo
 
 ```powershell
 cd D:\NCKH
@@ -24,28 +24,28 @@ python -m venv .venv
 python -m pip install --upgrade pip
 ```
 
-## 3. Kiem tra webcam laptop
+## 3. Kiểm tra webcam laptop
 
 ```powershell
 pip install -r requirements-camera.txt
 python -m src.camera.check_camera --camera 0
 ```
 
-Neu may co nhieu camera, thu:
+Nếu máy có nhiều camera, thử:
 
 ```powershell
 python -m src.camera.check_camera --camera 1
 ```
 
-## 4. Cai day du demo phat hien te nga
+## 4. Cài đầy đủ demo phát hiện té ngã
 
 ```powershell
 pip install -r requirements.txt
 python -m src.core.app --source 0
 ```
 
-## 5. Neu MediaPipe khong cai duoc
+## 5. Nếu MediaPipe không cài được
 
-MediaPipe tren PyPI hien liet ke ho tro chinh thuc cho Python 3.9 den 3.12. Neu Python 3.13 cua ban gap loi khi cai `mediapipe`, cach nhanh nhat cho de tai la cai them Python 3.12 va tao `.venv` bang Python 3.12.
+MediaPipe trên PyPI hiện liệt kê hỗ trợ chính thức cho Python 3.9 đến 3.12. Nếu Python 3.13 của bạn gặp lỗi khi cài `mediapipe`, cách nhanh nhất cho đề tài là cài thêm Python 3.12 và tạo `.venv` bằng Python 3.12.
 
-Ban van co the giu Python 3.13 tren may; chi can project nay dung moi truong ao Python 3.12.
+Bạn vẫn có thể giữ Python 3.13 trên máy; chỉ cần project này dùng môi trường ảo Python 3.12.
