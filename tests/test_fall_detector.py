@@ -123,9 +123,11 @@ def test_warning_state_when_standing_up_before_decay():
     )
     for pose in falling_sequence():
         detector.update(pose)
-    
+
     detector.update(lying_pose())
     assert detector.update(lying_pose()).state in {FallState.FALLEN, FallState.POSSIBLE_FALL}
-    
+
+    # Đứng thẳng hoàn toàn -> Trạng thái trở về NORMAL
     res = detector.update(standing_pose())
-    assert res.state == FallState.WARNING
+    assert res.state == FallState.NORMAL
+

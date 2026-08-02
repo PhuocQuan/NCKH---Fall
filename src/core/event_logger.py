@@ -18,6 +18,8 @@ class EventLogger:
                     [
                         "timestamp",
                         "state",
+                        "person_name",
+                        "person_type",
                         "torso_angle_deg",
                         "head_hip_delta",
                         "hip_velocity",
@@ -29,13 +31,15 @@ class EventLogger:
                     ]
                 )
 
-    def write(self, result: DetectionResult) -> None:
+    def write(self, result: DetectionResult, person_name: str = "Unknown", person_type: str = "N/A") -> None:
         with self.path.open("a", newline="", encoding="utf-8") as file:
             writer = csv.writer(file)
             writer.writerow(
                 [
                     datetime.now().isoformat(timespec="seconds"),
                     result.state.value,
+                    person_name,
+                    person_type,
                     f"{result.torso_angle_deg:.2f}",
                     f"{result.head_hip_delta:.4f}",
                     f"{result.hip_velocity:.4f}",
@@ -46,3 +50,4 @@ class EventLogger:
                     int(result.fall_like_transition),
                 ]
             )
+

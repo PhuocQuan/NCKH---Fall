@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from time import sleep
 import time
@@ -32,10 +33,28 @@ class VideoSource:
         self.height = height
         self.reconnect_attempts = reconnect_attempts
         self.reconnect_delay_sec = reconnect_delay_sec
+        self._lock = threading.Lock()
+        self._latest_frame: np.ndarray | None = None
+        self._running = True
         self.capture = self._open()
+
+        # Threaded frame grabber to eliminate RTSP network buffer delay (0s latency)
+        self._thread: threading.Thread | None = None
+        if not isinstance(self.capture, MockVideoCapture) and _is_live_stream(self.source):
+            self._thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self._thread.start()
 
     def _open(self) -> cv2.VideoCapture | MockVideoCapture:
         import sys
+        import os
+
+        is_rtsp = isinstance(self.source, str) and self.source.lower().startswith("rtsp://")
+        if is_rtsp:
+            # Low-latency settings for FFmpeg RTSP stream decoding
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                "rtsp_transport;udp|max_delay;0|flags;low_delay|fflags;nobuffer|analyzeduration;0|probesize;32"
+            )
+
         capture = None
         if sys.platform.startswith("win") and isinstance(self.source, int):
             capture = cv2.VideoCapture(self.source, cv2.CAP_DSHOW)
@@ -44,6 +63,8 @@ class VideoSource:
             capture = cv2.VideoCapture(self.source)
 
         if capture is not None and capture.isOpened():
+            if is_rtsp:
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if self.width:
                 capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             if self.height:
@@ -54,31 +75,91 @@ class VideoSource:
         print(f"[VideoSource] Warning: Khong mo duoc camera {self.source}. Dang dung simulator.")
         return MockVideoCapture(self.source, self.width or 640, self.height or 480)
 
-    def read(self):
-        ok, frame = self.capture.read()
-        if ok:
-            return True, frame
+    def _reader_loop(self) -> None:
+        """Continuously grab frames from stream in background so buffer never accumulates lag."""
+        consecutive_failures = 0
+        while self._running:
+            ok = False
+            frame = None
+            with self._lock:
+                if not self._running:
+                    break
+                if self.capture is not None and self.capture.isOpened():
+                    try:
+                        ok, frame = self.capture.read()
+                    except Exception:
+                        ok = False
 
-        for _ in range(self.reconnect_attempts):
-            self.capture.release()
-            sleep(self.reconnect_delay_sec)
-            self.capture = self._open()
-            ok, frame = self.capture.read()
-            if ok:
-                return True, frame
+            if ok and frame is not None:
+                consecutive_failures = 0
+                with self._lock:
+                    self._latest_frame = frame
+                sleep(0.005)
+            else:
+                consecutive_failures += 1
+                sleep(0.02)
+                if consecutive_failures > 30 and self._running:
+                    with self._lock:
+                        self._reconnect_locked()
+                    consecutive_failures = 0
 
-        return False, None
+    def _reconnect_locked(self) -> None:
+        try:
+            if self.capture is not None and not isinstance(self.capture, MockVideoCapture):
+                self.capture.release()
+        except Exception:
+            pass
+        self.capture = self._open()
+
+    def read(self) -> tuple[bool, np.ndarray | None]:
+        with self._lock:
+            if isinstance(self.capture, MockVideoCapture):
+                return self.capture.read()
+
+            if self._thread and self._thread.is_alive():
+                if self._latest_frame is not None:
+                    return True, self._latest_frame.copy()
+
+            if self.capture and self.capture.isOpened():
+                ok, frame = self.capture.read()
+                if ok:
+                    return True, frame
+
+            return False, None
 
     def info(self) -> SourceInfo:
-        return SourceInfo(
-            source=self.source,
-            width=int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            height=int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            fps=float(self.capture.get(cv2.CAP_PROP_FPS)),
-        )
+        with self._lock:
+            if self.capture is None or isinstance(self.capture, MockVideoCapture):
+                return SourceInfo(source=self.source, width=640, height=480, fps=30.0)
+            return SourceInfo(
+                source=self.source,
+                width=int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                height=int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                fps=float(self.capture.get(cv2.CAP_PROP_FPS)),
+            )
 
     def release(self) -> None:
-        self.capture.release()
+        self._running = False
+        if self._thread and self._thread.is_alive() and threading.current_thread() != self._thread:
+            self._thread.join(timeout=1.0)
+        with self._lock:
+            if self.capture:
+                try:
+                    self.capture.release()
+                except Exception:
+                    pass
+                self.capture = None
+
+
+def _is_live_stream(source: int | str) -> bool:
+    if isinstance(source, int):
+        return True
+    src_lower = str(source).lower().strip()
+    if src_lower.startswith(("rtsp://", "http://", "https://", "rtmp://")):
+        return True
+    if any(src_lower.endswith(ext) for ext in [".mp4", ".avi", ".mkv", ".mov", ".flv", ".wmv"]):
+        return False
+    return True
 
 
 def _normalize_source(source: int | str) -> int | str:

@@ -39,10 +39,19 @@ class AIConfig:
 
 
 @dataclass(frozen=True)
+class FaceConfig:
+    enabled: bool = True
+    known_faces_dir: str = "data/known_faces"
+    similarity_threshold: float = 0.363
+    process_every_n_frames: int = 5
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     detector: DetectorConfig = DetectorConfig()
     app: AppConfig = AppConfig()
     ai: AIConfig = AIConfig()
+    face: FaceConfig = FaceConfig()
 
 
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
@@ -61,4 +70,6 @@ def load_config(path: str | Path = "configs/default.yaml") -> ProjectConfig:
     detector = DetectorConfig(**_section(data, "detector"))
     app = AppConfig(**_section(data, "app"))
     ai = AIConfig(**_section(data, "ai"))
-    return ProjectConfig(detector=detector, app=app, ai=ai)
+    face = FaceConfig(**_section(data, "face"))
+    return ProjectConfig(detector=detector, app=app, ai=ai, face=face)
+

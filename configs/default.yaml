@@ -13,14 +13,23 @@ detector:
   profile: default
 
 app:
-  camera_width: 640
-  camera_height: 480
+  camera_width: 1280
+  camera_height: 720
   model_complexity: 0
-  draw_landmarks: true
+  draw_landmarks: false
   event_log_path: data/events.csv
+
 
 ai:
   enabled: false
   model_path: models/fall_classifier.joblib
   alert_probability: 0.70
   smoothing_frames: 5
+
+face:
+  enabled: true
+  known_faces_dir: data/known_faces
+  similarity_threshold: 0.32
+  process_every_n_frames: 5
+
+

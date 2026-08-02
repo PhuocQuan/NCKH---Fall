@@ -23,6 +23,7 @@ def _import_runtime():
     from src.detection.feature_extractor import LandmarkFeatureBuffer
     from src.detection.fall_detector import FallDetector, FallState
     from src.detection.pose_estimator import PoseEstimator
+    from src.face import FaceRecognizer, PersonType, RecognizedFace
 
     return {
         "cv2": cv2,
@@ -34,7 +35,11 @@ def _import_runtime():
         "FallDetector": FallDetector,
         "FallState": FallState,
         "PoseEstimator": PoseEstimator,
+        "FaceRecognizer": FaceRecognizer,
+        "PersonType": PersonType,
+        "RecognizedFace": RecognizedFace,
     }
+
 
 
 @dataclass
@@ -77,8 +82,11 @@ class FallDetectionPipeline:
         self._logger: EventLogger | None = None
         self._recent_alerts: list[dict[str, Any]] = []
         self._runtime: dict[str, Any] | None = None
+        self._last_stranger_alert_time: float = 0.0
         from collections import deque
-        self._frame_buffer = deque(maxlen=150)
+        self._frame_buffer = deque(maxlen=200)
+
+
 
 
     @property
@@ -119,13 +127,17 @@ class FallDetectionPipeline:
         PoseEstimator = runtime["PoseEstimator"]
         EventLogger = runtime["EventLogger"]
         VideoSource = runtime["VideoSource"]
+        FaceRecognizer = runtime["FaceRecognizer"]
 
         config = load_config(self.config_path)
+        self._config = config
         self._detector = FallDetector(config.detector)
         self._feature_buffer = LandmarkFeatureBuffer(window_size=round(config.detector.assumed_fps))
         self._ai_classifier = FallAIClassifier(config.ai)
         self._estimator = PoseEstimator(model_complexity=config.app.model_complexity)
         self._logger = EventLogger(config.app.event_log_path)
+        self._face_recognizer = FaceRecognizer(config.face)
+
 
         normalized = int(source) if str(source).isdigit() else source
         self._video = VideoSource(
@@ -165,6 +177,7 @@ class FallDetectionPipeline:
             return
         cv2 = runtime["cv2"]
         FallState = runtime["FallState"]
+        PersonType = runtime["PersonType"]
         state_colors = {
             FallState.NORMAL: (70, 200, 90),
             FallState.LYING: (180, 180, 180),
@@ -173,8 +186,14 @@ class FallDetectionPipeline:
             FallState.FALLEN: (40, 40, 230),
             FallState.ALERT: (0, 0, 255),
         }
+        person_type_colors = {
+            PersonType.FAMILY: (70, 200, 90),
+            PersonType.ATTENTION: (0, 220, 255),
+            PersonType.STRANGER: (40, 40, 230),
+        }
         frames = 0
         started = time.perf_counter()
+        cached_faces = []
         while self._running and self._video and self._estimator and self._detector:
             frame_start = time.perf_counter()
             ok, frame = self._video.read()
@@ -184,38 +203,80 @@ class FallDetectionPipeline:
                 time.sleep(0.05)
                 continue
 
+            frames += 1
+            if getattr(self, "_face_recognizer", None) and getattr(self, "_config", None):
+                if frames % self._config.face.process_every_n_frames == 0 or not cached_faces:
+                    cached_faces = self._face_recognizer.recognize(frame)
+
+            current_person_name = cached_faces[0].name if cached_faces else "Unknown"
+            current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
+
+            # Giữ ảnh gốc SẠCH KHÔNG CÓ KHUNG XƯƠNG để chụp hình gửi server
+            clean_frame = frame.copy()
+
             points, pose_results = self._estimator.estimate(frame)
             ai_prediction = None
             if points and self._feature_buffer and self._ai_classifier:
                 features = self._feature_buffer.append(points)
                 ai_prediction = self._ai_classifier.predict(features)
                 result = self._detector.update(points)
-                
+
                 event_triggered = result.event_started and self._logger
-                
-                if self._draw_landmarks:
-                    self._estimator.draw(frame, pose_results)
+
+                # KHÔNG vẽ khung xương lên live frame để màn hình camera sạch sẽ, rõ nét
                 _draw_status(frame, result, ai_prediction, state_colors, cv2)
-                
-                # Append frame to history buffer
+                _draw_faces(frame, cached_faces, person_type_colors, cv2)
+
+                # Lưu frame live vào lịch sử buffer
                 self._frame_buffer.append(frame.copy())
-                
+
+                # 1. Xử lý Cảnh báo người lạ -> Ảnh SẠCH (KHÔNG KHUNG XƯƠNG)
+                now_ts = time.time()
+                has_stranger = any(
+                    (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
+                    for f in cached_faces
+                )
+                if has_stranger and (now_ts - self._last_stranger_alert_time > 20.0):
+                    self._last_stranger_alert_time = now_ts
+                    stranger_id = f"STRANGER-{int(now_ts)}"
+                    print(f"[Stranger Alert] Phát hiện người lạ! Chụp ảnh sạch & gửi server: {stranger_id}")
+
+                    # Gửi alert vao DB & Danh sach Web Dashboard
+                    self._push_stranger_alert(stranger_id)
+
+                    # Kêu chuông cảnh báo
+                    threading.Thread(target=_play_alert_sound, daemon=True).start()
+
+                    # Lưu ảnh SẠCH (KHÔNG KHUNG XƯƠNG) gửi lên server Cloudinary
+                    snapshot = clean_frame.copy()
+                    threading.Thread(
+                        target=self._save_event_media,
+                        args=(stranger_id, snapshot, []),
+                        daemon=True,
+                    ).start()
+
+                # 2. Xử lý Cảnh báo Té ngã -> BẢO TOÀN KHUNG XƯƠNG làm bằng chứng
                 if event_triggered:
                     alert_id = f"AL-{int(time.time())}"
-                    self._logger.write(result)
+                    self._logger.write(result, person_name=current_person_name, person_type=current_person_type)
                     self._push_alert(result, alert_id)
-                    
-                    # Play alert sound in a separate background thread
+
+                    # Phát chuông cảnh báo
                     threading.Thread(target=_play_alert_sound, daemon=True).start()
-                    
-                    # Save snapshot and video in a separate background thread
-                    snapshot_frame = frame.copy()
+
+                    # Tạo ảnh cảnh báo té ngã CÓ KHUNG XƯƠNG để làm bằng chứng chứng minh tư thế té ngã
+                    fall_snapshot = clean_frame.copy()
+                    if pose_results:
+                        self._estimator.draw(fall_snapshot, pose_results)
+
                     video_frames = list(self._frame_buffer)
                     threading.Thread(
                         target=self._save_event_media,
-                        args=(alert_id, snapshot_frame, video_frames),
+                        args=(alert_id, fall_snapshot, video_frames),
                         daemon=True
                     ).start()
+
+
                 
                 status = PipelineStatus(
                     running=True,
@@ -235,7 +296,7 @@ class FallDetectionPipeline:
             else:
                 if self._feature_buffer:
                     self._feature_buffer.reset()
-                _draw_text(frame, "No pose detected", (20, 40), (180, 180, 180), cv2)
+                _draw_status(frame, None, ai_prediction, state_colors, cv2, pose_detected=False)
                 
                 # Append to frame buffer as well so that video is continuous
                 self._frame_buffer.append(frame.copy())
@@ -254,7 +315,7 @@ class FallDetectionPipeline:
             status.latency_ms = round((time.perf_counter() - frame_start) * 1000, 1)
 
 
-            ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
             if ok_enc:
                 with self._lock:
                     self._latest_jpeg = jpeg.tobytes()
@@ -295,8 +356,39 @@ class FallDetectionPipeline:
         except Exception as e:
             print(f"[Database Error] Khong the luu alert vao Turso: {e}")
 
+    def _push_stranger_alert(self, alert_id: str) -> None:
+        from datetime import datetime
+
+        alert = {
+            "id": alert_id,
+            "time": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "camera": getattr(self, "camera_id", "CAM-LOCAL"),
+            "person": "Người lạ xuất hiện",
+            "confidence": 95,
+            "status": "Chưa xử lý",
+            "level": "Cảnh báo",
+            "media": alert_id,
+            "state": "STRANGER_DETECTED",
+            "cloud_img_url": None,
+            "cloud_video_url": None,
+        }
+        self._recent_alerts.insert(0, alert)
+        self._recent_alerts = self._recent_alerts[:50]
+
+        try:
+            from src.web.shared.db import get_db_client
+            with get_db_client() as client:
+                client.execute(
+                    "INSERT INTO alerts (id, time, camera, person, confidence, status, level, media, state, cloud_img_url, cloud_video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [alert_id, alert["time"], alert["camera"], alert["person"], alert["confidence"], alert["status"], alert["level"], alert["media"], alert["state"], None, None]
+                )
+        except Exception as e:
+            print(f"[Database Error] Khong the luu stranger alert vao Turso: {e}")
+
+
     def _save_event_media(self, alert_id: str, snapshot_frame, video_frames: list) -> None:
         import os
+        import time
         from pathlib import Path
         
         project_root = Path(__file__).resolve().parents[3]
@@ -309,35 +401,62 @@ class FallDetectionPipeline:
         cloud_img_url = None
         cloud_video_url = None
 
+        # Đợi 2.5 giây sau sự kiện để ghi trọn vẹn diễn biến té ngã
+        time.sleep(2.5)
+        try:
+            with self._lock:
+                if self._frame_buffer:
+                    video_frames = list(self._frame_buffer)
+        except Exception:
+            pass
+
         try:
             # 1. Save snapshot image
-            cv2 = self._runtime["cv2"] if self._runtime else None
+            cv2 = self._runtime.get("cv2") if self._runtime else None
+            if cv2 is None:
+                import cv2
+
             if cv2 is not None:
                 cv2.imwrite(str(img_path), snapshot_frame)
-                
-                # 2. Save video clip
-                if video_frames:
+
+                # 2. Save video clip với FPS khớp thực tế (Tạo đoạn video dài 5-10 giây)
+                if video_frames and len(video_frames) >= 10:
                     height, width = video_frames[0].shape[:2]
-                    
-                    # Try multiple common codecs for browser compatibility
-                    for codec in ["avc1", "H264", "mp4v"]:
+                    write_fps = max(8.0, min(15.0, self._status.fps or 12.0))
+
+                    # Thử ghi video với các codec tương thích
+                    for codec in ["mp4v", "XVID", "MJPG", "avc1", "H264"]:
                         try:
                             fourcc = cv2.VideoWriter_fourcc(*codec)
-                            writer = cv2.VideoWriter(str(video_path), fourcc, 25.0, (width, height))
+                            writer = cv2.VideoWriter(str(video_path), fourcc, write_fps, (width, height))
                             if writer.isOpened():
                                 for f in video_frames:
                                     writer.write(f)
                                 writer.release()
-                                video_written = True
-                                break
-                        except Exception:
+                                # Kiểm tra file video ghi thành công (>1KB)
+                                if video_path.exists() and video_path.stat().st_size > 1000:
+                                    video_written = True
+                                    print(f"[Media] Recorded video clip ({len(video_frames)} frames @ {write_fps:.1f}fps): {video_path}")
+                                    break
+                                else:
+                                    if video_path.exists():
+                                        video_path.unlink()
+                        except Exception as codec_err:
+                            print(f"[Media Warning] Codec {codec} failed: {codec_err}")
+                            if video_path.exists():
+                                try:
+                                    video_path.unlink()
+                                except Exception:
+                                    pass
                             continue
+
                 
                 # 3. Upload to Cloudinary if configured in db.json
                 try:
                     from src.web.shared.cloudinary_uploader import upload_to_cloudinary
-                    cloud_img_url = upload_to_cloudinary(str(img_path))
-                    if video_written:
+                    if img_path.exists():
+                        cloud_img_url = upload_to_cloudinary(str(img_path))
+                    if video_written and video_path.exists():
                         cloud_video_url = upload_to_cloudinary(str(video_path))
                 except Exception as e:
                     print(f"[Cloudinary Error] Lỗi upload lên Cloud: {e}")
@@ -366,19 +485,19 @@ class FallDetectionPipeline:
                     from src.web.shared.notifications import send_all_alerts
                     send_all_alerts(
                         alert_id=alert_id,
-                        image_path=str(img_path),
-                        video_path=str(video_path) if video_written else None,
+                        image_path=str(img_path) if img_path.exists() else None,
+                        video_path=str(video_path) if (video_written and video_path.exists()) else None,
                         cloud_img_url=cloud_img_url,
                         cloud_video_url=cloud_video_url
                     )
                 except Exception as e:
                     print(f"[Notification Error] Khong gui duoc canh bao: {e}")
         finally:
-            # Delete local files immediately to avoid saving data locally
+            # Only delete local files if Cloudinary upload succeeded to retain fallback media locally
             try:
-                if img_path.exists():
+                if cloud_img_url and img_path.exists():
                     img_path.unlink()
-                if video_path.exists():
+                if cloud_video_url and video_path.exists():
                     video_path.unlink()
             except Exception as cleanup_err:
                 print(f"[Media Cleanup Error] Không thể xóa file tạm: {cleanup_err}")
@@ -400,28 +519,95 @@ def _play_alert_sound() -> None:
             return
 
 
-def _draw_status(frame, result, ai_prediction, state_colors, cv2) -> None:
-    color = state_colors[result.state]
-    label = (
-        f"{result.state.value.upper()} | angle={result.torso_angle_deg:.1f} "
-        f"| lie={result.lying_seconds:.1f}s | profile={result.profile}"
-    )
-    _draw_text(frame, label, (20, 40), color, cv2)
-    if ai_prediction.enabled:
-        ai_label = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
-        ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
-        _draw_text(frame, ai_label, (20, 80), ai_color, cv2)
+def _draw_status(frame, result, ai_prediction, state_colors, cv2, pose_detected: bool = True) -> None:
+    h, w = frame.shape[:2]
+    
+    if pose_detected and result:
+        color = state_colors.get(result.state, (70, 200, 90))
+        state_str = result.state.value.upper()
+        status_text = f"{state_str} | Angle: {result.torso_angle_deg:.1f}deg | Lie: {result.lying_seconds:.1f}s"
     else:
-        _draw_text(frame, "AI: disabled/no model", (20, 80), (180, 180, 180), cv2)
-    if result.state.value in {"fallen", "alert"}:
-        height, width = frame.shape[:2]
-        cv2.rectangle(frame, (0, 0), (width - 1, height - 1), color, 6)
+        color = (140, 145, 150)
+        status_text = "SEARCHING POSE... | Camera Active"
+
+    if ai_prediction and ai_prediction.enabled:
+        ai_text = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
+        ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
+    else:
+        ai_text = "AI: Disabled"
+        ai_color = (170, 175, 180)
+
+    font_scale = max(0.35, min(0.45, h / 950.0))
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # Draw semi-transparent background badge with comfortable safe margins (margin_x >= 30, margin_y >= 18)
+    margin_x = int(max(30, w * 0.05))
+    margin_y = int(max(18, h * 0.04))
+
+    badge_h = int(max(36, 42 * (h / 480.0)))
+    badge_w = int(min(w * 0.58, 330 * (w / 640.0)))
+    
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (margin_x, margin_y), (margin_x + badge_w, margin_y + badge_h), (18, 20, 26), -1)
+    cv2.rectangle(overlay, (margin_x, margin_y), (margin_x + 5, margin_y + badge_h), color, -1)
+    
+    cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
+
+    text_y1 = margin_y + int(badge_h * 0.44)
+    text_y2 = margin_y + int(badge_h * 0.84)
+
+    cv2.putText(frame, status_text, (margin_x + 12, text_y1), font, font_scale, (245, 245, 245), 1, cv2.LINE_AA)
+    cv2.putText(frame, ai_text, (margin_x + 12, text_y2), font, font_scale * 0.9, ai_color, 1, cv2.LINE_AA)
+
+    if pose_detected and result and result.state.value in {"fallen", "alert"}:
+        cv2.rectangle(frame, (0, 0), (w - 1, h - 1), color, 4)
 
 
 def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int, int], cv2) -> None:
-    cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
-    cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2, cv2.LINE_AA)
+    h = frame.shape[0]
+    font_scale = max(0.40, min(0.52, h / 850.0))
+    cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), 2, cv2.LINE_AA)
+    cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, 1, cv2.LINE_AA)
+
+
+def _draw_faces(frame, faces, person_type_colors, cv2) -> None:
+    has_stranger = False
+    for face in faces:
+        x, y, w, h = face.box
+        color = person_type_colors.get(face.person_type, (200, 200, 200))
+
+        # Khung viền mỏng đẹp
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+
+        # Định dạng nhãn sạch gọn, không lặp từ
+        ptype_str = face.person_type.value if hasattr(face.person_type, "value") else str(face.person_type)
+        if ptype_str == "STRANGER":
+            label = "NGUOI LA"
+            has_stranger = True
+        elif ptype_str == "ATTENTION":
+            label = f"{face.name} [VIP]"
+        else:
+            label = f"{face.name}"
+
+        # Vẽ thẻ nền phía trên bounding box
+        (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        label_bg_y1 = max(0, y - text_h - 8)
+        label_bg_y2 = max(text_h + 8, y)
+        cv2.rectangle(frame, (x, label_bg_y1), (x + text_w + 10, label_bg_y2), color, cv2.FILLED)
+
+        # Màu chữ tương phản
+        text_color = (0, 0, 0) if ptype_str in ("FAMILY", "ATTENTION") else (255, 255, 255)
+        cv2.putText(frame, label, (x + 5, label_bg_y2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1, cv2.LINE_AA)
+
+    if has_stranger:
+        h_img, w_img = frame.shape[:2]
+        # Báo động ở góc trên bên phải (tránh đè lên Status Badge ở góc trái)
+        badge_w = 230
+        cv2.rectangle(frame, (w_img - badge_w - 20, 18), (w_img - 20, 52), (40, 40, 230), cv2.FILLED)
+        cv2.putText(frame, "! CANH BAO: NGUOI LA !", (w_img - badge_w - 10, 41), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
 
 
 pipeline = FallDetectionPipeline()
+
+
 

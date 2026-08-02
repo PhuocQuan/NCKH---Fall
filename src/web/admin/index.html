@@ -741,7 +741,7 @@ function loadStore(key, fallback) {
           .map(u => ({
             name: `Nhà ${u.name}`,
             ownerEmail: u.email,
-            cameras: u.assignedCameras || []
+            cameras: Array.from(new Set(u.assignedCameras || []))
           }));
           
         const assignedCamIds = new Set(users.filter(u => u.role !== "Admin").flatMap(u => u.assignedCameras || []));
@@ -750,7 +750,7 @@ function loadStore(key, fallback) {
           customerHouses.push({
             name: "Thiết bị chưa gán",
             ownerEmail: "",
-            cameras: unassignedCams.map(c => c.id)
+            cameras: Array.from(new Set(unassignedCams.map(c => c.id)))
           });
         }
         return customerHouses;
@@ -759,11 +759,12 @@ function loadStore(key, fallback) {
           {
             name: `Nhà ${currentUser.name}`,
             ownerEmail: currentUser.email,
-            cameras: currentUser.assignedCameras || []
+            cameras: Array.from(new Set(currentUser.assignedCameras || []))
           }
         ];
       }
     }
+
     
     // Audio Context Alarm Sound Synthesis
     let audioCtx = null;
@@ -1129,8 +1130,8 @@ function loadStore(key, fallback) {
     const cameraCard = (cam, index = 0) => `<article class="cam ${stateClass(cam)}" data-open-camera="${esc(cam.id)}">
       <div class="cam-head"><span>${cameraRoomName(cam, index)}</span><span class="live">Live</span></div>
       <div class="cam-view">
-        <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
-        <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+        <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
+        <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
       </div>
     </article>`;
 
@@ -1413,18 +1414,20 @@ function loadStore(key, fallback) {
       const cam = cameraById(alertItem.camera);
       const isMock = id.startsWith("AL-20260615-");
       
+      let localImgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
       let imgSrc = "";
       if (alertItem.media && alertItem.media.startsWith("data:image")) {
         imgSrc = alertItem.media;
       } else if (alertItem.cloud_img_url) {
         imgSrc = alertItem.cloud_img_url;
       } else {
-        imgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
+        imgSrc = localImgSrc;
       }
       
       let videoHtml = "";
       if (hasVideo(alertItem)) {
         let videoSrc = alertItem.cloud_video_url || `${apiBaseUrl()}/media/${alertItem.id}.mp4`;
+        let localVideoSrc = `${apiBaseUrl()}/media/${alertItem.id}.mp4`;
         if (isMock) {
           videoHtml = `
             <div style="background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; margin-top:12px;">
@@ -1439,7 +1442,7 @@ function loadStore(key, fallback) {
           videoHtml = `
             <div style="margin-top: 12px;">
               <strong style="display:block; margin-bottom: 6px; font-size:13px; color:var(--ink);">Video clip sự kiện:</strong>
-              <video src="${videoSrc}" controls style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;"></video>
+              <video src="${videoSrc}" controls style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;" onerror="if(this.src!=='${localVideoSrc}'){this.src='${localVideoSrc}';}else{this.parentElement.innerHTML='<div style=\"padding:16px; text-align:center; background:#f8fafc; border-radius:8px; border:1px dashed var(--line); font-size:13px; color:var(--muted);\">🎥 Video sự kiện hiện không khả dụng.</div>';}"></video>
             </div>
           `;
         }
@@ -1454,7 +1457,7 @@ function loadStore(key, fallback) {
       const content = `
         <div style="display:flex; flex-direction:column; gap:16px; font-family: inherit;">
           <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
-            <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';">
+            <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';}">
           </div>
           
           <div class="card" style="padding:16px; margin-top: 0; background:rgba(244,63,94,0.02); border-color:#fee2e2;">
@@ -1898,8 +1901,9 @@ function loadStore(key, fallback) {
     function cameraById(id) {
       const vis = getVisibleCameras();
       if (vis.length === 0) return null;
-      return vis.find((cam) => cam.id === id) || vis[0];
+      return vis.find((cam) => cam.id === id) || null;
     }
+
 
     function cameraMetrics(cam) {
       const fallen = cam.state === "fallen";
@@ -1976,8 +1980,8 @@ function loadStore(key, fallback) {
           <article class="cam ${stateClass(c)}" data-open-camera="${esc(c.id)}" style="cursor: pointer;">
             <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live">Live</span></div>
             <div class="cam-view">
-              <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
-              <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+              <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
+              <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
               <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(c.status === "online" ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
             </div>
           </article>
@@ -2038,9 +2042,9 @@ function loadStore(key, fallback) {
           <article class="cam live-detail ${aiFallTestOn ? "fallen" : ""}" style="flex:1;">
             <div class="cam-head"><span>${cameraRoomName(cam, idx)}</span><span class="live">LIVE</span></div>
             <div class="cam-view ${aiFallTestOn ? "ai-test-on" : ""}" style="position:relative;">
-              <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+              <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
               <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:cover;display:none;">
+              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
               ${personSvg()}
               <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
               <span class="state" id="liveStateBadge">${statusPill(cam.state.toUpperCase())}</span>

@@ -6,17 +6,25 @@ import json
 from pathlib import Path
 
 DB_CONFIG_PATH = Path("configs/db.json")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_cloudinary_config() -> dict:
-    if not DB_CONFIG_PATH.exists():
-        return {}
-    try:
-        with DB_CONFIG_PATH.open(encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("cloudinary", {})
-    except Exception:
-        return {}
+    possible_paths = [
+        DB_CONFIG_PATH,
+        PROJECT_ROOT / "configs" / "db.json"
+    ]
+    for p in possible_paths:
+        if p.exists():
+            try:
+                with p.open(encoding="utf-8") as f:
+                    data = json.load(f)
+                    cfg = data.get("cloudinary", {})
+                    if cfg and cfg.get("cloud_name"):
+                        return cfg
+            except Exception:
+                pass
+    return {}
 
 
 def upload_to_cloudinary(file_path: str) -> str | None:
@@ -40,15 +48,25 @@ def upload_to_cloudinary(file_path: str) -> str | None:
         )
         
         resource_type = "video" if file_path.lower().endswith((".mp4", ".avi", ".mov", ".mkv")) else "image"
-        
-        print(f"[Cloudinary] Uploading {file_path}...")
-        res = cloudinary.uploader.upload(file_path, resource_type=resource_type)
+
+        print(f"[Cloudinary] Uploading {file_path} (resource_type={resource_type})...")
+        if resource_type == "video":
+            # Tự động transcode video sang chuẩn HTML5 H.264 để xem được trên tất cả trình duyệt web
+            res = cloudinary.uploader.upload(
+                file_path,
+                resource_type="video",
+                video_codec="h264",
+            )
+        else:
+            res = cloudinary.uploader.upload(file_path, resource_type="image")
+
         secure_url = res.get("secure_url")
         print(f"[Cloudinary] Upload success: {secure_url}")
         return secure_url
     except Exception as e:
         print(f"[Cloudinary] Lỗi upload: {e}")
         return None
+
 
 
 def delete_from_cloudinary(url: str) -> bool:

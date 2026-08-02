@@ -16,3 +16,4 @@ configs/db.json
 cloudflared.exe
 config.yml
 config.yaml
+data/pytest_tmp/

@@ -14,7 +14,7 @@ VALID_USERS = {
 }
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12
-JWT_SECRET_KEY = "nckh-fallguard-secret-key-2026"
+JWT_SECRET_KEY = "nckh-fallguard-production-secret-key-secure-2026-v2-32byte-min-length"
 JWT_ALGORITHM = "HS256"
 
 

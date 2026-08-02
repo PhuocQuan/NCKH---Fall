@@ -109,6 +109,7 @@ class FallDetector:
             self._lying_frames = 0
             self._fall_candidate = False
             self._alert_active = False
+            self._abnormal_frames = 0
 
         abnormal = lying and (
             self._fall_candidate or self.config.alert_on_long_lying_without_fall
@@ -117,11 +118,15 @@ class FallDetector:
         if abnormal:
             self._abnormal_frames += 1
         else:
-            self._abnormal_frames = max(0, self._abnormal_frames - 1)
+            self._abnormal_frames = 0
 
         event_started = False
         lying_seconds = self._lying_frames / max(self.config.assumed_fps, 1.0)
-        if (
+        
+        if torso_is_upright or not lying:
+            state = FallState.NORMAL
+            self._abnormal_frames = 0
+        elif (
             self._abnormal_frames >= self.config.min_fall_frames
             and lying_seconds >= self.config.alert_after_seconds
         ):

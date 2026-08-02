@@ -206,32 +206,41 @@ def camera_snapshot(request: Request):
     return Response(content=frame, media_type="image/jpeg")
 
 
-def _async_upload_test_snapshot(alert_id: str, img_path: Path):
+def _async_upload_test_snapshot(alert_id: str, img_path: Path, video_path: Path | None = None):
     cloud_img_url = None
+    cloud_video_url = None
     try:
         try:
-            cloud_img_url = upload_to_cloudinary(str(img_path))
+            if img_path.exists():
+                cloud_img_url = upload_to_cloudinary(str(img_path))
+            if video_path and video_path.exists():
+                cloud_video_url = upload_to_cloudinary(str(video_path))
         except Exception as e:
             print(f"[Cloudinary Error] Loi upload test-snapshot async: {e}")
 
         try:
             with get_db_client() as client:
-                if cloud_img_url:
-                    client.execute(
-                        "UPDATE alerts SET cloud_img_url = ? WHERE id = ?",
-                        [cloud_img_url, alert_id]
-                    )
-                    with pipeline._lock:
-                        for a in pipeline._recent_alerts:
-                            if a["id"] == alert_id:
-                                a["cloud_img_url"] = cloud_img_url
-                                break
+                media_val = f"{alert_id}_video" if (cloud_video_url or (video_path and video_path.exists())) else f"{alert_id}_image"
+                client.execute(
+                    "UPDATE alerts SET cloud_img_url = ?, cloud_video_url = ?, media = ? WHERE id = ?",
+                    [cloud_img_url, cloud_video_url, media_val, alert_id]
+                )
+                with pipeline._lock:
+                    for a in pipeline._recent_alerts:
+                        if a["id"] == alert_id:
+                            a["cloud_img_url"] = cloud_img_url
+                            a["cloud_video_url"] = cloud_video_url
+                            a["media"] = media_val
+                            break
         except Exception as e:
             print(f"[Database Error] Loi cap nhat test-snapshot async: {e}")
     finally:
         try:
-            if img_path.exists():
+            # Only delete local files if Cloudinary upload succeeded
+            if cloud_img_url and img_path.exists():
                 img_path.unlink()
+            if cloud_video_url and video_path and video_path.exists():
+                video_path.unlink()
         except Exception as cleanup_err:
             print(f"[Media Cleanup Error] Không thể xóa file test snapshot: {cleanup_err}")
 
@@ -241,6 +250,7 @@ def camera_test_snapshot(body: TestSnapshotRequest, user: str = Depends(require_
     alert_id = f"TEST-SNAPSHOT-{int(time.time())}"
     img_filename = f"{alert_id}.jpg"
     img_path = MEDIA_DIR / img_filename
+    video_path = None
 
     try:
         if body.image_data:
@@ -256,6 +266,33 @@ def camera_test_snapshot(body: TestSnapshotRequest, user: str = Depends(require_
             with img_path.open("wb") as f:
                 f.write(frame)
 
+        # Generate test video if pipeline buffer contains frames
+        video_frames = list(pipeline._frame_buffer) if (pipeline.is_running() and pipeline._frame_buffer) else []
+        if video_frames:
+            try:
+                import cv2
+                vpath = MEDIA_DIR / f"{alert_id}.mp4"
+                height, width = video_frames[0].shape[:2]
+                for codec in ["mp4v", "XVID", "MJPG"]:
+                    try:
+                        fourcc = cv2.VideoWriter_fourcc(*codec)
+                        writer = cv2.VideoWriter(str(vpath), fourcc, 25.0, (width, height))
+                        if writer.isOpened():
+                            for f in video_frames:
+                                writer.write(f)
+                            writer.release()
+                            if vpath.exists() and vpath.stat().st_size > 1000:
+                                video_path = vpath
+                                break
+                            else:
+                                if vpath.exists():
+                                    vpath.unlink()
+                    except Exception:
+                        continue
+            except Exception as e:
+                print(f"[Test Video Error] Khong thể tạo video test: {e}")
+
+        media_val = f"{alert_id}_video" if video_path else alert_id
         alert = {
             "id": alert_id,
             "time": datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -264,9 +301,10 @@ def camera_test_snapshot(body: TestSnapshotRequest, user: str = Depends(require_
             "confidence": 100,
             "status": "Đã xử lý",
             "level": "Trung bình",
-            "media": alert_id,
+            "media": media_val,
             "state": "test",
             "cloud_img_url": None,
+            "cloud_video_url": None,
         }
         with pipeline._lock:
             pipeline._recent_alerts.insert(0, alert)
@@ -284,7 +322,7 @@ def camera_test_snapshot(body: TestSnapshotRequest, user: str = Depends(require_
             print(f"[Database Error] Khong the luu test-snapshot alert vao Turso: {e}")
 
         # Run background upload
-        threading.Thread(target=_async_upload_test_snapshot, args=(alert_id, img_path), daemon=True).start()
+        threading.Thread(target=_async_upload_test_snapshot, args=(alert_id, img_path, video_path), daemon=True).start()
 
         return {
             "ok": True,

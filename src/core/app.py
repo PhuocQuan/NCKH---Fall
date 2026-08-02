@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import threading
 from dataclasses import replace
+from pathlib import Path
 
 import cv2
 
@@ -13,9 +14,10 @@ from src.detection.feature_extractor import LandmarkFeatureBuffer
 from src.detection.fall_detector import FallDetector, FallState
 from src.detection.pose_estimator import PoseEstimator
 from src.camera.video_source import VideoSource
+from src.face import FaceRecognizer, PersonType, RecognizedFace
 
 try:
-    # Windows-only: dùng để phát "beep" khi có cảnh báo té ngã.
+    # Windows-only: dùng để phát "beep" khi có cảnh báo té ngã hoặc người lạ.
     import winsound  # type: ignore
 except Exception:  # pragma: no cover
     winsound = None  # type: ignore
@@ -28,6 +30,12 @@ STATE_COLORS = {
     FallState.POSSIBLE_FALL: (0, 140, 255),
     FallState.FALLEN: (40, 40, 230),
     FallState.ALERT: (0, 0, 255),
+}
+
+PERSON_TYPE_COLORS = {
+    PersonType.FAMILY: (70, 200, 90),
+    PersonType.ATTENTION: (0, 220, 255),
+    PersonType.STRANGER: (40, 40, 230),
 }
 
 # Kêu chuông ngay khi nghi ngờ / xác nhận té ngã, không đợi ALERT (10 giây).
@@ -65,6 +73,7 @@ def main() -> None:
     ai_classifier = FallAIClassifier(config.ai)
     estimator = PoseEstimator(model_complexity=config.app.model_complexity)
     logger = EventLogger(config.app.event_log_path)
+    face_recognizer = FaceRecognizer(config.face)
 
     source = args.video if args.video else args.camera if args.camera is not None else args.source
     video = VideoSource(
@@ -73,16 +82,28 @@ def main() -> None:
         height=config.app.camera_height,
     )
 
-    window_name = "NCKH Fall Detection"
+    window_name = "NCKH Fall Detection & Face Recognition"
     alert_beep_interval_frames = max(1, round(detector_config.assumed_fps * 2))
     frames_since_alert_beep = alert_beep_interval_frames
     prev_fall_state = FallState.NORMAL
+
+    frame_count = 0
+    cached_faces: list[RecognizedFace] = []
 
     try:
         while True:
             ok, frame = video.read()
             if not ok:
                 break
+
+            frame_count += 1
+            # Quét khuôn mặt mỗi N frame để đảm bảo FPS mượt mà
+            if config.face.enabled and (frame_count % config.face.process_every_n_frames == 0 or not cached_faces):
+                cached_faces = face_recognizer.recognize(frame)
+
+            # Lấy thông tin người đầu tiên nhận diện được trong frame (nếu có)
+            current_person_name = cached_faces[0].name if cached_faces else "Unknown"
+            current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
 
             points, pose_results = estimator.estimate(frame)
             result = None
@@ -91,7 +112,7 @@ def main() -> None:
                 ai_prediction = ai_classifier.predict(features)
                 result = detector.update(points)
                 if result.event_started:
-                    logger.write(result)
+                    logger.write(result, person_name=current_person_name, person_type=current_person_type)
                 frames_since_alert_beep, prev_fall_state = _update_fall_alarm(
                     result.state,
                     prev_fall_state,
@@ -100,12 +121,15 @@ def main() -> None:
                 )
                 if config.app.draw_landmarks:
                     estimator.draw(frame, pose_results)
-                _draw_status(frame, result, ai_prediction)
+                _draw_status(frame, result, ai_prediction, current_person_name, current_person_type)
             else:
                 feature_buffer.reset()
                 prev_fall_state = FallState.NORMAL
                 frames_since_alert_beep = alert_beep_interval_frames
                 _draw_text(frame, "No pose detected", (20, 40), (180, 180, 180))
+
+            # Vẽ bounding boxes khuôn mặt
+            _draw_faces(frame, cached_faces)
 
             cv2.imshow(window_name, frame)
             key = cv2.waitKey(1) & 0xFF
@@ -115,10 +139,20 @@ def main() -> None:
                 detector.reset()
                 prev_fall_state = FallState.NORMAL
                 frames_since_alert_beep = alert_beep_interval_frames
+            if key == ord("s"):
+                # Đăng ký ảnh mới từ camera
+                print("\n[Save Face] Nhập tên người cần đăng ký (ví dụ: OngNoi_ATTENTION hoặc Me_FAMILY): ")
+                new_name = input("Tên: ").strip()
+                if new_name:
+                    save_path = Path(config.face.known_faces_dir) / f"{new_name}.jpg"
+                    cv2.imwrite(str(save_path), frame)
+                    print(f"Đã lưu ảnh khuôn mặt tại: {save_path}")
+                    face_recognizer.reload_known_faces()
     finally:
         estimator.close()
         video.release()
         cv2.destroyAllWindows()
+
 
 def _update_fall_alarm(
     state: FallState,
@@ -185,5 +219,43 @@ def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int,
     cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2, cv2.LINE_AA)
 
 
+def _draw_faces(frame: cv2.Mat, faces: list[RecognizedFace]) -> None:
+    has_stranger = False
+    for face in faces:
+        x, y, w, h = face.box
+        color = PERSON_TYPE_COLORS.get(face.person_type, (200, 200, 200))
+
+        # Khung viền mỏng đẹp
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+
+        # Định dạng nhãn sạch gọn
+        ptype_str = face.person_type.value if hasattr(face.person_type, "value") else str(face.person_type)
+        if ptype_str == "STRANGER":
+            label = "NGUOI LA"
+            has_stranger = True
+        elif ptype_str == "ATTENTION":
+            label = f"{face.name} [VIP]"
+        else:
+            label = f"{face.name}"
+
+        # Thẻ nền phía trên bounding box
+        (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        label_bg_y1 = max(0, y - text_h - 8)
+        label_bg_y2 = max(text_h + 8, y)
+        cv2.rectangle(frame, (x, label_bg_y1), (x + text_w + 10, label_bg_y2), color, cv2.FILLED)
+
+        # Màu chữ tương phản
+        text_color = (0, 0, 0) if ptype_str in ("FAMILY", "ATTENTION") else (255, 255, 255)
+        cv2.putText(frame, label, (x + 5, label_bg_y2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1, cv2.LINE_AA)
+
+    if has_stranger:
+        h_img, w_img = frame.shape[:2]
+        badge_w = 230
+        cv2.rectangle(frame, (w_img - badge_w - 20, 18), (w_img - 20, 52), (40, 40, 230), cv2.FILLED)
+        cv2.putText(frame, "! CANH BAO: NGUOI LA !", (w_img - badge_w - 10, 41), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+
 if __name__ == "__main__":
     main()
+
+
