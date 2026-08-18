@@ -1,6 +1,9 @@
 name: Build iOS IPA
 
 on:
+  push:
+    branches:
+      - Nhan
   workflow_dispatch: # Cho phép bấm nút chạy thủ công trên GitHub
 
 jobs:
