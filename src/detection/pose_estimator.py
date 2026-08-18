@@ -25,8 +25,8 @@ class PoseEstimator:
         self,
         static_image_mode: bool = False,
         model_complexity: int = 0,
-        min_detection_confidence: float = 0.65,
-        min_tracking_confidence: float = 0.65,
+        min_detection_confidence: float = 0.50,
+        min_tracking_confidence: float = 0.50,
     ) -> None:
         self._mp_pose = pose
         self._drawing = drawing_utils

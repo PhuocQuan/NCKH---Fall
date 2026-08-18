@@ -30,7 +30,7 @@ face:
   enabled: true
   known_faces_dir: data/known_faces
   similarity_threshold: 0.40
-  score_threshold: 0.58
+  score_threshold: 0.45
   process_every_n_frames: 2
 
 

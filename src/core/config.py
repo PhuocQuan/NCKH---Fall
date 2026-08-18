@@ -43,7 +43,7 @@ class FaceConfig:
     enabled: bool = True
     known_faces_dir: str = "data/known_faces"
     similarity_threshold: float = 0.40
-    score_threshold: float = 0.58
+    score_threshold: float = 0.45
     process_every_n_frames: int = 2
 
 
