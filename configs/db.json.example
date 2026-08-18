@@ -1,0 +1,11 @@
+{
+  "turso": {
+    "url": "libsql://YOUR_TURSO_DATABASE_URL",
+    "auth_token": "YOUR_TURSO_AUTH_TOKEN"
+  },
+  "cloudinary": {
+    "cloud_name": "YOUR_CLOUDINARY_CLOUD_NAME",
+    "api_key": "YOUR_CLOUDINARY_API_KEY",
+    "api_secret": "YOUR_CLOUDINARY_API_SECRET"
+  }
+}
