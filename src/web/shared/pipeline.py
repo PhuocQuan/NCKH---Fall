@@ -210,55 +210,12 @@ class FallDetectionPipeline:
             clean_frame = frame.copy()
             points, pose_results = self._estimator.estimate(frame)
 
-            # Lấy vị trí mũi từ MediaPipe Pose để xác minh & tracking
-            h_img, w_img = frame.shape[:2]
-            nose_pos = None
-            if points and "nose" in points and getattr(points["nose"], "visibility", 0) > 0.35:
-                nose_pos = (int(points["nose"].x * w_img), int(points["nose"].y * h_img))
-
-            # Xử lý nhận diện và tracking khuôn mặt linh hoạt
+            # Xử lý nhận diện đa khuôn mặt thời gian thực (hỗ trợ nhiều người cùng lúc)
             if getattr(self, "_face_recognizer", None) and getattr(self, "_config", None):
-                n_frames = max(1, getattr(self._config.face, "process_every_n_frames", 4))
+                n_frames = max(1, getattr(self._config.face, "process_every_n_frames", 2))
 
-                if frames % n_frames == 0 or raw_faces is None:
-                    detected_faces = self._face_recognizer.recognize(frame)
-
-                    # Lọc bỏ các bọc mặt giả xuất hiện trên áo/tường xa vị trí đầu thật
-                    if nose_pos and detected_faces:
-                        nx, ny = nose_pos
-                        valid_faces = []
-                        for f in detected_faces:
-                            fx, fy, fw, fh = f.box
-                            fc_x, fc_y = fx + fw // 2, fy + fh // 2
-                            dist = ((fc_x - nx) ** 2 + (fc_y - ny) ** 2) ** 0.5
-                            max_dist = max(200, int(max(fw, fh) * 2.0))
-                            if dist <= max_dist:
-                                valid_faces.append(f)
-                        raw_faces = valid_faces
-                    else:
-                        raw_faces = detected_faces
-
-                    last_face_nose = nose_pos
-                    cached_faces = list(raw_faces)
-                elif raw_faces and nose_pos and last_face_nose:
-                    # Cập nhật vị trí khung mặt dịch chuyển thời gian thực theo đầu người
-                    dx = nose_pos[0] - last_face_nose[0]
-                    dy = nose_pos[1] - last_face_nose[1]
-                    tracked_faces = []
-                    for f in raw_faces:
-                        fx, fy, fw, fh = f.box
-                        new_box = (max(0, fx + dx), max(0, fy + dy), fw, fh)
-                        tracked_faces.append(
-                            runtime["RecognizedFace"](
-                                name=f.name,
-                                person_type=f.person_type,
-                                box=new_box,
-                                confidence=f.confidence
-                            )
-                        )
-                    cached_faces = tracked_faces
-                elif not raw_faces:
-                    cached_faces = []
+                if frames % n_frames == 0 or cached_faces is None:
+                    cached_faces = self._face_recognizer.recognize(frame)
 
             current_person_name = cached_faces[0].name if cached_faces else "Unknown"
             current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"

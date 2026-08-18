@@ -44,7 +44,7 @@ class FaceConfig:
     known_faces_dir: str = "data/known_faces"
     similarity_threshold: float = 0.40
     score_threshold: float = 0.58
-    process_every_n_frames: int = 4
+    process_every_n_frames: int = 2
 
 
 @dataclass(frozen=True)
