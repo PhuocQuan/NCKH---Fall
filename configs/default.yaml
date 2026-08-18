@@ -1,13 +1,13 @@
 detector:
-  torso_fall_angle_deg: 62
+  torso_fall_angle_deg: 58
   torso_upright_angle_deg: 35
   head_hip_height_ratio: 0.18
   hip_drop_velocity: 0.035
   angle_change_velocity_deg: 18
   min_fall_frames: 7
   warning_frames: 3
-  alert_after_seconds: 10
-  alert_on_long_lying_without_fall: false
+  alert_after_seconds: 3
+  alert_on_long_lying_without_fall: true
   assumed_fps: 30
   cooldown_frames: 20
   profile: default
@@ -15,11 +15,22 @@ detector:
 app:
   camera_width: 1280
   camera_height: 720
-  draw_landmarks: true
+  model_complexity: 0
+  draw_landmarks: false
   event_log_path: data/events.csv
+
 
 ai:
   enabled: false
   model_path: models/fall_classifier.joblib
   alert_probability: 0.70
   smoothing_frames: 5
+
+face:
+  enabled: true
+  known_faces_dir: data/known_faces
+  similarity_threshold: 0.40
+  score_threshold: 0.45
+  process_every_n_frames: 2
+
+

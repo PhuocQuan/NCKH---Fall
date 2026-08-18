@@ -3,3 +3,17 @@ __pycache__/
 .pytest_cache/
 repo-push-temp/
 data/events.csv
+configs/notifications.json
+scratch/
+data/media/
+data/events.db
+*.log
+.env
+.ipynb_checkpoints/
+configs/db.json
+
+# Cloudflare Tunnel local binary & config
+cloudflared.exe
+config.yml
+config.yaml
+data/pytest_tmp/

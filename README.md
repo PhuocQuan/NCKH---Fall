@@ -21,7 +21,7 @@ Kiểm tra camera laptop trước:
 
 ```powershell
 pip install -r requirements-camera.txt
-python -m src.check_camera --camera 0
+python -m src.camera.check_camera --camera 0
 ```
 
 Cài đầy đủ để chạy phát hiện té ngã:
@@ -35,19 +35,19 @@ pip install -r requirements.txt
 ## Chạy demo webcam
 
 ```powershell
-python -m src.app --source 0
+python -m src.core.app --source 0
 ```
 
 Chạy với video:
 
 ```powershell
-python -m src.app --source path\to\video.mp4
+python -m src.core.app --source path\to\video.mp4
 ```
 
 Chạy với IP camera/RTSP trong tương lai:
 
 ```powershell
-python -m src.app --source rtsp://user:password@192.168.1.10:554/stream
+python -m src.core.app --source rtsp://user:password@192.168.1.10:554/stream
 ```
 
 ## Chạy test

@@ -1,0 +1,5 @@
+Hãy bỏ các ảnh chụp khuôn mặt người thân vào thư mục này.
+
+Quy tắc đặt tên file:
+1. Người thân bình thường: Me_FAMILY.jpg hoặc Bo.jpg
+2. Người cần chú ý đặc biệt (VIP / Người già): OngNoi_ATTENTION.jpg hoặc BaNoi_VIP.jpg
