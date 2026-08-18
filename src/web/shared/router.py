@@ -167,13 +167,16 @@ def control_stop(user: str = Depends(require_user)) -> dict[str, bool]:
 
 def _mjpeg_generator():
     placeholder = _placeholder_frame()
+    last_jpeg = None
     while True:
         frame = pipeline.get_jpeg_frame() or placeholder
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-        )
-        time.sleep(0.02)
+        if frame != last_jpeg:
+            last_jpeg = frame
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            )
+        time.sleep(0.005)
 
 
 def _placeholder_frame() -> bytes:
@@ -191,7 +194,15 @@ def _placeholder_frame() -> bytes:
 def camera_stream(request: Request):
     if not verify_token(_extract_token(request)):
         raise HTTPException(status_code=401, detail="Token khong hop le.")
-    return StreamingResponse(_mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(
+        _mjpeg_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, pre-check=0, post-check=0, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @router.get("/api/camera/snapshot")

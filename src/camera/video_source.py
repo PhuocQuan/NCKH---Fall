@@ -63,8 +63,7 @@ class VideoSource:
             capture = cv2.VideoCapture(self.source)
 
         if capture is not None and capture.isOpened():
-            if is_rtsp:
-                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if self.width:
                 capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             if self.height:
