@@ -198,15 +198,21 @@ class FaceRecognizer:
             best_match_name = "Stranger"
             best_match_type = PersonType.STRANGER
             best_score = 0.0
+            best_known = None
 
             # So sánh với database người thân đã lưu
+            threshold = float(getattr(self.config, "similarity_threshold", 0.40))
             for known_name, person_type, known_feature in self.known_embeddings:
-                score = self.recognizer.match(query_feature, known_feature, cv2.FaceRecognizerSF_FR_COSINE)
+                score = float(self.recognizer.match(query_feature, known_feature, cv2.FaceRecognizerSF_FR_COSINE))
                 if score > best_score:
                     best_score = score
-                    if score >= self.config.similarity_threshold:
-                        best_match_name = known_name
-                        best_match_type = person_type
+                    best_known = (known_name, person_type)
+
+            if best_known and best_score >= threshold:
+                best_match_name, best_match_type = best_known
+            else:
+                best_match_name = "Stranger"
+                best_match_type = PersonType.STRANGER
 
             results.append(
                 RecognizedFace(
