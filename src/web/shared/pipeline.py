@@ -219,6 +219,34 @@ class FallDetectionPipeline:
 
             current_person_name = cached_faces[0].name if cached_faces else "Unknown"
             current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
+            # 1. Vẽ nhận diện khuôn mặt & Kiểm tra Cảnh báo người lạ trên TẤT CẢ các khung hình
+            _draw_faces(frame, cached_faces, person_type_colors, cv2)
+
+            now_ts = time.time()
+            has_stranger = any(
+                (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
+                for f in cached_faces
+            )
+            if has_stranger and (now_ts - self._last_stranger_alert_time > 15.0):
+                self._last_stranger_alert_time = now_ts
+                stranger_id = f"STRANGER-{int(now_ts)}"
+                print(f"[Stranger Alert] Phát hiện người lạ! Chụp ảnh sạch & gửi server: {stranger_id}")
+
+                # Gửi alert vào DB & Danh sách Web Dashboard
+                self._push_stranger_alert(stranger_id)
+
+                # Kêu chuông cảnh báo
+                threading.Thread(target=_play_alert_sound, daemon=True).start()
+
+                # Lưu ảnh SẠCH gửi lên server Cloudinary
+                snapshot = clean_frame.copy()
+                threading.Thread(
+                    target=self._save_event_media,
+                    args=(stranger_id, snapshot, []),
+                    daemon=True,
+                ).start()
+
+            # 2. Xử lý phân tích tư thế Té ngã
             ai_prediction = None
             if points and self._feature_buffer and self._ai_classifier:
                 features = self._feature_buffer.append(points)
@@ -226,40 +254,12 @@ class FallDetectionPipeline:
                 result = self._detector.update(points)
 
                 event_triggered = result.event_started and self._logger
-
-                # KHÔNG vẽ khung xương lên live frame để màn hình camera sạch sẽ, rõ nét
                 _draw_status(frame, result, ai_prediction, state_colors, cv2)
-                _draw_faces(frame, cached_faces, person_type_colors, cv2)
 
                 # Lưu frame live vào lịch sử buffer
                 self._frame_buffer.append(frame.copy())
 
-                # 1. Xử lý Cảnh báo người lạ -> Ảnh SẠCH (KHÔNG KHUNG XƯƠNG)
-                now_ts = time.time()
-                has_stranger = any(
-                    (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
-                    for f in cached_faces
-                )
-                if has_stranger and (now_ts - self._last_stranger_alert_time > 20.0):
-                    self._last_stranger_alert_time = now_ts
-                    stranger_id = f"STRANGER-{int(now_ts)}"
-                    print(f"[Stranger Alert] Phát hiện người lạ! Chụp ảnh sạch & gửi server: {stranger_id}")
-
-                    # Gửi alert vao DB & Danh sach Web Dashboard
-                    self._push_stranger_alert(stranger_id)
-
-                    # Kêu chuông cảnh báo
-                    threading.Thread(target=_play_alert_sound, daemon=True).start()
-
-                    # Lưu ảnh SẠCH (KHÔNG KHUNG XƯƠNG) gửi lên server Cloudinary
-                    snapshot = clean_frame.copy()
-                    threading.Thread(
-                        target=self._save_event_media,
-                        args=(stranger_id, snapshot, []),
-                        daemon=True,
-                    ).start()
-
-                # 2. Xử lý Cảnh báo Té ngã -> BẢO TOÀN KHUNG XƯƠNG làm bằng chứng
+                # Xử lý Cảnh báo Té ngã -> BẢO TOÀN KHUNG XƯƠNG làm bằng chứng
                 if event_triggered:
                     alert_id = f"AL-{int(time.time())}"
                     self._logger.write(result, person_name=current_person_name, person_type=current_person_type)
