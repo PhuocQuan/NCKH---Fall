@@ -25,20 +25,18 @@ class AppStateService {
 
   // Default demo data (fallback khi offline)
   static const _defaultCameras = [
-    {'id': 'CAM-001', 'name': 'Camera phòng 101', 'area': 'Khu A', 'state': 'normal', 'status': 'online', 'fps': 30, 'resolution': '1920x1080', 'threshold': 78},
-    {'id': 'CAM-002', 'name': 'Camera hành lang A', 'area': 'Khu A', 'state': 'walking', 'status': 'online', 'fps': 25, 'resolution': '1280x720', 'threshold': 76},
-    {'id': 'CAM-003', 'name': 'Camera phòng 203', 'area': 'Khu B', 'state': 'fallen', 'status': 'online', 'fps': 30, 'resolution': '1920x1080', 'threshold': 82},
-    {'id': 'CAM-004', 'name': 'Camera phòng phục hồi', 'area': 'Khu C', 'state': 'sitting', 'status': 'maintenance', 'fps': 20, 'resolution': '1280x720', 'threshold': 74},
-    {'id': 'CAM-005', 'name': 'Camera phòng 305', 'area': 'Khu C', 'state': 'normal', 'status': 'offline', 'fps': 0, 'resolution': '1920x1080', 'threshold': 80},
+    {'id': 'CAM-001', 'name': 'Camera phòng khách', 'area': 'Khu A', 'state': 'normal', 'status': 'online', 'fps': 30, 'resolution': '1920x1080', 'threshold': 78},
   ];
 
   static const _defaultAlerts = [
+    {'id': 'STRANGER-20260615-001', 'time': '15/06/2026 16:30', 'camera': 'CAM-001', 'person': 'Người lạ', 'confidence': 90, 'status': 'Chưa xử lý', 'level': 'Khẩn cấp', 'media': 'Ảnh'},
     {'id': 'AL-20260615-001', 'time': '15/06/2026 16:22', 'camera': 'CAM-003', 'person': 'Nguyễn Văn Minh', 'confidence': 94, 'status': 'Chưa xử lý', 'level': 'Khẩn cấp', 'media': 'Ảnh + video 12s'},
     {'id': 'AL-20260615-002', 'time': '15/06/2026 14:10', 'camera': 'CAM-001', 'person': 'Lê Thị Hoa', 'confidence': 81, 'status': 'Đang xử lý', 'level': 'Cao', 'media': 'Ảnh'},
     {'id': 'AL-20260615-003', 'time': '15/06/2026 09:40', 'camera': 'CAM-002', 'person': 'Trần Văn An', 'confidence': 68, 'status': 'Báo động giả', 'level': 'Trung bình', 'media': 'Video 8s'},
   ];
 
   static const _defaultNotifications = [
+    {'id': 'NT-000', 'type': 'stranger', 'title': 'Cảnh báo người lạ', 'content': 'Phát hiện người lạ tại Camera phòng khách lúc 16:30.', 'time': '15/06/2026 16:30', 'read': false},
     {'id': 'NT-001', 'type': 'fall', 'title': 'Cảnh báo ngã khẩn cấp', 'content': 'Phát hiện té ngã tại Camera phòng 203 lúc 16:22 ngày 15/06/2026.', 'time': '15/06/2026 16:22', 'read': false},
     {'id': 'NT-002', 'type': 'disconnect', 'title': 'Camera mất kết nối', 'content': 'Camera phòng 305 đã mất kết nối lúc 13:00 ngày 15/06/2026.', 'time': '15/06/2026 13:00', 'read': true},
     {'id': 'NT-003', 'type': 'maintenance', 'title': 'Bảo trì hệ thống', 'content': 'Hệ thống FallGuard AI sẽ tiến hành bảo trì từ 01:00 đến 03:00 ngày 20/06/2026.', 'time': '14/06/2026 18:00', 'read': true},

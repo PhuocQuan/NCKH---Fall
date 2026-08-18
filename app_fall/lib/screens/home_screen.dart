@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _currentTab = 0; // 0=dashboard, 1=alerts, 2=notifications, 3=profile
   bool _isBackendOnline = false;
+  bool _isViewingCamera = false;
   Timer? _statusTimer;
 
 
@@ -109,6 +110,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader() {
     final user = _state.currentUser;
+    final cams = _state.getVisibleCameras();
+    
+    String statusText;
+    Color statusColor;
+    Color statusBgColor;
+
+    if (_isViewingCamera) {
+      statusText = 'Đang mở cam';
+      statusColor = const Color(0xFF16A34A);
+      statusBgColor = const Color(0xFFDCFCE7);
+    } else if (cams.isNotEmpty) {
+      statusText = 'Camera On';
+      statusColor = const Color(0xFF16A34A);
+      statusBgColor = const Color(0xFFDCFCE7);
+    } else {
+      statusText = 'Camera Off';
+      statusColor = kMuted;
+      statusBgColor = const Color(0xFFF1F5F9);
+    }
+
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
@@ -141,15 +162,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: _isBackendOnline ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+              color: statusBgColor,
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
-              _isBackendOnline ? 'AI Online' : 'Offline',
+              statusText,
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: _isBackendOnline ? const Color(0xFF16A34A) : kMuted,
+                color: statusColor,
               ),
             ),
           ),
@@ -489,6 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() {
       _currentTab = 0; // keep on dashboard but show stream modal
+      _isViewingCamera = true;
     });
     _showStreamSheet(cam);
   }
@@ -497,18 +519,19 @@ class _HomeScreenState extends State<HomeScreen> {
     // Tự động bật pipeline server khi User mở cam (không cần Admin)
     ApiClient().startCamera(cam.rtsp.isNotEmpty ? cam.rtsp : '0', cam.id);
     
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _LiveStreamSheet(
-        camera: cam,
-        streamUrl: ApiClient().mjpegUrl(),
-        isBackendOnline: _isBackendOnline,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _LiveStreamScreen(
+          camera: cam,
+          streamUrl: ApiClient().mjpegUrl(),
+          isBackendOnline: _isBackendOnline,
+        ),
       ),
     ).then((_) {
       // Khi đóng BottomSheet, tự động gửi lệnh stop camera lên server để tắt webcam
       ApiClient().stopCamera();
+      if (mounted) setState(() => _isViewingCamera = false);
     });
   }
 
@@ -597,6 +620,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _alertCard(AlertModel alert, bool isSelected, VoidCallback onToggle) {
+    final isStranger = alert.id.startsWith('STRANGER');
+    final title = isStranger ? '👤 Người lạ xuất hiện' : '⚠️ Cảnh báo ngã';
+    final titleColor = isStranger ? kBlue : kRed;
+
     return GestureDetector(
       onTap: () => _showAlertDetail(alert),
       child: Container(
@@ -623,7 +650,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                const Text('⚠️ Cảnh báo ngã', style: TextStyle(color: kRed, fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(title, style: TextStyle(color: titleColor, fontSize: 14, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text(alert.time, style: const TextStyle(fontSize: 11, color: kMuted)),
               ],
@@ -741,11 +768,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final borderColor = switch (notif.type) {
       'fall' => kRed,
       'disconnect' => kAmber,
+      'stranger' => kBlue,
       _ => kBlue,
     };
     final icon = switch (notif.type) {
       'fall' => '🚨',
       'disconnect' => '⚠️',
+      'stranger' => '👤',
       _ => '🔧',
     };
 
@@ -1075,76 +1104,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── LIVE STREAM BOTTOM SHEET ──────────────────────────────────────────────────
+// ─── LIVE STREAM FULL SCREEN ──────────────────────────────────────────────────
 
-class _LiveStreamSheet extends StatelessWidget {
+class _LiveStreamScreen extends StatelessWidget {
   final CameraModel camera;
   final String streamUrl;
   final bool isBackendOnline;
 
-  const _LiveStreamSheet({required this.camera, required this.streamUrl, required this.isBackendOnline});
+  const _LiveStreamScreen({required this.camera, required this.streamUrl, required this.isBackendOnline});
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      maxChildSize: 0.95,
-      minChildSize: 0.5,
-      builder: (_, sc) => Container(
-        decoration: const BoxDecoration(
-          color: kInk,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Text(camera.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+        actions: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: kRed, borderRadius: BorderRadius.circular(4)),
+              child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
         child: Column(
           children: [
-            // Drag handle
-            Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+            Expanded(
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: MjpegView(streamUrl: streamUrl, isBackendOnline: isBackendOnline),
+                ),
               ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back_ios, color: Colors.white70, size: 20),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      camera.name,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: kRed, borderRadius: BorderRadius.circular(4)),
-                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Stream view
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: MjpegView(streamUrl: streamUrl, isBackendOnline: isBackendOnline),
             ),
             // Status badge
-            Padding(
-              padding: const EdgeInsets.all(16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              color: const Color(0xFF111111),
               child: Row(
                 children: [
                   StatusPill.fromStatus(camera.status),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: camera.isFallen ? kRed.withAlpha(30) : kGreen.withAlpha(30),
                       borderRadius: BorderRadius.circular(6),
@@ -1154,13 +1166,13 @@ class _LiveStreamSheet extends StatelessWidget {
                       camera.state.toUpperCase(),
                       style: TextStyle(
                         color: camera.isFallen ? kRed : kGreen,
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   const Spacer(),
-                  Text(camera.id, style: const TextStyle(color: kMuted, fontSize: 12)),
+                  Text(camera.id, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
             ),
@@ -1183,6 +1195,9 @@ class _AlertDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final imgSrc = alert.cloudImgUrl ?? '$apiBaseUrl/media/${alert.id}.jpg';
     final videoSrc = alert.cloudVideoUrl ?? '$apiBaseUrl/media/${alert.id}.mp4';
+    final isStranger = alert.id.startsWith('STRANGER');
+    final title = isStranger ? 'Chi tiết người lạ' : 'Chi tiết cảnh báo ngã';
+    final titleColor = isStranger ? kBlue : kInk;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -1206,7 +1221,7 @@ class _AlertDetailSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  const Text('Chi tiết cảnh báo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kInk)),
+                  Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: titleColor)),
                   const Spacer(),
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: kMuted)),
                 ],
@@ -1221,19 +1236,36 @@ class _AlertDetailSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Image preview
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Image.network(
-                          imgSrc,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: kBg,
-                            child: const Center(child: Icon(Icons.broken_image, color: kMuted, size: 40)),
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Image.network(
+                              imgSrc,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: kBg,
+                                child: const Center(child: Icon(Icons.broken_image, color: kMuted, size: 40)),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        if (alert.cloudImgUrl != null)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withAlpha(150),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('☁️ Cloudinary', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     // Details

@@ -1,0 +1,38 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: # Cho phép bấm nút chạy thủ công trên GitHub
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        working-directory: app_fall
+        run: flutter pub get
+
+      - name: Build unsigned iOS app
+        working-directory: app_fall
+        run: flutter build ios --release --no-codesign
+
+      - name: Create Payload and IPA
+        working-directory: app_fall/build/ios/iphoneos
+        run: |
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -qq -r FallGuard.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FallGuard-iOS
+          path: app_fall/build/ios/iphoneos/FallGuard.ipa
