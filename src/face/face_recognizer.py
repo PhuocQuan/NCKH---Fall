@@ -70,11 +70,12 @@ class FaceRecognizer:
 
         if yunet_path.exists() and sface_path.exists():
             try:
+                score_thresh = float(getattr(self.config, "score_threshold", 0.58))
                 self.detector = cv2.FaceDetectorYN.create(
                     model=str(yunet_path),
                     config="",
                     input_size=(640, 640),
-                    score_threshold=0.40,
+                    score_threshold=score_thresh,
                     nms_threshold=0.3,
                     top_k=5000,
                 )
