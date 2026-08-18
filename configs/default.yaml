@@ -31,6 +31,6 @@ face:
   known_faces_dir: data/known_faces
   similarity_threshold: 0.32
   score_threshold: 0.58
-  process_every_n_frames: 5
+  process_every_n_frames: 10
 
 
