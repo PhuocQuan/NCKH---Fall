@@ -145,7 +145,17 @@ class FaceRecognizer:
 
         h, w = image.shape[:2]
         self.detector.setInputSize((w, h))
-        _, faces = self.detector.detect(image)
+        
+        # Dùng ngưỡng score_threshold thấp (0.20) khi đọc ảnh mẫu để đảm bảo đọc đủ tất cả các mặt
+        orig_thresh = self.detector.getScoreThreshold() if hasattr(self.detector, "getScoreThreshold") else 0.58
+        if hasattr(self.detector, "setScoreThreshold"):
+            self.detector.setScoreThreshold(0.20)
+
+        try:
+            _, faces = self.detector.detect(image)
+        finally:
+            if hasattr(self.detector, "setScoreThreshold"):
+                self.detector.setScoreThreshold(orig_thresh)
 
         if faces is not None and len(faces) > 0:
             face = faces[0]  # Lấy khuôn mặt đầu tiên
