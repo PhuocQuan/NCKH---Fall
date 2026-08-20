@@ -3,9 +3,12 @@
 // Thiết kế theo src/web/mobile/user.html + mobile_user.css
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import '../core/api_client.dart';
 import '../core/auth_service.dart';
 import '../core/app_state_service.dart';
@@ -61,6 +64,88 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _isBackendOnline = online);
     });
     if (mounted) setState(() {});
+    
+    // Check for app updates
+    _checkForUpdates();
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version; 
+      
+      // GitHub Repo details
+      const githubUrl = 'https://api.github.com/repos/PhuocQuan/NCKH---Fall/releases/latest';
+      
+      final response = await http.get(Uri.parse(githubUrl));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final latestTagName = data['tag_name'] as String;
+        final latestVersion = latestTagName.replaceAll('v', '');
+        
+        if (_isNewerVersion(currentVersion, latestVersion)) {
+          if (!mounted) return;
+          _showUpdateDialog(latestTagName, data['html_url'] ?? 'https://github.com/PhuocQuan/NCKH---Fall/releases');
+        }
+      }
+    } catch (e) {
+      debugPrint("Update check failed: $e");
+    }
+  }
+
+  bool _isNewerVersion(String current, String latest) {
+    try {
+      final v1 = current.split('.').map(int.parse).toList();
+      final v2 = latest.split('.').map(int.parse).toList();
+      for (int i = 0; i < 3; i++) {
+        final part1 = i < v1.length ? v1[i] : 0;
+        final part2 = i < v2.length ? v2[i] : 0;
+        if (part2 > part1) return true;
+        if (part2 < part1) return false;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  void _showUpdateDialog(String version, String url) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Text('🌟', style: TextStyle(fontSize: 24)),
+            SizedBox(width: 8),
+            Text('Cập nhật ứng dụng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Đã có phiên bản FallGuard mới ($version).\n\nVui lòng tải và cài đặt để trải nghiệm tính năng mới nhất và sửa lỗi!',
+          style: const TextStyle(fontSize: 15, color: Color(0xFF334155), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Để sau', style: TextStyle(color: Color(0xFF64748b), fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4f46e5),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+            },
+            child: const Text('Tải ngay (APK)', style: TextStyle(fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
   }
 
   Future<void> _checkBackend() async {
@@ -116,7 +201,11 @@ class _HomeScreenState extends State<HomeScreen> {
     Color statusColor;
     Color statusBgColor;
 
-    if (_isViewingCamera) {
+    if (!_isBackendOnline) {
+      statusText = 'Offline';
+      statusColor = const Color(0xFFEF4444); // Red
+      statusBgColor = const Color(0xFFFEE2E2); // Light Red
+    } else if (_isViewingCamera) {
       statusText = 'Đang mở cam';
       statusColor = const Color(0xFF16A34A);
       statusBgColor = const Color(0xFFDCFCE7);
@@ -849,6 +938,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() {});
                 },
               ),
+              if (notif.type == 'update' && notif.actionUrl != null) ...[
+                const SizedBox(width: 8),
+                _smallBtn(
+                  label: 'Tải bản mới',
+                  color: kBlue,
+                  onTap: () async {
+                    final uri = Uri.parse(notif.actionUrl!);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+              ],
             ],
           ),
         ],
@@ -1345,23 +1447,31 @@ class _ContactFormSheet extends StatefulWidget {
 class _ContactFormSheetState extends State<_ContactFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
-  late final TextEditingController _relationship;
+  String? _relationship;
   late final TextEditingController _phone;
   late final TextEditingController _email;
+  
+  final List<String> _relationshipOptions = [
+    'Con trai', 'Con gái', 'Vợ', 'Chồng', 'Bố', 'Mẹ', 'Anh/Chị/Em', 'Họ hàng', 'Bác sĩ', 'Y tá', 'Bạn bè', 'Khác'
+  ];
 
   @override
   void initState() {
     super.initState();
     final c = widget.initial;
     _name = TextEditingController(text: c?.name ?? '');
-    _relationship = TextEditingController(text: c?.relationship ?? '');
     _phone = TextEditingController(text: c?.phone ?? '');
     _email = TextEditingController(text: c?.email ?? '');
+    
+    _relationship = c?.relationship;
+    if (_relationship != null && _relationship!.isNotEmpty && !_relationshipOptions.contains(_relationship)) {
+      _relationshipOptions.add(_relationship!); // Keep existing values
+    }
   }
 
   @override
   void dispose() {
-    _name.dispose(); _relationship.dispose(); _phone.dispose(); _email.dispose();
+    _name.dispose(); _phone.dispose(); _email.dispose();
     super.dispose();
   }
 
@@ -1393,7 +1503,35 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
               const Divider(color: kLine),
               const SizedBox(height: 8),
               _formField('Họ và tên', _name, required: true),
-              _formField('Mối quan hệ', _relationship, hint: 'Con gái, Bác sĩ...', required: true),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Mối quan hệ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kInk)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: _relationship,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kLine)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kLine)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kBlue, width: 2)),
+                      ),
+                      hint: const Text('Chọn mối quan hệ'),
+                      items: _relationshipOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) {
+                        setState(() {
+                          _relationship = v;
+                        });
+                      },
+                      validator: (v) => (v == null || v.isEmpty) ? 'Bắt buộc' : null,
+                    ),
+                  ],
+                ),
+              ),
               _formField('Số điện thoại', _phone, keyboardType: TextInputType.phone, required: true),
               _formField('Email', _email, keyboardType: TextInputType.emailAddress, required: true),
               const SizedBox(height: 16),
@@ -1412,7 +1550,7 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
                         if (!_formKey.currentState!.validate()) return;
                         final contact = EmergencyContact(
                           name: _name.text.trim(),
-                          relationship: _relationship.text.trim(),
+                          relationship: _relationship ?? '',
                           phone: _phone.text.trim(),
                           email: _email.text.trim(),
                         );

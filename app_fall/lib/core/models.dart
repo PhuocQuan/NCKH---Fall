@@ -224,11 +224,12 @@ class EmergencyContact {
 
 class AppNotification {
   final String id;
-  final String type; // fall, disconnect, maintenance
+  final String type; // fall, disconnect, maintenance, update
   final String title;
   final String content;
   final String time;
   bool read;
+  final String? actionUrl;
 
   AppNotification({
     required this.id,
@@ -237,6 +238,7 @@ class AppNotification {
     required this.content,
     required this.time,
     this.read = false,
+    this.actionUrl,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
@@ -246,6 +248,7 @@ class AppNotification {
         content: json['content'] ?? '',
         time: json['time'] ?? '',
         read: json['read'] ?? false,
+        actionUrl: json['actionUrl'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -255,6 +258,7 @@ class AppNotification {
         'content': content,
         'time': time,
         'read': read,
+        if (actionUrl != null) 'actionUrl': actionUrl,
       };
 }
 

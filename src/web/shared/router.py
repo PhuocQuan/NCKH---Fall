@@ -84,7 +84,7 @@ def require_user(request: Request) -> str:
 
 
 @router.get("/api/health")
-def health() -> dict[str, Any]:
+def health(request: Request) -> dict[str, Any]:
     db_connected = False
     try:
         with get_db_client() as client:
@@ -93,7 +93,7 @@ def health() -> dict[str, Any]:
     except Exception as e:
         print(f"[Health Check DB Error] {e}")
         db_connected = False
-    return {"ok": True, "pipeline_running": pipeline.is_running(), "db_connected": db_connected}
+    return {"ok": True, "version": request.app.version, "pipeline_running": pipeline.is_running(), "db_connected": db_connected}
 
 
 @router.post("/api/auth/login")

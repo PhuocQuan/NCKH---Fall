@@ -206,16 +206,17 @@ class FallDetectionPipeline:
                 time.sleep(0.05)
                 continue
 
-            frames += 1
             clean_frame = frame.copy()
             points, pose_results = self._estimator.estimate(frame)
 
             # Xử lý nhận diện đa khuôn mặt thời gian thực (hỗ trợ nhiều người cùng lúc)
-            if getattr(self, "_face_recognizer", None) and getattr(self, "_config", None):
-                n_frames = max(1, getattr(self._config.face, "process_every_n_frames", 2))
-
-                if frames % n_frames == 0 or cached_faces is None:
-                    cached_faces = self._face_recognizer.recognize(clean_frame)
+            if hasattr(self, "_face_recognizer") and self._face_recognizer is not None:
+                if frames % 2 == 0 or cached_faces is None or len(cached_faces) == 0:
+                    try:
+                        cached_faces = self._face_recognizer.recognize(clean_frame)
+                    except Exception as e:
+                        cv2.putText(frame, f"ERR: {str(e)[:30]}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+                        cached_faces = []
 
 
             current_person_name = cached_faces[0].name if cached_faces else "Unknown"
@@ -539,7 +540,7 @@ def _draw_status(frame, result, ai_prediction, state_colors, cv2, pose_detected:
         ai_text = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
         ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
     else:
-        ai_text = "AI: Disabled"
+        ai_text = f"AI: Disabled | YuNet: active"
         ai_color = (170, 175, 180)
 
     font_scale = max(0.35, min(0.45, h / 950.0))
@@ -577,14 +578,17 @@ def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int,
 
 def _draw_faces(frame, faces, person_type_colors, cv2) -> None:
     has_stranger = False
+    
     for face in faces:
         x, y, w, h = face.box
         color = person_type_colors.get(face.person_type, (200, 200, 200))
 
         # Khung viền mỏng đẹp
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-
-        # Định dạng nhãn sạch gọn, không lặp từ
+        
+        # Vẽ label
+        label = f"{face.name} ({face.confidence:.2f})"
+        cv2.putText(frame, label, (x, max(15, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         ptype_str = face.person_type.value if hasattr(face.person_type, "value") else str(face.person_type)
         if ptype_str == "STRANGER":
             label = "NGUOI LA"

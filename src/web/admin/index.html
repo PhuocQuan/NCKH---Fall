@@ -616,20 +616,19 @@ function loadStore(key, fallback) {
     const menu = [
       ["Tổng quan", [["dashboard", "01", "Tổng quát", "Thống kê tổng quan camera, khách hàng và nơi lắp đặt"]]],
       ["Vận hành", [
-        ["alerts", "02", "Hệ thống cảnh báo", "Cảnh báo ngã và trạng thái xử lý"],
-        ["notifications", "03", "Thông báo", "Cài đặt các kênh thông báo tự động"]
+        ["alerts", "02", "Lịch sử sự kiện té ngã", "Cảnh báo ngã và trạng thái xử lý"],
+        ["notifications", "03", "Quản lý thông báo Tele", "Cài đặt Telegram Bot"]
       ]],
       ["Quản lý", [
         ["users", "04", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
-        ["media", "05", "Hình ảnh & video", "Ảnh chụp và video sự kiện cảnh báo theo nơi lắp đặt"],
-        ["cameras", "06", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
+        ["cameras", "05", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
       ]],
       ["Dữ liệu", [
-        ["logs", "07", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
+        ["logs", "06", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
       ]],
       ["Hệ thống", [
-        ["settings", "08", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
-        ["api", "09", "API Management", "Quản lý khóa API truy cập hệ thống"]
+        ["settings", "07", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
+        ["api", "08", "API Management", "Quản lý khóa API truy cập hệ thống"]
       ]]
     ];
 
@@ -674,7 +673,9 @@ function loadStore(key, fallback) {
     let alertsLocationFilter = "Tất cả";
     let mediaLocationFilter = "Tất cả";
     let logsCurrentPage = 1;
+    let adminAlertsCurrentPage = 1;
     const logsPerPage = 10;
+    const adminAlertsPerPage = 10;
     let systemLogs = [];
     let selectedCameraId = cameras[0]?.id || "";
     let cameraStreamBackView = "";
@@ -1630,6 +1631,35 @@ function loadStore(key, fallback) {
           const camIds = camsInHouse.map(c => c.id);
           const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
 
+          const totalAlerts = filteredAlerts.length;
+          const totalPages = Math.max(1, Math.ceil(totalAlerts / adminAlertsPerPage));
+          if (adminAlertsCurrentPage > totalPages) adminAlertsCurrentPage = totalPages;
+          if (adminAlertsCurrentPage < 1) adminAlertsCurrentPage = 1;
+          const startIndex = (adminAlertsCurrentPage - 1) * adminAlertsPerPage;
+          const endIndex = Math.min(startIndex + adminAlertsPerPage, totalAlerts);
+          const pageAlerts = filteredAlerts.slice(startIndex, endIndex);
+
+          let pagesHtml = "";
+          const prevDisabled = adminAlertsCurrentPage === 1 ? "disabled" : "";
+          pagesHtml += `<button class="pagination-btn" ${prevDisabled} onclick="adminAlertsCurrentPage=${adminAlertsCurrentPage - 1}; render('alerts', false)">Trước</button>`;
+          for (let i = 1; i <= totalPages; i++) {
+            const activeClass = i === adminAlertsCurrentPage ? "active" : "";
+            pagesHtml += `<button class="pagination-btn ${activeClass}" onclick="adminAlertsCurrentPage=${i}; render('alerts', false)">${i}</button>`;
+          }
+          const nextDisabled = adminAlertsCurrentPage === totalPages ? "disabled" : "";
+          pagesHtml += `<button class="pagination-btn" ${nextDisabled} onclick="adminAlertsCurrentPage=${adminAlertsCurrentPage + 1}; render('alerts', false)">Sau</button>`;
+          
+          const paginationHtml = `
+            <div class="pagination-bar" style="margin-top: 16px;">
+              <span style="font-size: 13px; color: var(--gray-600);">
+                Hiển thị từ <strong>${totalAlerts > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalAlerts}</strong> cảnh báo
+              </span>
+              <div class="pagination-controls">
+                ${pagesHtml}
+              </div>
+            </div>
+          `;
+
           return `
             <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
               <button class="btn line" onclick="alertsViewLevel='locations'; render('alerts', false);">← Quay lại Nơi lắp đặt</button>
@@ -1644,22 +1674,22 @@ function loadStore(key, fallback) {
             </div>
             ${table([
               `<input type="checkbox" id="selectAllAdminAlerts" onclick="toggleSelectAllAdminAlerts(this)" style="cursor: pointer; width: 16px; height: 16px;">`,
-              "Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Media", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
-            ], filteredAlerts.map(a => [
-              `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
-              a.id, a.time, a.camera, a.person, (a.id === "AL-20260615-001" || a.id === "AL-20260615-002" || a.id === "AL-20260615-003") ? a.media : (hasVideo(a) ? "Ảnh + video thực" : "Ảnh thực"), `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
-              isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
-            ]))}
+              "Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
+            ], pageAlerts.map(a => {
+              const imgUrl = a.id.startsWith("AL-20260615-") ? a.media : (a.cloud_img_url || `/api/media/${esc(a.id)}.jpg`);
+              return [
+                `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
+                a.id, a.time, a.camera, a.person, `<img src="${imgUrl}" onclick="openModal('Ảnh sự kiện ${esc(a.id)}', \`<img src='${imgUrl}' style='width:100%; border-radius:8px;' onerror='this.src=\\\\\\'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60\\\\\\'' >\`, \`<button class='btn block line' onclick='closeModal()'>Đóng</button>\`)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(!this.src.includes('unsplash')){this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=100&auto=format&fit=crop&q=60';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+                isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
+              ];
+            }))}
+            ${paginationHtml}
           `;
         }
       },
             notifications: () => `<div class="grid three">
         ${[
-          ["email", "Web & Email tự động", "Gửi thư điện tử kèm cảnh báo."],
-          ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."],
-          ["sms", "SMS tin nhắn", "Gửi tin nhắn SMS khẩn cấp tới số điện thoại."],
-          ["zalo", "Zalo OA cảnh báo", "Gửi cảnh báo qua tài khoản Zalo Official Account."],
-          ["cloud", "Cloud Backup", "Đồng bộ video sự kiện lên đám mây."]
+          ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."]
         ].map(([key, title, desc]) => {
           const connectBtn = key === "telegram" ? `<button class="btn small primary" data-action="connect-telegram" style="margin-right:8px;">Kết nối Bot</button>` : "";
           return card(title, `
@@ -4048,8 +4078,33 @@ function loadStore(key, fallback) {
         if (alertItem) {
           const cam = cameraById(alertItem.camera);
           const owner = users.find(u => (u.assignedCameras || []).includes(alertItem.camera)) || users.find(u => u.name === alertItem.person);
+          const isMock = id.startsWith("AL-20260615-");
+          let localImgSrc = `/api/media/${alertItem.id}.jpg`;
+          let imgSrc = isMock ? alertItem.media : (alertItem.cloud_img_url || localImgSrc);
+          
+          let videoHtml = "";
+          if (hasVideo(alertItem)) {
+            let videoSrc = alertItem.cloud_video_url || `/api/media/${alertItem.id}.mp4`;
+            videoHtml = `
+              <div style="margin-top: 12px;">
+                <strong style="display:block; margin-bottom: 6px; font-size:13px; color:var(--ink);">Video clip sự kiện:</strong>
+                <video src="${videoSrc}" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('vid-err-${alertItem.id}').style.display='block';"></video>
+                <div id="vid-err-${alertItem.id}" style="display:none; padding:16px; text-align:center; background:#f8fafc; border-radius:8px; border:1px dashed var(--line); font-size:13px; color:var(--muted);">🎥 Video sự kiện hiện không khả dụng.</div>
+              </div>
+            `;
+          } else {
+            videoHtml = `
+              <div style="margin-top: 12px; padding: 16px; text-align:center; background:#f8fafc; border-radius:8px; border:1px dashed var(--line); font-size:13px; color:var(--muted);">
+                🎥 Không có video ghi hình sự kiện cho cảnh báo này.
+              </div>
+            `;
+          }
           const content = `
             <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
+                <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';}">
+              </div>
+              ${videoHtml}
               <div class="card" style="background:#fff5f5; border:1px solid #fee2e2;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                   <strong style="color:var(--red); font-size:16px;">CẢNH BÁO TÉ NGÃ</strong>

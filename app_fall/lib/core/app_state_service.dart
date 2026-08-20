@@ -180,13 +180,45 @@ class AppStateService {
     } catch (_) {}
   }
 
+  Future<void> _checkVersionAndNotify() async {
+    final res = await ApiClient().healthCheck();
+    final bool online = res['ok'] == true;
+    isBackendOnline = online;
+    
+    if (online && res.containsKey('version')) {
+      final String newVersion = res['version'].toString();
+      final prefs = await SharedPreferences.getInstance();
+      final String? savedVersion = prefs.getString('fg_backend_version');
+      
+      if (savedVersion != newVersion) {
+        // Version changed (or first time detecting version), generate notification
+        final notif = AppNotification(
+          id: 'NT-SYS-${DateTime.now().millisecondsSinceEpoch}',
+          type: 'update',
+          title: 'Hệ thống cập nhật',
+          content: 'Hệ thống đã được cập nhật lên phiên bản $newVersion.',
+          time: DateTime.now().toString().substring(0, 16).replaceAll('-', '/'),
+          read: false,
+          actionUrl: 'https://github.com/PhuocQuan/NCKH---Fall/releases',
+        );
+        notifications.insert(0, notif);
+        await saveToLocal();
+        await pushToBackend();
+        onStateChanged?.call();
+      }
+      await prefs.setString('fg_backend_version', newVersion);
+    }
+    
+    if (online) await syncFromBackend();
+  }
+
   void startAutoSync() {
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
-      final online = await AuthService().checkBackendOnline();
-      isBackendOnline = online;
-      if (online) await syncFromBackend();
+      await _checkVersionAndNotify();
     });
+    // Run once immediately
+    _checkVersionAndNotify();
   }
 
   void stopAutoSync() {
@@ -198,8 +230,26 @@ class AppStateService {
 
   List<CameraModel> getVisibleCameras() {
     final assigned = currentUser?.assignedCameras ?? [];
-    if (assigned.isEmpty) return cameras;
-    return cameras.where((c) => assigned.contains(c.id)).toList();
+    List<CameraModel> result = cameras;
+    if (assigned.isNotEmpty) {
+      result = cameras.where((c) => assigned.contains(c.id)).toList();
+    }
+    
+    if (!isBackendOnline) {
+      result = result.map((c) => CameraModel(
+        id: c.id,
+        name: c.name,
+        area: c.area,
+        state: c.state,
+        status: 'offline',
+        fps: c.fps,
+        resolution: c.resolution,
+        threshold: c.threshold,
+        rtsp: c.rtsp,
+      )).toList();
+    }
+    
+    return result;
   }
 
   List<String> getUniqueAreas() {

@@ -70,9 +70,7 @@ class FaceRecognizer:
 
         if yunet_path.exists() and sface_path.exists():
             try:
-                score_thresh = float(getattr(self.config, "score_threshold", 0.42))
-
-
+                score_thresh = float(getattr(self.config, "score_threshold", 0.30))
 
                 self.detector = cv2.FaceDetectorYN.create(
                     model=str(yunet_path),
@@ -80,7 +78,7 @@ class FaceRecognizer:
                     input_size=(640, 640),
                     score_threshold=score_thresh,
                     nms_threshold=0.3,
-                    top_k=5000,
+                    top_k=50,
                 )
 
                 self.recognizer = cv2.FaceRecognizerSF.create(
@@ -206,6 +204,9 @@ class FaceRecognizer:
 
         self.detector.setInputSize((det_w, det_h))
         _, faces = self.detector.detect(det_frame)
+        
+        num_faces = len(faces) if faces is not None else 0
+        print(f"[DEBUG] YuNet detected {num_faces} faces at threshold {self.detector.getScoreThreshold()}", flush=True)
 
         if faces is None or len(faces) == 0:
             return results
@@ -217,12 +218,17 @@ class FaceRecognizer:
         for face in faces:
             bbox = face[:4].astype(int)
             fx, fy, fw, fh = bbox[0], bbox[1], bbox[2], bbox[3]
+            
+            print(f"[DEBUG] Face bbox: {bbox}, fw: {fw}, fh: {fh}", flush=True)
 
-            # Bỏ qua các vật thể nhỏ hơn 35x35 pixel hoặc hình dạng dị dạng (lá cây, xe máy, chậu cây)
+            # Bỏ qua các vật thể nhỏ hơn 35x35 pixel hoặc hình dạng dị dạng
             if fw < 35 or fh < 35:
+                print(f"[DEBUG] Skipped due to small size: {fw}x{fh}", flush=True)
                 continue
             aspect_ratio = fw / float(max(1, fh))
-            if aspect_ratio < 0.50 or aspect_ratio > 1.70:
+            # Nới lỏng tỷ lệ khung hình vì góc quay từ dưới lên (laptop) có thể làm bóp méo khung
+            if aspect_ratio < 0.30 or aspect_ratio > 2.50:
+                print(f"[DEBUG] Skipped due to aspect ratio: {aspect_ratio:.2f}", flush=True)
                 continue
 
             aligned_face = self.recognizer.alignCrop(frame, face)
