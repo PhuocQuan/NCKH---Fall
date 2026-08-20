@@ -29,8 +29,12 @@ ai:
 face:
   enabled: true
   known_faces_dir: data/known_faces
-  similarity_threshold: 0.40
-  score_threshold: 0.45
-  process_every_n_frames: 2
+  similarity_threshold: 0.32
+  score_threshold: 0.42
+  process_every_n_frames: 1
+
+
+
+
 
 

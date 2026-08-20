@@ -70,7 +70,10 @@ class FaceRecognizer:
 
         if yunet_path.exists() and sface_path.exists():
             try:
-                score_thresh = float(getattr(self.config, "score_threshold", 0.58))
+                score_thresh = float(getattr(self.config, "score_threshold", 0.42))
+
+
+
                 self.detector = cv2.FaceDetectorYN.create(
                     model=str(yunet_path),
                     config="",
@@ -189,20 +192,41 @@ class FaceRecognizer:
                 )
             return results
 
-        if not self._initialized or self.detector is None or self.recognizer is None:
-            return results
+        # Tối ưu phát hiện khuôn mặt cho camera độ phân giải cao (1080p / 2K)
+        scale = 1.0
+        max_dim = max(h, w)
+        if max_dim > 1024:
+            scale = 1024.0 / max_dim
+            det_w = int(w * scale)
+            det_h = int(h * scale)
+            det_frame = cv2.resize(frame, (det_w, det_h))
+        else:
+            det_frame = frame
+            det_w, det_h = w, h
 
-        self.detector.setInputSize((w, h))
-        _, faces = self.detector.detect(frame)
+        self.detector.setInputSize((det_w, det_h))
+        _, faces = self.detector.detect(det_frame)
 
         if faces is None or len(faces) == 0:
             return results
+
+        if scale != 1.0:
+            faces = faces.copy()
+            faces[:, :14] = faces[:, :14] / scale
 
         for face in faces:
             bbox = face[:4].astype(int)
             fx, fy, fw, fh = bbox[0], bbox[1], bbox[2], bbox[3]
 
+            # Bỏ qua các vật thể nhỏ hơn 35x35 pixel hoặc hình dạng dị dạng (lá cây, xe máy, chậu cây)
+            if fw < 35 or fh < 35:
+                continue
+            aspect_ratio = fw / float(max(1, fh))
+            if aspect_ratio < 0.50 or aspect_ratio > 1.70:
+                continue
+
             aligned_face = self.recognizer.alignCrop(frame, face)
+
             query_feature = self.recognizer.feature(aligned_face)
 
             best_match_name = "Stranger"

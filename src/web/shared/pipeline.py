@@ -215,7 +215,8 @@ class FallDetectionPipeline:
                 n_frames = max(1, getattr(self._config.face, "process_every_n_frames", 2))
 
                 if frames % n_frames == 0 or cached_faces is None:
-                    cached_faces = self._face_recognizer.recognize(frame)
+                    cached_faces = self._face_recognizer.recognize(clean_frame)
+
 
             current_person_name = cached_faces[0].name if cached_faces else "Unknown"
             current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
