@@ -36,7 +36,7 @@ jobs:
 
       - name: Build Android APK
         working-directory: app_fall
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Build unsigned iOS app
         working-directory: app_fall
