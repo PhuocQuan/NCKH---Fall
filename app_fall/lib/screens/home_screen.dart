@@ -7,8 +7,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:intl/intl.dart';
 import '../core/api_client.dart';
 import '../core/auth_service.dart';
 import '../core/app_state_service.dart';
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   int _currentTab = 0; // 0=dashboard, 1=alerts, 2=notifications, 3=profile
+  int _alertsPage = 0;
   bool _isBackendOnline = false;
   bool _isViewingCamera = false;
   Timer? _statusTimer;
@@ -85,7 +88,18 @@ class _HomeScreenState extends State<HomeScreen> {
         
         if (_isNewerVersion(currentVersion, latestVersion)) {
           if (!mounted) return;
-          _showUpdateDialog(latestTagName, data['html_url'] ?? 'https://github.com/PhuocQuan/NCKH---Fall/releases');
+          final url = data['html_url'] ?? 'https://github.com/PhuocQuan/NCKH---Fall/releases';
+          _state.notifications.removeWhere((n) => n.type == 'update');
+          _state.notifications.insert(0, AppNotification(
+             id: 'UPDATE_$latestTagName',
+             title: '🌟 Cập nhật ứng dụng',
+             content: 'Đã có phiên bản FallGuard mới ($latestTagName). Vui lòng tải và cài đặt để trải nghiệm tính năng mới nhất!',
+             time: DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
+             read: false,
+             type: 'update',
+          ));
+          _state.saveToLocal();
+          if (mounted) setState(() {});
         }
       }
     } catch (e) {
@@ -629,82 +643,119 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildAlertsView() {
     final visibleAlerts = _state.getVisibleAlerts();
     final selected = <String>{};
+    const int alertsPerPage = 10;
 
     return StatefulBuilder(
-      builder: (context, setSt) => Column(
-        children: [
-          // Toolbar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              color: kCard,
-              border: Border(bottom: BorderSide(color: kLine)),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setSt(() {
-                      if (selected.length == visibleAlerts.length) {
-                        selected.clear();
-                      } else {
-                        selected.addAll(visibleAlerts.map((a) => a.id));
-                      }
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        selected.length == visibleAlerts.length && visibleAlerts.isNotEmpty
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        size: 20,
-                        color: kBlue,
-                      ),
-                      const SizedBox(width: 6),
-                      const Text('Chọn tất cả', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: kInk)),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                if (selected.isNotEmpty)
-                  TextButton(
-                    onPressed: () => _deleteSelectedAlerts(selected.toList(), setSt),
-                    style: TextButton.styleFrom(foregroundColor: kRed),
-                    child: const Text('Xóa đã chọn', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  ),
-                TextButton(
-                  onPressed: () => _deleteAllAlerts(setSt),
-                  style: TextButton.styleFrom(foregroundColor: kRed),
-                  child: const Text('Xóa tất cả', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-          ),
+      builder: (context, setSt) {
+        final totalPages = (visibleAlerts.length / alertsPerPage).ceil();
+        if (_alertsPage >= totalPages && totalPages > 0) {
+          _alertsPage = totalPages - 1;
+        } else if (_alertsPage < 0) {
+          _alertsPage = 0;
+        }
 
-          Expanded(
-            child: visibleAlerts.isEmpty
-                ? const Center(child: _EmptyState(message: 'Chưa có cảnh báo nào được ghi nhận.', icon: Icons.check_circle_outline))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: visibleAlerts.length,
-                    itemBuilder: (_, i) {
-                      final alert = visibleAlerts[i];
-                      final isSelected = selected.contains(alert.id);
-                      return _alertCard(alert, isSelected, () {
-                        setSt(() {
-                          if (isSelected) {
-                            selected.remove(alert.id);
-                          } else {
-                            selected.add(alert.id);
-                          }
-                        });
+        final startIndex = _alertsPage * alertsPerPage;
+        final endIndex = (startIndex + alertsPerPage < visibleAlerts.length) ? startIndex + alertsPerPage : visibleAlerts.length;
+        final pagedAlerts = visibleAlerts.isEmpty ? <AlertModel>[] : visibleAlerts.sublist(startIndex, endIndex);
+
+        return Column(
+          children: [
+            // Toolbar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                color: kCard,
+                border: Border(bottom: BorderSide(color: kLine)),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setSt(() {
+                        if (selected.length == visibleAlerts.length) {
+                          selected.clear();
+                        } else {
+                          selected.addAll(visibleAlerts.map((a) => a.id));
+                        }
                       });
                     },
+                    child: Row(
+                      children: [
+                        Icon(
+                          selected.length == visibleAlerts.length && visibleAlerts.isNotEmpty
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 20,
+                          color: kBlue,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text('Chọn tất cả', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: kInk)),
+                      ],
+                    ),
                   ),
-          ),
-        ],
-      ),
+                  const Spacer(),
+                  if (selected.isNotEmpty)
+                    TextButton(
+                      onPressed: () => _deleteSelectedAlerts(selected.toList(), setSt),
+                      style: TextButton.styleFrom(foregroundColor: kRed),
+                      child: const Text('Xóa đã chọn', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  TextButton(
+                    onPressed: () => _deleteAllAlerts(setSt),
+                    style: TextButton.styleFrom(foregroundColor: kRed),
+                    child: const Text('Xóa tất cả', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: pagedAlerts.isEmpty
+                  ? const Center(child: _EmptyState(message: 'Chưa có cảnh báo nào được ghi nhận.', icon: Icons.check_circle_outline))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: pagedAlerts.length,
+                      itemBuilder: (_, i) {
+                        final alert = pagedAlerts[i];
+                        final isSelected = selected.contains(alert.id);
+                        return _alertCard(alert, isSelected, () {
+                          setSt(() {
+                            if (isSelected) {
+                              selected.remove(alert.id);
+                            } else {
+                              selected.add(alert.id);
+                            }
+                          });
+                        });
+                      },
+                    ),
+            ),
+            
+            if (totalPages > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: const BoxDecoration(
+                  color: kCard,
+                  border: Border(top: BorderSide(color: kLine)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: _alertsPage > 0 ? () => setSt(() => _alertsPage--) : null,
+                    ),
+                    Text('Trang ${_alertsPage + 1} / $totalPages', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: _alertsPage < totalPages - 1 ? () => setSt(() => _alertsPage++) : null,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -828,14 +879,30 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _pageHeader('Thông báo', 'Thông báo từ hệ thống'),
-              TextButton(
-                onPressed: () {
-                  for (final n in _state.notifications) { n.read = true; }
-                  _state.saveToLocal();
-                  _state.pushToBackend();
-                  setState(() {});
-                },
-                child: const Text('Đọc tất cả', style: TextStyle(color: kBlue, fontSize: 13)),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      for (final n in _state.notifications) { n.read = true; }
+                      _state.saveToLocal();
+                      _state.pushToBackend();
+                      setState(() {});
+                    },
+                    child: const Text('Đọc tất cả', style: TextStyle(color: kBlue, fontSize: 13)),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final confirm = await _showConfirm('Xóa tất cả thông báo?');
+                      if (confirm && mounted) {
+                        _state.notifications.removeWhere((n) => n.type != 'update');
+                        _state.saveToLocal();
+                        _state.pushToBackend();
+                        setState(() {});
+                      }
+                    },
+                    child: const Text('Xóa tất cả', style: TextStyle(color: kRed, fontSize: 13)),
+                  ),
+                ],
               ),
             ],
           ),
@@ -858,12 +925,14 @@ class _HomeScreenState extends State<HomeScreen> {
       'fall' => kRed,
       'disconnect' => kAmber,
       'stranger' => kBlue,
+      'update' => kGreen,
       _ => kBlue,
     };
     final icon = switch (notif.type) {
       'fall' => '🚨',
       'disconnect' => '⚠️',
       'stranger' => '👤',
+      'update' => '🌟',
       _ => '🔧',
     };
 
@@ -918,6 +987,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (notif.type == 'update') ...[
+                _smallBtn(
+                  label: 'Tải bản cập nhật mới nhất',
+                  onTap: () {
+                    launchUrl(Uri.parse('https://github.com/PhuocQuan/NCKH---Fall/releases/latest'), mode: LaunchMode.externalApplication);
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
               _smallBtn(
                 label: notif.read ? 'Chưa đọc' : 'Đã đọc',
                 onTap: () {
@@ -1390,12 +1468,14 @@ class _AlertDetailSheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('☁️ Lưu trữ Cloudinary', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 12)),
-                            const SizedBox(height: 4),
+                            const Text('☁️ Video Cloudinary', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 12)),
+                            const SizedBox(height: 8),
+                            _VideoPlayerWidget(url: videoSrc),
+                            const SizedBox(height: 8),
                             GestureDetector(
                               onTap: () async {
                                 final uri = Uri.parse(videoSrc);
-                                if (await canLaunchUrl(uri)) launchUrl(uri);
+                                if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
                               },
                               child: Text(videoSrc, style: const TextStyle(color: kBlue, fontSize: 11, decoration: TextDecoration.underline)),
                             ),
@@ -1428,6 +1508,83 @@ class _AlertDetailSheet extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── VIDEO PLAYER WIDGET ───────────────────────────────────────────────────────
+
+class _VideoPlayerWidget extends StatefulWidget {
+  final String url;
+  const _VideoPlayerWidget({required this.url});
+
+  @override
+  State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _error = false;
+  String _errorMsg = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (mounted) setState(() => _initialized = true);
+      }).catchError((e) {
+        debugPrint('Video error: $e');
+        if (mounted) setState(() { _error = true; _errorMsg = e.toString(); });
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        color: kRed.withAlpha(20),
+        child: Column(
+          children: [
+            const Text('Lỗi tải video', style: TextStyle(color: kRed, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(_errorMsg, style: const TextStyle(color: kRed, fontSize: 11), textAlign: TextAlign.center),
+          ],
+        ),
+      );
+    }
+    if (!_initialized) return const SizedBox(height: 150, child: Center(child: CircularProgressIndicator()));
+    
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+        const SizedBox(height: 4),
+        IconButton(
+          icon: Icon(
+            _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+            color: kGreen,
+            size: 32,
+          ),
+          onPressed: () {
+            setState(() {
+              _controller.value.isPlaying ? _controller.pause() : _controller.play();
+            });
+          },
+        ),
+      ],
     );
   }
 }
@@ -1617,6 +1774,7 @@ class _UserProfileFormState extends State<_UserProfileForm> {
   late final TextEditingController _phone;
   late final TextEditingController _email;
   bool _saving = false;
+  bool _isEditing = false;
 
   @override
   void initState() {
@@ -1631,22 +1789,90 @@ class _UserProfileFormState extends State<_UserProfileForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isEditing) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _infoRow('Họ và tên', widget.user?.name ?? 'Chưa cập nhật'),
+          _infoRow('Số điện thoại', (widget.user?.phone?.isEmpty ?? true) ? 'Chưa cập nhật' : widget.user!.phone!),
+          _infoRow('Email tài khoản', widget.user?.email ?? 'Chưa cập nhật'),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: OutlinedButton.icon(
+              onPressed: () => setState(() => _isEditing = true),
+              icon: const Icon(Icons.edit, size: 16),
+              label: const Text('Chỉnh sửa thông tin'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kBlue,
+                side: const BorderSide(color: kBlue),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Form(
       key: _formKey,
       child: Column(
         children: [
           _field('Họ và tên', _name, required: true),
           _field('Số điện thoại', _phone, keyboardType: TextInputType.phone),
-          _field('Email tài khoản', _email, keyboardType: TextInputType.emailAddress, required: true),
+          _field('Email tài khoản', _email, keyboardType: TextInputType.emailAddress, required: true, isEmail: true),
           const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () {
+                    _name.text = widget.user?.name ?? '';
+                    _phone.text = widget.user?.phone ?? '';
+                    _email.text = widget.user?.email ?? '';
+                    setState(() => _isEditing = false);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: const Text('Hủy'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu thay đổi', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu thay đổi', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
+            width: 120,
+            child: Text(label, style: const TextStyle(fontSize: 12, color: kMuted)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kInk)),
           ),
         ],
       ),
@@ -1657,15 +1883,53 @@ class _UserProfileFormState extends State<_UserProfileForm> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      String newEmail = _email.text.trim().toLowerCase();
+      if (newEmail.endsWith('@nckh')) {
+        newEmail = '$newEmail.vn';
+      } else if (newEmail.isNotEmpty && !newEmail.contains('@')) {
+        newEmail = '$newEmail@nckh.vn';
+      }
+
       final updated = (widget.user ?? const UserModel(email: '', name: '', role: 'Khachhang')).copyWith(
         name: _name.text.trim(),
         phone: _phone.text.trim(),
-        email: _email.text.trim().toLowerCase(),
+        email: newEmail,
       );
+      
+      final bool emailChanged = widget.user != null && widget.user!.email.toLowerCase() != newEmail;
+
+      if (emailChanged && mounted) {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Xác nhận đổi Email'),
+            content: const Text('Đổi email sẽ thay đổi tài khoản đăng nhập của bạn. Bạn sẽ bị đăng xuất và phải đăng nhập lại. Bạn có chắc chắn muốn đổi không?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white),
+                child: const Text('Đồng ý'),
+              ),
+            ],
+          ),
+        );
+        if (confirm != true) {
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
+      }
+
       if (widget.isBackendOnline) {
         await ApiClient().updateUser(widget.user?.email ?? updated.email, updated.toJson());
       }
       widget.onSaved(updated);
+      if (mounted) setState(() => _isEditing = false);
+      
+      if (emailChanged && mounted) {
+        await AuthService().clearSession();
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
     } on ApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: kRed));
     } finally {
@@ -1673,7 +1937,7 @@ class _UserProfileFormState extends State<_UserProfileForm> {
     }
   }
 
-  Widget _field(String label, TextEditingController ctrl, {TextInputType? keyboardType, bool required = false}) {
+  Widget _field(String label, TextEditingController ctrl, {TextInputType? keyboardType, bool required = false, bool isEmail = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1684,6 +1948,11 @@ class _UserProfileFormState extends State<_UserProfileForm> {
           TextFormField(
             controller: ctrl,
             keyboardType: keyboardType,
+            inputFormatters: isEmail ? [
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                return TextEditingValue(text: newValue.text.toLowerCase(), selection: newValue.selection);
+              })
+            ] : null,
             decoration: InputDecoration(
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
@@ -1719,12 +1988,30 @@ class _ChangePasswordFormState extends State<_ChangePasswordForm> {
   final _newPwd = TextEditingController();
   final _confirm = TextEditingController();
   bool _saving = false;
+  bool _isEditing = false;
 
   @override
   void dispose() { _old.dispose(); _newPwd.dispose(); _confirm.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isEditing) {
+      return SizedBox(
+        width: double.infinity,
+        height: 42,
+        child: OutlinedButton.icon(
+          onPressed: () => setState(() => _isEditing = true),
+          icon: const Icon(Icons.lock_reset, size: 16),
+          label: const Text('Đổi mật khẩu'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: kBlue,
+            side: const BorderSide(color: kBlue),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      );
+    }
+
     return Form(
       key: _formKey,
       child: Column(
@@ -1733,14 +2020,36 @@ class _ChangePasswordFormState extends State<_ChangePasswordForm> {
           _pwdField('Mật khẩu mới', _newPwd),
           _pwdField('Xác nhận mật khẩu mới', _confirm),
           const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              style: ElevatedButton.styleFrom(backgroundColor: kBlue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Cập nhật mật khẩu', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () {
+                    _old.clear(); _newPwd.clear(); _confirm.clear();
+                    setState(() => _isEditing = false);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: const Text('Hủy'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Cập nhật', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1786,6 +2095,7 @@ class _ChangePasswordFormState extends State<_ChangePasswordForm> {
         await ApiClient().updateUser(widget.currentUser!.email, payload);
       }
       _old.clear(); _newPwd.clear(); _confirm.clear();
+      if (mounted) setState(() => _isEditing = false);
       widget.onSaved();
     } on ApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: kRed));

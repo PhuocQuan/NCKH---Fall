@@ -2,6 +2,7 @@
 // Màn hình đăng nhập — thiết kế theo src/web/mobile/index.html
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../core/api_client.dart';
 import '../core/auth_service.dart';
@@ -42,7 +43,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _normalizeUsername(String input) {
-    final lower = input.trim().toLowerCase();
+    String lower = input.trim().toLowerCase();
+    if (lower.endsWith('@nckh')) {
+      lower = '$lower.vn';
+    }
     if (lower.contains('@')) return lower;
     switch (lower) {
       case 'admin': return 'admin@nckh.vn';
@@ -184,6 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _usernameCtrl,
                           hint: 'Ví dụ: admin@nckh.vn',
                           keyboardType: TextInputType.emailAddress,
+                          isEmail: true,
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập email' : null,
                         ),
                         const SizedBox(height: 16),
@@ -427,10 +432,16 @@ class _LoginScreenState extends State<LoginScreen> {
     required String hint,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool isEmail = false,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: isEmail ? [
+        TextInputFormatter.withFunction((oldValue, newValue) {
+          return TextEditingValue(text: newValue.text.toLowerCase(), selection: newValue.selection);
+        })
+      ] : null,
       style: const TextStyle(fontSize: 14, color: Color(0xFF0f172a)),
       decoration: InputDecoration(
         hintText: hint,

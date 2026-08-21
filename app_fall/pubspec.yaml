@@ -28,6 +28,7 @@ dependencies:
   # Open phone dialer for emergency contacts
   url_launcher: ^6.3.1
   package_info_plus: ^10.2.1
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:
