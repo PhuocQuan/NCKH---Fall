@@ -20,6 +20,9 @@ class UserDB(BaseModel):
     status: str
     assignedCameras: list[str]
     phone: str | None = None
+    age: int | None = None
+    gender: str | None = None
+    address: str | None = None
 
 
 class CameraDB(BaseModel):

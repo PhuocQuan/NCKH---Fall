@@ -2288,67 +2288,68 @@ function loadStore(key, fallback) {
 
 
 
-    function usersView() {
-      const cardsHtml = users.map(u => {
-        const initials = u.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
-        
+    function renderUsersTableHtml(query = "") {
+      const q = query.toLowerCase();
+      const filteredUsers = users.filter(u => 
+        u.role !== "Admin" && (
+        u.name.toLowerCase().includes(q) || 
+        u.email.toLowerCase().includes(q) || 
+        (u.phone && u.phone.includes(q)))
+      );
+
+      const rows = filteredUsers.map(u => {
         const isLocked = u.status === "Bị khóa";
         const statusClass = isLocked ? "red" : "green";
+        const role = u.role === "Admin" ? "Admin" : "Khách hàng";
         
         const cams = u.assignedCameras || [];
-        const camsHtml = cams.length > 0 
-          ? cams.map(c => `<span class="mini-tag">${c}</span>`).join("")
-          : `<span class="mini-tag empty">Không có camera</span>`;
-          
-        return `
-          <div class="user-card ${isLocked ? "locked" : ""}">
-            <div class="user-card-head">
-              <span class="pill purple">${u.role === "Admin" ? "Admin" : "Khách hàng"}</span>
-              <span class="pill ${statusClass}">${u.status}</span>
-            </div>
-            
-            <div class="user-card-body">
-              <div class="user-avatar-wrap">
-                <div class="user-avatar">${initials}</div>
-                <span class="status-dot ${statusClass}"></span>
-              </div>
-              <div class="user-info">
-                <h4 class="user-name" title="${esc(u.name)}">${esc(u.name)}</h4>
-                <div class="user-meta">
-                  <span class="meta-item" title="${esc(u.email)}">📧 ${esc(u.email)}</span>
-                  <span class="meta-item">📞 ${esc(u.phone || "Chưa cập nhật")}</span>
-                  <span class="meta-item" style="gap: 4px;">
-                    🔑 Mật khẩu: 
-                    <span style="font-family: monospace; font-weight: 600; font-size: 13px;">••••••••</span>
-                    <button type="button" data-pwd="${esc(u.password || "nckh2025")}" onclick="const txt = this.previousElementSibling; if(txt.textContent === '••••••••') { txt.textContent = this.dataset.pwd; this.textContent = '🙈'; } else { txt.textContent = '••••••••'; this.textContent = '👁️'; }" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; margin-left: 2px;">👁️</button>
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="user-card-cams">
-              <strong>Quyền xem camera:</strong>
-              <div class="user-cams-list">
-                ${camsHtml}
-              </div>
-            </div>
-            
-            <div class="user-card-actions">
-              <button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button>
-              <button class="btn small line warning-btn" data-toggle-user="${esc(u.email)}">${isLocked ? "Mở khóa" : "Khóa"}</button>
-              <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>
-            </div>
+        const camsStr = cams.length > 0 ? cams.join(", ") : "Không có";
+        
+        const pwdBtn = `<button type="button" data-pwd="${esc(u.password || "nckh2025")}" onclick="const txt = this.previousElementSibling; if(txt.textContent === '••••••••') { txt.textContent = this.dataset.pwd; this.textContent = '🙈'; } else { txt.textContent = '••••••••'; this.textContent = '👁️'; }" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; margin-left: 2px;">👁️</button>`;
+        const pwdDisplay = `<span style="font-family: monospace;">••••••••</span>${pwdBtn}`;
+
+        const actions = `
+          <div style="display: flex; gap: 6px; white-space: nowrap; align-items: center;">
+            <button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button>
+            <button class="btn small line warning-btn" data-toggle-user="${esc(u.email)}">${isLocked ? "Mở khóa" : "Khóa"}</button>
+            <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>
           </div>
         `;
-      }).join("");
-      
+
+        return [
+          esc(u.name),
+          esc(u.email),
+          esc(u.phone || "Chưa cập nhật"),
+          `<span class="pill ${u.role === 'Admin' ? 'purple' : 'gray'}">${role}</span>`,
+          `<span class="pill ${statusClass}">${u.status}</span>`,
+          camsStr,
+          pwdDisplay,
+          actions
+        ];
+      });
+
+      return table(["Tên", "Email", "SĐT", "Vai trò", "Trạng thái", "Camera", "Mật khẩu", "Thao tác"], rows);
+    }
+
+    window.renderUsersTable = function() {
+      const input = document.getElementById('userSearchInput');
+      const container = document.getElementById('usersTableContainer');
+      if (container && input) {
+        container.innerHTML = renderUsersTableHtml(input.value);
+      }
+    };
+
+    function usersView() {
       return `
         <div class="tools" style="justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Danh sách khách hàng</h2>
-          <button class="btn primary" data-add-user>Thêm tài khoản</button>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="userSearchInput" placeholder="Tìm kiếm khách hàng..." class="control" style="width: 250px;" oninput="renderUsersTable()">
+            <button class="btn primary" data-add-user>Thêm tài khoản</button>
+          </div>
         </div>
-        <div class="user-grid-container">
-          ${cardsHtml}
+        <div id="usersTableContainer">
+          ${renderUsersTableHtml()}
         </div>
       `;
     }
@@ -2453,7 +2454,7 @@ function loadStore(key, fallback) {
         <div class="form-grid">
           <label class="field"><span>Email</span><input class="control" name="email" value="${esc(u.email || "")}" required></label>
           <label class="field"><span>Họ tên</span><input class="control" name="name" value="${esc(u.name || "")}" required></label>
-          <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(u.phone || "")}" placeholder="Ví dụ: 0912345678"></label>
+          <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(u.phone || "")}" placeholder="Ví dụ: 0912345678" pattern="[0-9]{10}" maxlength="10" title="Vui lòng nhập đủ 10 số (không thừa không thiếu)" required></label>
           <label class="field"><span>Vai trò</span><select class="control" name="role"><option value="Admin" ${u.role === "Admin" ? "selected" : ""}>Admin</option><option value="Khachhang" ${u.role === "Khachhang" ? "selected" : ""}>Khách hàng</option></select></label>
           <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${u.status === "Đang hoạt động" ? "selected" : ""}>Đang hoạt động</option><option ${u.status === "Bị khóa" ? "selected" : ""}>Bị khóa</option></select></label>
           <label class="field">

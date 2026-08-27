@@ -10,7 +10,7 @@ from src.web.shared.db import get_db_client
 def get_all_users_db() -> list[dict[str, Any]]:
     users_list = []
     with get_db_client() as client:
-        res = client.execute("SELECT email, name, role, status, assigned_cameras, phone, password FROM users")
+        res = client.execute("SELECT email, name, role, status, assigned_cameras, phone, password, age, gender, address FROM users")
         for r in res.rows:
             assigned = []
             if r[4]:
@@ -25,16 +25,19 @@ def get_all_users_db() -> list[dict[str, Any]]:
                 "status": r[3],
                 "assignedCameras": assigned,
                 "phone": r[5] if len(r) > 5 else None,
-                "password": r[6] if len(r) > 6 else None
+                "password": r[6] if len(r) > 6 else None,
+                "age": r[7] if len(r) > 7 else None,
+                "gender": r[8] if len(r) > 8 else None,
+                "address": r[9] if len(r) > 9 else None
             })
     return users_list
 
 
-def create_user_db(email: str, password: str | None, name: str, role: str, status: str, assigned_cameras_json: str, phone: str | None) -> None:
+def create_user_db(email: str, password: str | None, name: str, role: str, status: str, assigned_cameras_json: str, phone: str | None, age: int | None = None, gender: str | None = None, address: str | None = None) -> None:
     with get_db_client() as client:
         client.execute(
-            "INSERT INTO users (email, password, name, role, status, assigned_cameras, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [email, password or "nckh2025", name, role, status, assigned_cameras_json, phone]
+            "INSERT INTO users (email, password, name, role, status, assigned_cameras, phone, age, gender, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [email, password or "nckh2025", name, role, status, assigned_cameras_json, phone, age, gender, address]
         )
 
 
@@ -44,17 +47,17 @@ def check_user_exists_db(email: str) -> bool:
         return len(res.rows) > 0
 
 
-def update_user_db(email: str, password: str | None, name: str, role: str, status: str, assigned_cameras_json: str, phone: str | None, old_email: str) -> None:
+def update_user_db(email: str, password: str | None, name: str, role: str, status: str, assigned_cameras_json: str, phone: str | None, old_email: str, age: int | None = None, gender: str | None = None, address: str | None = None) -> None:
     with get_db_client() as client:
         if password:
             client.execute(
-                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ? WHERE email = ?",
-                [email, name, role, status, assigned_cameras_json, password, phone, old_email]
+                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, password = ?, phone = ?, age = ?, gender = ?, address = ? WHERE email = ?",
+                [email, name, role, status, assigned_cameras_json, password, phone, age, gender, address, old_email]
             )
         else:
             client.execute(
-                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ? WHERE email = ?",
-                [email, name, role, status, assigned_cameras_json, phone, old_email]
+                "UPDATE users SET email = ?, name = ?, role = ?, status = ?, assigned_cameras = ?, phone = ?, age = ?, gender = ?, address = ? WHERE email = ?",
+                [email, name, role, status, assigned_cameras_json, phone, age, gender, address, old_email]
             )
 
 

@@ -64,9 +64,23 @@ def _init_db_schema(client):
             phone TEXT,
             monitored_profile_json TEXT DEFAULT '{}',
             emergency_contacts_json TEXT DEFAULT '[]',
-            user_notifications_json TEXT DEFAULT '[]'
+            user_notifications_json TEXT DEFAULT '[]',
+            age INTEGER,
+            gender TEXT,
+            address TEXT
         )
     """)
+    # Add new columns if table already existed without them
+    res = client.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in res.rows]
+    if "age" not in columns:
+        try:
+            client.execute("ALTER TABLE users ADD COLUMN age INTEGER")
+            client.execute("ALTER TABLE users ADD COLUMN gender TEXT")
+            client.execute("ALTER TABLE users ADD COLUMN address TEXT")
+        except Exception as e:
+            print(f"[DB Migration Error] Khong the them cot vao bang users: {e}")
+            
     client.execute("""
         CREATE TABLE IF NOT EXISTS cameras (
             id TEXT PRIMARY KEY,

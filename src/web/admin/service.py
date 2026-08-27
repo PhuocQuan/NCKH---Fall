@@ -32,7 +32,10 @@ def create_user(body_dict: dict[str, Any]) -> None:
         role=body_dict["role"],
         status=body_dict["status"],
         assigned_cameras_json=assigned_json,
-        phone=body_dict.get("phone")
+        phone=body_dict.get("phone"),
+        age=body_dict.get("age"),
+        gender=body_dict.get("gender"),
+        address=body_dict.get("address")
     )
 
 
@@ -47,7 +50,10 @@ def update_user(email: str, body_dict: dict[str, Any]) -> None:
             role=body_dict["role"],
             status=body_dict["status"],
             assigned_cameras_json=assigned_json,
-            phone=body_dict.get("phone")
+            phone=body_dict.get("phone"),
+            age=body_dict.get("age"),
+            gender=body_dict.get("gender"),
+            address=body_dict.get("address")
         )
     else:
         repo.update_user_db(
@@ -58,7 +64,10 @@ def update_user(email: str, body_dict: dict[str, Any]) -> None:
             status=body_dict["status"],
             assigned_cameras_json=assigned_json,
             phone=body_dict.get("phone"),
-            old_email=email
+            old_email=email,
+            age=body_dict.get("age"),
+            gender=body_dict.get("gender"),
+            address=body_dict.get("address")
         )
 
 

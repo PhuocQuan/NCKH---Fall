@@ -2215,19 +2215,18 @@ function loadStore(key, fallback) {
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; flex: 1;">
                   <img src="ios-logo.png" style="height: 70px; width: auto; object-fit: contain; margin-bottom: 0px;" alt="iOS Logo" />
                   <h4 style="margin: 0; font-size: 19px; font-weight: 800; color: #1e293b;">Phiên bản iOS (iPhone)</h4>
-                  <span class="pill amber small" style="display: inline-block; font-weight: 700;">Đang thử nghiệm</span>
+                  <span class="pill amber small" style="display: inline-block; font-weight: 700;">Bản Sideload (IPA)</span>
                   <p class="hint" style="margin: 15px 0 20px; font-size: 13.5px; line-height: 1.5; color: var(--gray-600); max-width: 320px; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center;">
-                    Hỗ trợ hệ điều hành iOS 14.0 trở lên. Ứng dụng đang kiểm duyệt trên App Store. Liên hệ Admin để nhận lời mời TestFlight.
+                    Hỗ trợ hệ điều hành iOS 14.0 trở lên. Bấm tải trực tiếp file cài đặt (.ipa) qua GitHub và xem hướng dẫn cài đặt chi tiết (Sideloadly/AltStore).
                   </p>
                 </div>
                 
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; margin-top: 10px;">
-                  <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; width: 170px; height: 190px; justify-content: center; box-sizing: border-box;">
-                    <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 6px; font-size: 32px; border: 1px solid var(--line);">🔒</div>
-                    <span style="font-size: 11px; color: var(--gray-500); font-weight: 750; margin-top: 4px;">Mã QR sắp ra mắt</span>
-                  </div>
-                  <button onclick="alert('Hệ thống đang cấu hình mời TestFlight. Vui lòng liên hệ Admin qua hotline để được cấp quyền thử nghiệm!')" class="btn line" style="display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; max-width: 260px; height: 44px; font-weight: 700; border-radius: 9999px;">
-                    App Store (Sắp ra mắt)
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; margin-top: 10px;">
+                  <a href="https://github.com/PhuocQuan/NCKH---Fall/releases/latest/download/FallGuard.ipa" target="_blank" class="btn primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; justify-content: center; width: 100%; max-width: 260px; height: 44px; font-weight: 700; border-radius: 9999px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);">
+                    <span>📥</span> Tải trực tiếp IPA
+                  </a>
+                  <button onclick="window.showIosGuide()" class="btn line" style="display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; max-width: 260px; height: 44px; font-weight: 700; border-radius: 9999px;">
+                    <span>ℹ️</span> Hướng dẫn cài đặt
                   </button>
                 </div>
               </div>
@@ -2246,9 +2245,9 @@ function loadStore(key, fallback) {
           ? `<img src="${savedAvatar}" style="width:100%; height:100%; object-fit:cover;">` 
           : `<div style="width:100%; height:100%; font-size:42px; display:flex; justify-content:center; align-items:center; color:#ffffff; font-weight:800; background:linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);">${avatarInitials}</div>`;
         
-        const age = localStorage.getItem(`profile_age_${currentUser.email}`) || "";
-        const gender = localStorage.getItem(`profile_gender_${currentUser.email}`) || "";
-        const address = localStorage.getItem(`profile_address_${currentUser.email}`) || "";
+        const age = currentUser.age || localStorage.getItem(`profile_age_${currentUser.email}`) || "";
+        const gender = currentUser.gender || localStorage.getItem(`profile_gender_${currentUser.email}`) || "";
+        const address = currentUser.address || localStorage.getItem(`profile_address_${currentUser.email}`) || "";
 
         return `
           <div class="premium-profile-wrapper" style="max-width: 1000px; margin: 0 auto; padding: 12px 0 32px;">
@@ -4535,7 +4534,10 @@ function loadStore(key, fallback) {
             ...users[targetUserIdx],
             name: data.name.trim(),
             email: newEmail,
-            phone: data.phone.trim() || null
+            phone: data.phone.trim() || null,
+            age: data.age ? parseInt(data.age, 10) : null,
+            gender: data.gender || null,
+            address: data.address.trim() || null
           };
           
           if (isBackendOnline && authToken) {
@@ -4560,38 +4562,21 @@ function loadStore(key, fallback) {
             }
           }
           
-          // Migrate local storage avatar, age, gender, address
+          // Migrate local storage avatar
           if (newEmail !== oldEmail) {
             const avatar = localStorage.getItem(`avatar_${oldEmail}`);
             if (avatar) {
               localStorage.setItem(`avatar_${newEmail}`, avatar);
               localStorage.removeItem(`avatar_${oldEmail}`);
             }
-            const ageVal = localStorage.getItem(`profile_age_${oldEmail}`);
-            if (ageVal) {
-              localStorage.setItem(`profile_age_${newEmail}`, ageVal);
-              localStorage.removeItem(`profile_age_${oldEmail}`);
-            }
-            const genderVal = localStorage.getItem(`profile_gender_${oldEmail}`);
-            if (genderVal) {
-              localStorage.setItem(`profile_gender_${newEmail}`, genderVal);
-              localStorage.removeItem(`profile_gender_${oldEmail}`);
-            }
-            const addressVal = localStorage.getItem(`profile_address_${oldEmail}`);
-            if (addressVal) {
-              localStorage.setItem(`profile_address_${newEmail}`, addressVal);
-              localStorage.removeItem(`profile_address_${oldEmail}`);
-            }
+            localStorage.removeItem(`profile_age_${oldEmail}`);
+            localStorage.removeItem(`profile_gender_${oldEmail}`);
+            localStorage.removeItem(`profile_address_${oldEmail}`);
           }
           
           users[targetUserIdx] = updatedUser;
           currentUser = updatedUser;
           localStorage.setItem("nckh_current_user_email", currentUser.email);
-          
-          // Save additional fields locally for the new email key
-          localStorage.setItem(`profile_age_${currentUser.email}`, data.age || "");
-          localStorage.setItem(`profile_gender_${currentUser.email}`, data.gender || "");
-          localStorage.setItem(`profile_address_${currentUser.email}`, data.address || "");
           
           saveAll();
           updateSidebarFooter();
@@ -4653,6 +4638,38 @@ function loadStore(key, fallback) {
         document.getElementById("sidebarOverlay").classList.remove("active");
       }
     });
+    
+    window.showIosGuide = function() {
+      const guideHtml = `
+        <div style="font-size: 14px; line-height: 1.6; color: #334155;">
+          <p>Hiện tại ứng dụng FallGuard dành cho iOS đang trong quá trình xét duyệt App Store. Bạn có thể cài đặt thủ công qua <strong>Sideloadly</strong> theo các bước sau:</p>
+          
+          <h4 style="margin: 15px 0 5px; color: #1e293b;">Yêu cầu chuẩn bị:</h4>
+          <ul style="margin-top: 0; padding-left: 20px;">
+            <li>Máy tính (Windows/macOS) có cài đặt iTunes/iCloud.</li>
+            <li>Cáp kết nối iPhone với máy tính.</li>
+            <li>Tài khoản Apple ID (nên dùng tài khoản phụ).</li>
+          </ul>
+          
+          <h4 style="margin: 15px 0 5px; color: #1e293b;">Các bước thực hiện:</h4>
+          <ol style="margin-top: 0; padding-left: 20px;">
+            <li>Tải và cài đặt phần mềm <a href="https://sideloadly.io" target="_blank">Sideloadly</a> trên máy tính.</li>
+            <li>Tải tệp <strong>FallGuard.ipa</strong> từ nút tải bên dưới (hoặc từ GitHub).</li>
+            <li>Mở Sideloadly, kết nối iPhone vào máy tính và tin cậy thiết bị.</li>
+            <li>Kéo thả tệp FallGuard.ipa vào biểu tượng IPA trong Sideloadly.</li>
+            <li>Nhập Apple ID của bạn và nhấn <strong>Start</strong>.</li>
+            <li>Chờ Sideloadly cài đặt xong ("Done").</li>
+            <li>Trên iPhone, vào <em>Cài đặt > Cài đặt chung > Quản lý VPN & Thiết bị</em>. Nhấn vào Apple ID của bạn và chọn <strong>Tin cậy</strong>.</li>
+          </ol>
+          
+          <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 12px; border-radius: 8px; margin-top: 15px;">
+            <strong style="color: #d97706;">⚠️ Lưu ý:</strong><br>
+            Ứng dụng cài đặt qua Sideload (bản miễn phí) sẽ hết hạn sau 7 ngày. Bạn cần cắm cáp và chạy lại Sideloadly để gia hạn mà không bị mất dữ liệu.
+          </div>
+        </div>
+      `;
+      openModal("Hướng dẫn Sideload ứng dụng iOS", guideHtml, `<button class="btn line block" style="width:100%;" onclick="closeModal()">Đã hiểu</button>`);
+    };
 
     initSession();
   </script>
