@@ -1,3 +1,10 @@
+/// File: lib/main.dart
+/// Chức năng chính: Điểm khởi chạy (Entry point) của ứng dụng Flutter FallGuard.
+/// Khởi tạo các dịch vụ (Services) cần thiết trước khi vẽ UI.
+///
+/// File liên kết:
+/// - Khởi tạo từ: core/auth_service.dart, core/app_state_service.dart
+/// - Gọi màn hình: screens/login_screen.dart, screens/home_screen.dart
 // lib/main.dart
 // Entry point — FallGuard AI Flutter Client
 
@@ -9,6 +16,7 @@ import 'core/navigator_key.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
+/// Hàm main: Chạy đầu tiên khi mở App.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,6 +35,7 @@ void main() async {
   runApp(const FallGuardApp());
 }
 
+/// Widget gốc của toàn bộ ứng dụng. Quản lý Theme và Routing (chuyển trang).
 class FallGuardApp extends StatelessWidget {
   const FallGuardApp({super.key});
 

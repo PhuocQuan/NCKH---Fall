@@ -1,3 +1,12 @@
+"""
+File: src/ai/ai_classifier.py
+Chức năng chính: Chạy mô hình Học máy (Machine Learning/ONNX) để phân loại hành động.
+Nhận chuỗi toạ độ xương và dự đoán xem có phải là "fall" (té ngã) hay không.
+
+File liên kết:
+- Load model từ: data/models/fall_model.onnx
+- Được gọi bởi: app.py, pipeline.py
+"""
 from __future__ import annotations
 
 from collections import deque
@@ -18,6 +27,7 @@ class AIPrediction:
 
 
 class FallAIClassifier:
+    """Class quản lý việc dự đoán té ngã bằng mô hình Học máy (ONNX/Scikit-learn)."""
     def __init__(self, config: AIConfig) -> None:
         self.config = config
         self.model = None
@@ -34,6 +44,10 @@ class FallAIClassifier:
         return self.config.enabled and self.model is not None
 
     def predict(self, features: PoseFeatures) -> AIPrediction:
+        """
+        Nhận vào bộ đặc trưng (PoseFeatures) trích xuất từ 30 frame.
+        Sử dụng mô hình AI (RandomForest/SVM/LSTM) để dự đoán nhãn (fall / adl).
+        """
         if not self.ready:
             return AIPrediction(label="disabled", probability=0.0, enabled=False)
 

@@ -20,6 +20,7 @@ from src.web.shared.notifications import (
 
 
 def get_users() -> list[dict[str, Any]]:
+    """Gọi repository để lấy danh sách Users từ CSDL Turso."""
     return repo.get_all_users_db()
 
 
@@ -72,10 +73,12 @@ def update_user(email: str, body_dict: dict[str, Any]) -> None:
 
 
 def delete_user(email: str) -> None:
+    """Xóa người dùng khỏi hệ thống thông qua repository."""
     repo.delete_user_db(email)
 
 
 def get_cameras() -> list[dict[str, Any]]:
+    """Lấy danh sách toàn bộ camera từ DB."""
     return repo.get_all_cameras_db()
 
 

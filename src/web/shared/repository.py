@@ -1,4 +1,8 @@
-"""Repository layer for shared domain (Alerts, AppState, UserRoles)."""
+"""
+File: src/web/shared/repository.py
+Chức năng chính: Chứa các câu lệnh SQL dùng chung (Ví dụ: truy vấn Cảnh báo, Cài đặt).
+"""
+
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from src.web.shared.db import get_db_client
 
 
 def get_user_role_db(email: str) -> str:
+    """SQL SELECT: Trả về quyền (Role) của người dùng (Admin hoặc Khachhang)."""
     try:
         with get_db_client() as client:
             res = client.execute("SELECT role FROM users WHERE email = ?", [email])
@@ -19,6 +24,7 @@ def get_user_role_db(email: str) -> str:
 
 
 def get_alerts_db() -> list[dict[str, Any]]:
+    """SQL SELECT: Lấy danh sách sự kiện té ngã."""
     alerts_list = []
     with get_db_client() as client:
         res = client.execute(
@@ -44,6 +50,7 @@ def get_alerts_db() -> list[dict[str, Any]]:
 
 
 def get_alert_by_id_db(alert_id: str) -> dict[str, Any] | None:
+    """SQL SELECT: Tìm thông tin chi tiết 1 cảnh báo theo ID."""
     with get_db_client() as client:
         res = client.execute(
             "SELECT id, cloud_img_url, cloud_video_url, deleted_by_users FROM alerts WHERE id = ?",
@@ -69,11 +76,13 @@ def soft_delete_alert_db(alert_id: str, deleted_by_users_json: str) -> None:
 
 
 def hard_delete_alert_db(alert_id: str) -> None:
+    """SQL DELETE: Xóa vĩnh viễn cảnh báo khỏi DB (Dành cho Admin)."""
     with get_db_client() as client:
         client.execute("DELETE FROM alerts WHERE id = ?", [alert_id])
 
 
 def solve_alert_db(alert_id: str) -> None:
+    """SQL UPDATE: Đánh dấu trạng thái cảnh báo là "Đã xử lý"."""
     with get_db_client() as client:
         client.execute("UPDATE alerts SET status = 'Đã xử lý' WHERE id = ?", [alert_id])
 
@@ -115,12 +124,14 @@ def get_app_state_db(email: str = "global") -> dict[str, str]:
 
 
 def update_app_state_db(updates: list[str], params: list[Any]) -> None:
+    """SQL UPDATE: Cập nhật cài đặt hệ thống."""
     with get_db_client() as client:
         query = f"UPDATE app_state SET {', '.join(updates)} WHERE id = ?"
         client.execute(query, params)
 
 
 def get_user_app_state_db(email: str) -> dict[str, str]:
+    """SQL SELECT: Lấy cài đặt cá nhân của User."""
     with get_db_client() as client:
         res = client.execute(
             "SELECT monitored_profile_json, emergency_contacts_json, user_notifications_json "
@@ -141,6 +152,7 @@ def get_user_app_state_db(email: str) -> dict[str, str]:
 
 
 def update_user_app_state_db(email: str, updates: list[str], params: list[Any]) -> None:
+    """SQL UPDATE: Cập nhật cài đặt cá nhân của User."""
     with get_db_client() as client:
         query = f"UPDATE users SET {', '.join(updates)} WHERE email = ?"
         client.execute(query, params + [email])
@@ -148,6 +160,7 @@ def update_user_app_state_db(email: str, updates: list[str], params: list[Any]) 
 
 
 def get_user_assigned_cameras_db(email: str) -> list[str]:
+    """SQL SELECT: Trả về danh sách ID Camera mà user này được phép xem."""
     with get_db_client() as client:
         res = client.execute("SELECT assigned_cameras FROM users WHERE email = ?", [email])
         if res.rows and res.rows[0][0]:
@@ -159,12 +172,14 @@ def get_user_assigned_cameras_db(email: str) -> list[str]:
 
 
 def get_all_alert_ids_db() -> list[str]:
+    """SQL SELECT: Lấy toàn bộ ID cảnh báo."""
     with get_db_client() as client:
         res = client.execute("SELECT id FROM alerts")
         return [r[0] for r in res.rows]
 
 
 def get_alert_ids_by_cameras_db(cameras: list[str]) -> list[str]:
+    """SQL SELECT: Lấy ID cảnh báo của những camera cụ thể."""
     if not cameras:
         return []
     with get_db_client() as client:

@@ -1,3 +1,11 @@
+"""
+File: src/camera/video_source.py
+Chức năng chính: Xử lý đầu vào Video hoặc Webcam.
+Hỗ trợ đọc từ Webcam (ID=0), File Video (.mp4), hoặc luồng RTSP từ Camera IP.
+
+File liên kết:
+- Gọi bởi: app.py, pipeline.py
+"""
 from __future__ import annotations
 
 import threading
@@ -18,6 +26,7 @@ class SourceInfo:
 
 
 class VideoSource:
+    """Class quản lý luồng đầu vào (Camera/Video)."""
     """OpenCV video source wrapper for webcam, video files, HTTP, and RTSP URLs."""
 
     def __init__(
@@ -207,6 +216,7 @@ class MockVideoCapture:
         return True
 
     def read(self) -> tuple[bool, np.ndarray]:
+        """Đọc và trả về 1 khung hình (frame) từ Camera/Video. Tự động thay đổi kích thước nếu cần."""
         import numpy as np
         import cv2
         import time

@@ -1,5 +1,10 @@
 """Module to handle Cloudinary cloud uploads using credentials from configs/configs/db.json."""
 
+"""
+File: src/web/shared/cloudinary_uploader.py
+Chức năng chính: Tải hình ảnh/video lên dịch vụ Cloudinary để lưu trữ đám mây.
+Dùng để lưu ảnh avatar hoặc video bằng chứng té ngã.
+"""
 from __future__ import annotations
 
 import json

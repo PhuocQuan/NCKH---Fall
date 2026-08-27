@@ -1,3 +1,12 @@
+"""
+File: src/detection/feature_extractor.py
+Chức năng chính: Trích xuất các đặc trưng (features) từ chuỗi toạ độ của MediaPipe.
+Tạo ra một chuỗi dữ liệu (ví dụ 30 frame) để đưa vào mô hình AI (LSTM) dự đoán hành động.
+
+File liên kết:
+- Gọi bởi: app.py, pipeline.py
+- Cung cấp dữ liệu cho: src/ai/ai_classifier.py
+"""
 from __future__ import annotations
 
 from collections import deque
@@ -31,6 +40,7 @@ class PoseFeatures:
 
 
 class LandmarkFeatureBuffer:
+    """Bộ đệm (Buffer) lưu trữ N khung hình gần nhất (Mặc định 30 frame) để tính toán đặc trưng."""
     def __init__(self, window_size: int = 30) -> None:
         self.window_size = window_size
         self._frames: deque[Mapping[str, Point]] = deque(maxlen=window_size)
@@ -39,11 +49,17 @@ class LandmarkFeatureBuffer:
         self._frames.clear()
 
     def append(self, landmarks: Mapping[str, Point]) -> PoseFeatures:
+        """Thêm 1 frame mới vào bộ đệm và lập tức tính toán đặc trưng (features) của cả chuỗi."""
         self._frames.append(landmarks)
         return extract_sequence_features(self._frames)
 
 
 def extract_sequence_features(frames: Iterable[Mapping[str, Point]]) -> PoseFeatures:
+    """
+    Rút trích 10 đặc trưng (features) từ chuỗi 30 khung hình.
+    Ví dụ: Góc nghiêng trung bình, Góc nghiêng lớn nhất, Độ chênh lệch hông, Vận tốc rơi...
+    Đầu ra của hàm này sẽ được đưa thẳng vào mô hình AI (AI Classifier) để dự đoán.
+    """
     frame_list = list(frames)
     if not frame_list:
         return PoseFeatures(values=np.zeros(len(FEATURE_NAMES), dtype=float), names=FEATURE_NAMES.copy())

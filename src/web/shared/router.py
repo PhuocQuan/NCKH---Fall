@@ -1,4 +1,16 @@
-"""Shared routes for both Admin and User endpoints."""
+"""
+File: src/web/shared/router.py
+Chức năng chính: Chứa các API dùng chung cho cả Admin và User.
+Bao gồm:
+- API đăng nhập (Login)
+- API tải file ảnh (Upload image)
+- API điều khiển luồng Camera AI (Bật/Tắt)
+- API kiểm tra trạng thái sức khỏe (Health Check)
+
+File liên kết:
+- Gọi tới: src.web.shared.service.py (xử lý logic)
+- Được gộp vào: src.web.server.py
+"""
 
 from __future__ import annotations
 
@@ -57,6 +69,10 @@ class AppStateModel(BaseModel):
 
 
 def _extract_token(request: Request) -> str | None:
+    """
+    Hàm ẩn: Lấy mã xác thực (Token) từ Headers hoặc tham số truy vấn (Query Params).
+    Token dùng để xác minh người dùng đã đăng nhập hay chưa.
+    """
     auth = request.headers.get("Authorization", "")
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
@@ -64,6 +80,11 @@ def _extract_token(request: Request) -> str | None:
 
 
 def require_user(request: Request) -> str:
+    """
+    Middleware (Bộ lọc): Bắt buộc người dùng phải đăng nhập hợp lệ.
+    Hàm này kiểm tra Token, nếu đúng thì cho đi tiếp, nếu sai báo lỗi 401.
+    Đồng thời kiểm tra xem tài khoản có bị khóa (Banned) trên Database hay không.
+    """
     token = _extract_token(request)
     user = verify_token(token)
     if not user:
@@ -85,6 +106,10 @@ def require_user(request: Request) -> str:
 
 @router.get("/api/health")
 def health(request: Request) -> dict[str, Any]:
+    """
+    API: Kiểm tra tình trạng sức khỏe của Server và Database.
+    App Flutter thường xuyên gọi API này để xem máy chủ có đang bị sập hay không.
+    """
     db_connected = False
     try:
         with get_db_client() as client:
@@ -98,6 +123,11 @@ def health(request: Request) -> dict[str, Any]:
 
 @router.post("/api/auth/login")
 def api_login(body: LoginRequest) -> dict[str, str]:
+    """
+    API: Đăng nhập.
+    Nhận username và password, gọi hàm service.login để kiểm tra.
+    Nếu đúng, trả về thông tin User, Role và mã Token.
+    """
     try:
         return service.login_user(body.username, body.password, body.source)
     except ValueError as exc:

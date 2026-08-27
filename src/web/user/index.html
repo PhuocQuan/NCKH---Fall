@@ -2,6 +2,12 @@
 <html lang="vi">
 <head>
   <script>
+    /* === CHÚ THÍCH GIAO DIỆN USER (src/web/user/index.html) ===
+     * Chức năng: Xử lý logic Frontend (Trình duyệt) cho trang User Dashboard.
+     * Liên kết:
+     * - Gọi API đến: src/web/user/router.py (để lưu thông tin, đổi mật khẩu)
+     * - Các biến trạng thái chính: currentUser, appState.
+     */
     function checkRedirect() {
       if (/Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768) {
         window.location.replace("../mobile/user.html" + window.location.search);
@@ -566,6 +572,12 @@
   <div class="modal-backdrop" id="modalBackdrop"></div>
 
   <script>
+    /* === CHÚ THÍCH GIAO DIỆN USER (src/web/user/index.html) ===
+     * Chức năng: Xử lý logic Frontend (Trình duyệt) cho trang User Dashboard.
+     * Liên kết:
+     * - Gọi API đến: src/web/user/router.py (để lưu thông tin, đổi mật khẩu)
+     * - Các biến trạng thái chính: currentUser, appState.
+     */
 function loadStore(key, fallback) {
       try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
     }

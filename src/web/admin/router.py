@@ -1,4 +1,16 @@
-"""Admin routes for user, camera, notifications, and logs management."""
+"""
+File: src/web/admin/router.py
+Chức năng chính: Chứa các API dành riêng cho Quản trị viên (Admin) trên Dashboard.
+Chịu trách nhiệm nhận HTTP Requests (GET, POST, PUT, DELETE) cho việc:
+- Quản lý danh sách Người dùng (Users).
+- Quản lý danh sách Camera.
+- Quản lý Lịch sử (Logs) cảnh báo.
+- Kiểm tra tính năng Gửi thông báo (Telegram/Zalo).
+
+File liên kết (Ảnh hưởng / Bị ảnh hưởng):
+- Gọi tới: src.web.admin.service.py (để xử lý logic dữ liệu).
+- Middleware: Bắt buộc gọi `Depends(require_user)` từ src.web.shared.router.py để kiểm tra phân quyền.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +25,7 @@ router = APIRouter()
 
 
 class UserDB(BaseModel):
+    """Khuôn mẫu (Schema) quy định dữ liệu của một Người dùng khi truyền qua API."""
     email: str
     password: str | None = None
     name: str
@@ -26,6 +39,7 @@ class UserDB(BaseModel):
 
 
 class CameraDB(BaseModel):
+    """Khuôn mẫu (Schema) quy định dữ liệu của một Camera khi truyền qua API."""
     id: str
     name: str
     ip: str
@@ -50,18 +64,21 @@ def get_users(user: str = Depends(require_user)) -> list[dict[str, Any]]:
 
 @router.post("/api/users")
 def create_user(body: UserDB, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Tạo người dùng mới. Chuyển thông tin từ request body sang service."""
     service.create_user(body.model_dump())
     return {"ok": True}
 
 
 @router.put("/api/users/{email}")
 def update_user(email: str, body: UserDB, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Cập nhật thông tin người dùng theo email."""
     service.update_user(email, body.model_dump())
     return {"ok": True}
 
 
 @router.delete("/api/users/{email}")
 def delete_user(email: str, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Xoá người dùng theo email."""
     service.delete_user(email)
     return {"ok": True}
 
@@ -73,24 +90,28 @@ def get_cameras(user: str = Depends(require_user)) -> list[dict[str, Any]]:
 
 @router.post("/api/cameras")
 def create_camera(body: CameraDB, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Thêm mới một camera vào hệ thống."""
     service.create_camera(body.model_dump(), user)
     return {"ok": True}
 
 
 @router.put("/api/cameras/{id}")
 def update_camera(id: str, body: CameraDB, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Cập nhật thông tin camera (Tên, IP, Luồng RTSP...)."""
     service.update_camera(id, body.model_dump(), user)
     return {"ok": True}
 
 
 @router.delete("/api/cameras/{id}")
 def delete_camera(id: str, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Xoá camera ra khỏi hệ thống."""
     service.delete_camera(id, user)
     return {"ok": True}
 
 
 @router.get("/api/logs")
 def list_logs(user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Lấy lịch sử cảnh báo té ngã từ file sự kiện và SQLite."""
     try:
         logs_list = service.get_system_logs()
         return {"logs": logs_list}

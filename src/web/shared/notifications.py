@@ -1,5 +1,10 @@
 """Module hỗ trợ gửi cảnh báo thực tế qua Telegram, Email SMTP và SMS."""
 
+"""
+File: src/web/shared/notifications.py
+Chức năng chính: Gửi tin nhắn cảnh báo qua Telegram (thông qua Bot).
+Khi có sự kiện té ngã hoặc người lạ, hệ thống gọi file này để báo về điện thoại.
+"""
 from __future__ import annotations
 
 import json

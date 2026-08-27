@@ -2,6 +2,12 @@
 <html lang="vi">
 <head>
   <script>
+    /* === CHÚ THÍCH GIAO DIỆN ADMIN (src/web/admin/index.html) ===
+     * Chức năng: Xử lý logic Frontend (Trình duyệt) cho trang Admin Dashboard.
+     * Liên kết:
+     * - Gọi API đến: src/web/admin/router.py (quản lý user, camera, xem logs)
+     * - Các biến trạng thái chính: users (danh sách user), cameras (danh sách camera).
+     */
     function checkRedirect() {
       if (/Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768) {
         window.location.replace("../mobile/admin.html" + window.location.search);
@@ -544,6 +550,12 @@
   <div class="modal-backdrop" id="modalBackdrop"></div>
 
   <script>
+    /* === CHÚ THÍCH GIAO DIỆN ADMIN (src/web/admin/index.html) ===
+     * Chức năng: Xử lý logic Frontend (Trình duyệt) cho trang Admin Dashboard.
+     * Liên kết:
+     * - Gọi API đến: src/web/admin/router.py (quản lý user, camera, xem logs)
+     * - Các biến trạng thái chính: users (danh sách user), cameras (danh sách camera).
+     */
 function loadStore(key, fallback) {
       try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
     }

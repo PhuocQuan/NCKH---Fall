@@ -1,4 +1,14 @@
-"""Fall detection pipeline for web streaming."""
+"""
+File: src/web/shared/pipeline.py
+Chức năng chính: Quản lý luồng chạy ngầm (Background Thread) cho Camera và thuật toán AI.
+Thay vì chạy trực tiếp trên giao diện như src/core/app.py, file này cho phép chạy AI
+ngầm trên Server, đồng thời liên tục trích xuất từng khung hình (frame) thành dạng ảnh JPEG
+để phát trực tiếp (livestream) lên giao diện Web/App thông qua API MJPEG.
+
+File liên kết:
+- Gọi tới: src.core.app (sử dụng lại logic vẽ hình, phát hiện té ngã)
+- Gọi bởi: src.web.shared.router.py (khi có lệnh Start/Stop Camera từ App)
+"""
 
 from __future__ import annotations
 
@@ -44,6 +54,7 @@ def _import_runtime():
 
 @dataclass
 class PipelineStatus:
+    """Class lưu trữ trạng thái hiện tại của luồng Camera (Đang chạy, Góc nghiêng, Lỗi...)."""
     running: bool = False
     source: str = ""
     state: str = "normal"
@@ -65,7 +76,14 @@ class PipelineStatus:
 
 
 class FallDetectionPipeline:
-    """Background thread chạy camera + FallDetector, phục vụ MJPEG stream."""
+    """
+    Class khởi tạo và quản lý Luồng Camera ngầm.
+    Chịu trách nhiệm:
+    - Bật camera, chạy AI nhận diện y hệt như app.py.
+    - Mã hóa (encode) từng khung hình thành chuỗi byte JPEG.
+    - Cung cấp hình ảnh cho API (để truyền lên Web/App).
+    - Lưu lại đoạn video (15-30 frame) khi có người té ngã.
+    """
 
     def __init__(self, config_path: str = "configs/default.yaml") -> None:
         self.config_path = config_path
@@ -153,6 +171,7 @@ class FallDetectionPipeline:
         self._thread.start()
 
     def stop(self) -> None:
+        """Tắt Camera và dừng luồng AI."""
         self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)

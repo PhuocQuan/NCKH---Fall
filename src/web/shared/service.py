@@ -16,6 +16,7 @@ import src.web.shared.repository as repo
 
 
 def login_user(username: str, password: str, source: str = "web") -> dict[str, str]:
+    """API Logic: Gọi hàm tạo Token và ghi lịch sử Đăng nhập."""
     try:
         token = auth_login(username, password, source)
         log_action("Đăng nhập", username.strip().lower(), "Thành công")
@@ -26,11 +27,13 @@ def login_user(username: str, password: str, source: str = "web") -> dict[str, s
 
 
 def logout_user(token: str | None, user: str) -> None:
+    """API Logic: Xóa Token khỏi bộ nhớ để Đăng xuất."""
     auth_logout(token)
     log_action("Đăng xuất", user, "Thành công")
 
 
 def get_alerts(user: str) -> list[dict[str, Any]]:
+    """API Logic: Lấy danh sách cảnh báo. Nếu là Admin thì lấy hết, nếu là User chỉ lấy cảnh báo của Camera được phân quyền."""
     role = repo.get_user_role_db(user)
     all_alerts = repo.get_alerts_db()
     
@@ -60,6 +63,7 @@ def get_alerts(user: str) -> list[dict[str, Any]]:
 
 
 def solve_alert(alert_id: str, user: str) -> None:
+    """API Logic: Đánh dấu cảnh báo đã được giải quyết (an toàn)."""
     repo.solve_alert_db(alert_id)
     with pipeline._lock:
         for alert in pipeline._recent_alerts:
@@ -70,6 +74,7 @@ def solve_alert(alert_id: str, user: str) -> None:
 
 
 def delete_alert(alert_id: str, user: str, media_dir: Path) -> None:
+    """API Logic: Xóa 1 cảnh báo. Admin thì xóa thật (Database + Ảnh mây), User thì chỉ ẩn khỏi màn hình của họ."""
     role = repo.get_user_role_db(user)
     if role != "Admin":
         # Soft delete: append user email to deleted_by_users list of this alert
@@ -122,6 +127,7 @@ def delete_alert(alert_id: str, user: str, media_dir: Path) -> None:
 
 
 def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, media_dir: Path) -> int:
+    """API Logic: Xóa nhiều cảnh báo cùng lúc (chọn nhiều dòng hoặc chọn tất cả)."""
     role = repo.get_user_role_db(user)
     
     # Determine which alerts to process
@@ -190,6 +196,7 @@ def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, m
 
 
 def get_app_state(user: str) -> dict[str, str]:
+    """API Logic: Gộp cài đặt chung của Hệ thống (Admin) và cài đặt riêng của User."""
     global_state = repo.get_app_state_db()
     user_state = repo.get_user_app_state_db(user)
     return {
@@ -202,6 +209,7 @@ def get_app_state(user: str) -> dict[str, str]:
 
 
 def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
+    """API Logic: Lưu cấu hình. Phân tách key nào thuộc Admin, key nào thuộc User để update vào bảng tương ứng."""
     global_updates = []
     global_params = []
     user_updates = []

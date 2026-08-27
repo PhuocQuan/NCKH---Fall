@@ -1,3 +1,11 @@
+"""
+File: src/detection/pose_estimator.py
+Chức năng chính: Bao bọc (Wrapper) thư viện MediaPipe Pose.
+Nhận vào một khung hình (frame), xử lý và trả về toạ độ (x, y) của các khớp xương (landmarks).
+
+File liên kết:
+- Gọi bởi: app.py, pipeline.py
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +29,7 @@ LANDMARK_NAMES = {
 
 
 class PoseEstimator:
+    """Class bọc (Wrapper) thư viện MediaPipe Pose."""
     def __init__(
         self,
         static_image_mode: bool = False,

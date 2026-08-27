@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+"""
+File: src/ai/build_feature_dataset.py
+Chức năng chính: Quét qua thư mục chứa video mẫu (nằm/ngã), chạy MediaPipe để lấy tọa độ khung xương rồi xuất ra file .csv để huấn luyện (train) AI.
+"""
 from pathlib import Path
 
 import cv2

@@ -1,3 +1,12 @@
+"""
+File: src/face/face_recognizer.py
+Chức năng chính: Nhận diện khuôn mặt (Face Recognition) sử dụng thư viện face_recognition.
+Phân loại người quen, người cần chú ý (ATTENTION), hoặc người lạ (STRANGER).
+
+File liên kết:
+- Load dữ liệu từ: data/known_faces/
+- Được gọi bởi: app.py, pipeline.py
+"""
 from __future__ import annotations
 
 import enum
@@ -30,6 +39,7 @@ SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recogniti
 
 
 class FaceRecognizer:
+    """Class quản lý việc nhận diện khuôn mặt."""
     def __init__(self, config: FaceConfig, models_dir: str = "models") -> None:
         self.config = config
         self.models_dir = Path(models_dir)

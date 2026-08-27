@@ -1,5 +1,10 @@
 """Xác thực đơn giản cho dashboard NCKH sử dụng JWT."""
 
+"""
+File: src/web/shared/auth.py
+Chức năng chính: Mã hóa và kiểm tra mã xác thực (JWT Token).
+Giúp bảo mật API, đảm bảo chỉ người dùng đã đăng nhập mới gọi được API.
+"""
 from __future__ import annotations
 
 import time
@@ -65,6 +70,7 @@ def login(username: str, password: str, source: str = "web") -> str:
 
 
 def verify_token(token: str | None) -> str | None:
+    """Kiểm tra mã JWT có hợp lệ và chưa hết hạn không. Trả về email nếu đúng."""
     if not token:
         return None
     try:

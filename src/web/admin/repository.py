@@ -8,6 +8,7 @@ from src.web.shared.db import get_db_client
 
 
 def get_all_users_db() -> list[dict[str, Any]]:
+    """Truy vấn SQL để lấy danh sách người dùng. Giải mã (parse) chuỗi JSON nếu có."""
     users_list = []
     with get_db_client() as client:
         res = client.execute("SELECT email, name, role, status, assigned_cameras, phone, password, age, gender, address FROM users")
@@ -62,11 +63,13 @@ def update_user_db(email: str, password: str | None, name: str, role: str, statu
 
 
 def delete_user_db(email: str) -> None:
+    """SQL DELETE: Xóa user."""
     with get_db_client() as client:
         client.execute("DELETE FROM users WHERE email = ?", [email])
 
 
 def get_all_cameras_db() -> list[dict[str, Any]]:
+    """SQL SELECT: Lấy danh sách cameras."""
     cams = []
     with get_db_client() as client:
         res = client.execute("SELECT id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold FROM cameras")
@@ -110,6 +113,7 @@ def update_camera_db(id: str, name: str, ip: str, rtsp: str, area: str, target: 
 
 
 def delete_camera_db(id: str) -> None:
+    """SQL DELETE: Xóa camera."""
     with get_db_client() as client:
         client.execute("DELETE FROM cameras WHERE id = ?", [id])
 

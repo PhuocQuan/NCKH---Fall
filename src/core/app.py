@@ -1,3 +1,18 @@
+"""
+File: src/core/app.py
+Chức năng chính: Điểm khởi chạy (entry point) của luồng Camera (Video/Webcam). 
+File này liên kết và gọi các module khác để thực hiện chu trình:
+1. Đọc video (từ src/camera/video_source.py)
+2. Ước lượng tư thế bằng MediaPipe (từ src/detection/pose_estimator.py)
+3. Nhận diện khuôn mặt (từ src/face/face_recognizer.py)
+4. Phát hiện té ngã (từ src/detection/fall_detector.py)
+5. Dự đoán bằng AI (từ src/ai/ai_classifier.py)
+6. Ghi log sự kiện và vẽ lên màn hình.
+
+File liên kết (Ảnh hưởng / Bị ảnh hưởng):
+- Gọi tới: src.detection.*, src.face.*, src.ai.*
+- Bị gọi bởi: src/web/shared/pipeline.py (khi chạy luồng AI chung với Server)
+"""
 from __future__ import annotations
 
 import argparse
@@ -45,6 +60,13 @@ FALL_ALARM_STATES = frozenset(
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Hàm phân tích các tham số dòng lệnh (command line arguments) khi chạy file này trực tiếp.
+    Ví dụ: python -m src.core.app --source 0 --config configs/default.yaml
+    
+    Returns:
+        argparse.Namespace: Chứa các tham số cấu hình truyền vào.
+    """
     parser = argparse.ArgumentParser(description="Realtime fall detection demo.")
     parser.add_argument(
         "--source",
@@ -63,6 +85,21 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Hàm chính (main) của chương trình.
+    Các bước thực hiện:
+    1. Tải cấu hình từ yaml (load_config).
+    2. Khởi tạo các module lõi: FallDetector, PoseEstimator, FaceRecognizer, AIClassifier.
+    3. Mở luồng video (VideoSource).
+    4. Vòng lặp chính:
+       a. Đọc từng frame từ video/camera.
+       b. Quét khuôn mặt nếu đến chu kỳ (process_every_n_frames).
+       c. Trích xuất khung xương (PoseEstimator).
+       d. Đưa khung xương vào thuật toán (FallDetector) và AI (AIClassifier) để dự đoán.
+       e. Ghi log nếu có người ngã.
+       f. Vẽ kết quả lên màn hình (khung xương, cảnh báo, khuôn mặt).
+    5. Xử lý sự kiện phím bấm (nhấn 's' để lưu khuôn mặt mới, 'r' để reset trạng thái).
+    """
     args = parse_args()
     config = load_config(args.config)
     detector_config = config.detector
@@ -154,13 +191,21 @@ def main() -> None:
         cv2.destroyAllWindows()
 
 
-def _update_fall_alarm(
+def _update_fall_alarm( # type: ignore
     state: FallState,
     prev_state: FallState,
     frames_since_beep: int,
     beep_interval_frames: int,
 ) -> tuple[int, FallState]:
-    """Kêu ngay khi vừa phát hiện té ngã, lặp lại định kỳ cho đến khi hết nguy hiểm."""
+    """
+    Kiểm tra trạng thái hiện tại và quyết định có phát chuông báo động hay không.
+    
+    Logic từng bước:
+    1. Nếu trạng thái hiện tại là NGÃ (nằm trong FALL_ALARM_STATES):
+       - Nếu trước đó chưa ngã -> Vừa mới ngã -> Kêu chuông lập tức.
+       - Nếu trước đó đã ngã rồi -> Đang nằm -> Chờ hết chu kỳ (beep_interval_frames) rồi kêu tiếp.
+    2. Trả về số frame đếm ngược cho lần kêu tiếp theo và trạng thái hiện tại.
+    """
 
     if state in FALL_ALARM_STATES:
         if prev_state not in FALL_ALARM_STATES:
@@ -178,7 +223,10 @@ def _update_fall_alarm(
 
 
 def _play_alert_sound() -> None:
-    """Phát chuông cảnh báo té ngã. Chạy trong thread riêng để không đơ camera."""
+    """
+    Phát âm thanh cảnh báo "bíp bíp" trên Windows.
+    Sử dụng luồng riêng (threading.Thread) để việc phát âm thanh không làm đứng hình (lag) camera.
+    """
 
     if winsound is None:
         return
@@ -197,6 +245,14 @@ def _play_alert_sound() -> None:
 
 
 def _draw_status(frame, result, ai_prediction) -> None:
+    """
+    Vẽ trạng thái té ngã và kết quả AI lên góc trái màn hình video.
+    
+    Args:
+        frame: Khung hình hiện tại (OpenCV Mat).
+        result: Kết quả từ FallDetector (chứa góc, thời gian nằm, trạng thái).
+        ai_prediction: Kết quả dự đoán từ mô hình AI.
+    """
     color = STATE_COLORS[result.state]
     label = (
         f"{result.state.value.upper()} | angle={result.torso_angle_deg:.1f} "
@@ -220,6 +276,14 @@ def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int,
 
 
 def _draw_faces(frame: cv2.Mat, faces: list[RecognizedFace]) -> None:
+    """
+    Vẽ khung viền (bounding box) và tên của những khuôn mặt nhận diện được lên màn hình.
+    Đồng thời hiện cảnh báo góc phải màn hình nếu phát hiện người lạ (STRANGER).
+    
+    Args:
+        frame: Khung hình hiện tại.
+        faces: Danh sách các khuôn mặt đã được nhận diện.
+    """
     has_stranger = False
     for face in faces:
         x, y, w, h = face.box

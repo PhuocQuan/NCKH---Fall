@@ -4,6 +4,10 @@ import argparse
 from pathlib import Path
 
 import joblib
+"""
+File: src/ai/train_ai_model.py
+Chức năng chính: Đọc file .csv đặc trưng (features) đã tạo, huấn luyện mô hình Machine Learning (Random Forest) và xuất ra file model_fall.joblib để dự đoán té ngã.
+"""
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix

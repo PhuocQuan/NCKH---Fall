@@ -1,3 +1,11 @@
+"""
+File: src/core/config.py
+Chức năng chính: Đọc và phân tích file cấu hình (configs/default.yaml).
+Chứa các thông số cấu hình mặc định cho Camera, AI, Thuật toán phát hiện (Góc, Thời gian).
+
+File liên kết:
+- Ảnh hưởng tới: Toàn bộ hệ thống (app.py, pipeline.py, fall_detector.py đều phải gọi file này).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +15,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class DetectorConfig:
+    """Cấu hình các ngưỡng (threshold) cho thuật toán phát hiện té ngã (Góc nghiêng, tốc độ rơi, thời gian nằm)."""
     torso_fall_angle_deg: float = 62.0
     torso_upright_angle_deg: float = 35.0
     head_hip_height_ratio: float = 0.18
@@ -23,6 +32,7 @@ class DetectorConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
+    """Cấu hình chung cho ứng dụng (Độ phân giải camera, hiển thị xương khớp, đường dẫn lưu file log)."""
     camera_width: int = 640
     camera_height: int = 480
     model_complexity: int = 1
@@ -32,6 +42,7 @@ class AppConfig:
 
 @dataclass(frozen=True)
 class AIConfig:
+    """Cấu hình cho mô hình Học máy AI (Bật/tắt AI, đường dẫn model, ngưỡng xác suất)."""
     enabled: bool = False
     model_path: str = "models/fall_classifier.joblib"
     alert_probability: float = 0.70
@@ -40,6 +51,7 @@ class AIConfig:
 
 @dataclass(frozen=True)
 class FaceConfig:
+    """Cấu hình nhận diện khuôn mặt (Bật/tắt, đường dẫn lưu ảnh người quen, ngưỡng sai số)."""
     enabled: bool = True
     known_faces_dir: str = "data/known_faces"
     similarity_threshold: float = 0.40
@@ -49,6 +61,7 @@ class FaceConfig:
 
 @dataclass(frozen=True)
 class ProjectConfig:
+    """Class tổng hợp toàn bộ các cấu hình ở trên."""
     detector: DetectorConfig = DetectorConfig()
     app: AppConfig = AppConfig()
     ai: AIConfig = AIConfig()
@@ -61,6 +74,7 @@ def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def load_config(path: str | Path = "configs/default.yaml") -> ProjectConfig:
+    """Hàm đọc file yaml và ánh xạ (map) vào các Class cấu hình."""
     import yaml
 
     config_path = Path(path)
