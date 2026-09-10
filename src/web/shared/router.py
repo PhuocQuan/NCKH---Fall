@@ -206,7 +206,7 @@ def _mjpeg_generator():
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
             )
-        time.sleep(0.005)
+        time.sleep(0.035)
 
 
 def _placeholder_frame() -> bytes:
@@ -231,6 +231,8 @@ def camera_stream(request: Request):
             "Cache-Control": "no-cache, no-store, must-revalidate, pre-check=0, post-check=0, max-age=0",
             "Pragma": "no-cache",
             "Expires": "0",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
         },
     )
 

@@ -129,8 +129,11 @@ class FallDetector:
         hip_dropped_fast = hip_velocity >= self.config.hip_drop_velocity
         body_rotated_fast = angle_velocity >= self.config.angle_change_velocity_deg
         
-        # Nhận diện nằm: thân nghiêng ngang và đầu thấp, hoặc góc nghiêng rõ rệt (>= 60°)
-        lying = (torso_is_horizontal and head_is_low) or (torso_angle >= 60.0 and head_hip_delta <= max(0.30, self.config.head_hip_height_ratio * 1.5))
+        # Nhận diện nằm: thân nghiêng ngang (>= 50°) và đầu không quá cao so với hông
+        max_lying_head_delta = max(0.38, self.config.head_hip_height_ratio * 1.5)
+        lying = (torso_is_horizontal and head_hip_delta <= max_lying_head_delta) or (
+            torso_angle >= 50.0 and head_hip_delta <= max_lying_head_delta
+        )
 
         if torso_is_upright:
             self._recent_upright_frames = min(self._recent_upright_frames + 1, 30)

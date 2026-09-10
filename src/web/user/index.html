@@ -1220,9 +1220,15 @@ function loadStore(key, fallback) {
             return `
               <article class="cam ${stateClass(c)}" data-open-camera="${esc(c.id)}" style="cursor: ${cursorStyle}; opacity: ${opacityStyle};">
                 <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
-                <div class="cam-view" style="display:flex; flex-direction:column; justify-content:center; align-items:center; background:#0f172a; color:#94a3b8; min-height:180px; gap:8px; position:relative;">
-                  <div style="font-size:40px;">📹</div>
-                  <div style="font-size:12px; font-weight:600; color:#94a3b8;">Bấm để xem trực tiếp</div>
+                <div class="cam-view" style="position:relative; background:#0f172a; min-height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                  ${isOnline ? `
+                    <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}">
+                  ` : `
+                    <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:8px; padding:40px 0;">
+                      <div style="font-size:40px;">📹</div>
+                      <div style="font-size:12px; font-weight:600;">Camera đang Offline</div>
+                    </div>
+                  `}
                   <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
                 </div>
               </article>
@@ -1298,8 +1304,7 @@ function loadStore(key, fallback) {
             <button class="btn line" onclick="${backAction}">${backText}</button>
             <div class="row" style="gap:8px">
               <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
-                <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
-                <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
+                <option value="server" selected>Server AI (Webcam máy chủ)</option>
               </select>
               <button class="btn line" onclick="captureScreenshot()">📸 Chụp ảnh</button>
               <button class="btn line" onclick="toggleFullscreen()">🔲 Full màn hình</button>
@@ -2306,7 +2311,7 @@ function loadStore(key, fallback) {
                     </div>
                     <div style="display:flex; gap:6px;">
                       <button class="btn small line" onclick="toggleReadNotification(${idx})">${readLabel}</button>
-                      <button class="btn small danger line" onclick="deleteNotification(${idx})" style="border:none; color:var(--red);">Xóa</button>
+                      <button class="btn small danger" onclick="deleteNotification(${idx})" style="border:none; color:#ffffff; background:var(--red); font-weight:700; padding:7px 14px; border-radius:6px; cursor:pointer;">Xóa</button>
                     </div>
                   </div>
                 `;
@@ -2700,7 +2705,7 @@ function loadStore(key, fallback) {
       
       const hintEl = $("cameraTestHint");
       const modeSelect = $("cameraModeSelect");
-      const selectedMode = modeSelect ? modeSelect.value : (isBackendOnline ? "server" : "client");
+      const selectedMode = modeSelect ? modeSelect.value : "server";
       
       if (selectedMode === "server" && isBackendOnline) {
         if (hintEl) hintEl.textContent = "Đang kết nối tới server AI...";
@@ -3789,7 +3794,11 @@ function loadStore(key, fallback) {
                 changed = true;
                 
                 if (backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
-                  triggerRealtimeFallAlert(backendAlert);
+                  if (isFallAlert(backendAlert)) {
+                    triggerRealtimeFallAlert(backendAlert);
+                  } else if (isStrangerAlert(backendAlert)) {
+                    toast(`👤 CẢNH BÁO: Phát hiện người lạ (${backendAlert.confidence || 90}%) tại camera ${backendAlert.camera || ''}!`);
+                  }
                 }
               } else {
                 const local = alerts[localIndex];
@@ -3943,8 +3952,8 @@ function loadStore(key, fallback) {
         syncAlertsAndEvents();
       }
       
-      // Auto-start status polling on detection tab or user dashboard if stream is active
-      const shouldPoll = id === "detection" || (id === "user_live" && liveViewLevel === "stream");
+      // Auto-start status polling on detection tab, user dashboard, or live stream
+      const shouldPoll = id === "detection" || id === "user_dashboard" || (id === "user_live" && liveViewLevel === "stream");
       if (shouldPoll && (testCameraStream || (isBackendOnline && authToken))) {
         if (isBackendOnline) startStatusPolling(); else startSimulatedPolling();
       }
@@ -4752,6 +4761,11 @@ function loadStore(key, fallback) {
           }
           
           backendCheckInterval = setInterval(checkBackendStatus, 5000);
+          setInterval(() => {
+            if (isBackendOnline && authToken) {
+              syncAlertsAndEvents();
+            }
+          }, 3000);
           return;
         }
       }

@@ -352,7 +352,7 @@ class FallDetectionPipeline:
             status.latency_ms = round((time.perf_counter() - frame_start) * 1000, 1)
 
 
-            ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
             if ok_enc:
                 with self._lock:
                     self._latest_jpeg = jpeg.tobytes()

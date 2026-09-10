@@ -138,43 +138,65 @@ class _MjpegViewState extends State<MjpegView> {
 
   // JPEG magic bytes: start = 0xFF 0xD8, end = 0xFF 0xD9
   void _extractFrames() {
-    const jpegStart = [0xFF, 0xD8];
-    const jpegEnd = [0xFF, 0xD9];
+    const jpegStart0 = 0xFF;
+    const jpegStart1 = 0xD8;
+    const jpegEnd0 = 0xFF;
+    const jpegEnd1 = 0xD9;
+
+    Uint8List? latestFrame;
 
     while (true) {
       // Find JPEG start
       int startIdx = -1;
-      for (int i = 0; i < _buffer.length - 1; i++) {
-        if (_buffer[i] == jpegStart[0] && _buffer[i + 1] == jpegStart[1]) {
+      final bufLen = _buffer.length;
+      for (int i = 0; i < bufLen - 1; i++) {
+        if (_buffer[i] == jpegStart0 && _buffer[i + 1] == jpegStart1) {
           startIdx = i;
           break;
         }
       }
       if (startIdx == -1) {
-        if (_buffer.length > 4096) _buffer.removeRange(0, _buffer.length - 4);
+        if (_buffer.length > 2048) {
+          _buffer.removeRange(0, _buffer.length - 2);
+        }
         break;
+      }
+
+      // Drop any garbage before startIdx
+      if (startIdx > 0) {
+        _buffer.removeRange(0, startIdx);
+        startIdx = 0;
       }
 
       // Find JPEG end after start
       int endIdx = -1;
-      for (int i = startIdx + 2; i < _buffer.length - 1; i++) {
-        if (_buffer[i] == jpegEnd[0] && _buffer[i + 1] == jpegEnd[1]) {
+      final curLen = _buffer.length;
+      for (int i = 2; i < curLen - 1; i++) {
+        if (_buffer[i] == jpegEnd0 && _buffer[i + 1] == jpegEnd1) {
           endIdx = i + 2;
           break;
         }
       }
-      if (endIdx == -1) break;
-
-      // Extract complete JPEG frame
-      final frame = Uint8List.fromList(_buffer.sublist(startIdx, endIdx));
-      _buffer.removeRange(0, endIdx);
-
-      if (mounted) {
-        setState(() {
-          _frame = frame;
-          _loading = false;
-        });
+      if (endIdx == -1) {
+        // Prevent memory bloating if stream buffer grows without end marker
+        if (_buffer.length > 256 * 1024) {
+          _buffer.clear();
+        }
+        break;
       }
+
+      // Extract complete JPEG frame, discarding any older frames in this batch
+      latestFrame = Uint8List.fromList(_buffer.sublist(0, endIdx));
+      _buffer.removeRange(0, endIdx);
+    }
+
+    // Only render the newest frame to eliminate stream lag
+    if (latestFrame != null && mounted) {
+      setState(() {
+        _frame = latestFrame;
+        _loading = false;
+        _error = null;
+      });
     }
   }
 
