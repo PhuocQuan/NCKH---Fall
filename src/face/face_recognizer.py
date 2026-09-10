@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import enum
 import os
+import re
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +40,20 @@ YUNET_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection
 SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
 
 
+def _compute_iou(box1: tuple[int, int, int, int], box2: tuple[int, int, int, int]) -> float:
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
+    xi1 = max(x1, x2)
+    yi1 = max(y1, y2)
+    xi2 = min(x1 + w1, x2 + w2)
+    yi2 = min(y1 + h1, y2 + h2)
+    inter_w = max(0, xi2 - xi1)
+    inter_h = max(0, yi2 - yi1)
+    inter_area = inter_w * inter_h
+    union_area = (w1 * h1) + (w2 * h2) - inter_area
+    return inter_area / union_area if union_area > 0 else 0.0
+
+
 class FaceRecognizer:
     """Class quản lý việc nhận diện khuôn mặt."""
     def __init__(self, config: FaceConfig, models_dir: str = "models") -> None:
@@ -51,6 +67,7 @@ class FaceRecognizer:
         self.detector = None
         self.recognizer = None
         self.known_embeddings: list[tuple[str, PersonType, np.ndarray]] = []
+        self._recent_known_tracks: list[tuple[float, str, PersonType, tuple[int, int, int, int]]] = []
         self._initialized = False
 
         self._init_models()
@@ -108,22 +125,24 @@ class FaceRecognizer:
 
     def parse_filename(self, filename: str) -> tuple[str, PersonType]:
         """Tách tên và loại đối tượng từ tên file.
-        Ví dụ: 'OngNoi_ATTENTION.jpg' -> ('OngNoi', PersonType.ATTENTION)
-               'Me_FAMILY.jpg' -> ('Me', PersonType.FAMILY)
+        Hỗ trợ nạp nhiều ảnh mẫu cho một người (ví dụ: 'An.jpg', 'An_1.jpg', 'An_2.jpg', 'An (1).jpg').
+        Ví dụ: 'OngNoi_ATTENTION.jpg', 'OngNoi_ATTENTION_1.jpg' -> ('OngNoi', PersonType.ATTENTION)
+               'Me_FAMILY.jpg', 'Me_FAMILY_2.jpg' -> ('Me', PersonType.FAMILY)
                'BaNoi.png' -> ('BaNoi', PersonType.FAMILY)
         """
         stem = Path(filename).stem
-        parts = stem.split("_")
+        cleaned_stem = re.sub(r'[\s_\-]+(?:\(\d+\)|\d+)$', '', stem)
+        parts = cleaned_stem.split("_")
         if len(parts) >= 2:
             tag = parts[-1].upper()
-            if tag == "ATTENTION" or tag == "VIP":
+            if tag in ("ATTENTION", "VIP"):
                 name = "_".join(parts[:-1])
                 return name, PersonType.ATTENTION
             elif tag == "FAMILY":
                 name = "_".join(parts[:-1])
                 return name, PersonType.FAMILY
 
-        return stem, PersonType.FAMILY
+        return cleaned_stem, PersonType.FAMILY
 
     def reload_known_faces(self) -> None:
         """Đọc toàn bộ ảnh mẫu trong thư mục known_faces_dir và trích xuất vector đặc trưng."""
@@ -184,6 +203,12 @@ class FaceRecognizer:
 
         results: list[RecognizedFace] = []
         h, w = frame.shape[:2]
+
+        current_time = time.time()
+        # Dọn dẹp các track nhận diện cũ hơn 2.5 giây
+        self._recent_known_tracks = [
+            t for t in self._recent_known_tracks if (current_time - t[0]) <= 2.5
+        ]
 
         if self._initialized and self.detector is not None and self.recognizer is None:
             # Haar Cascade fallback
@@ -258,18 +283,38 @@ class FaceRecognizer:
                     best_score = score
                     best_known = (known_name, person_type)
 
+            current_box = (max(0, fx), max(0, fy), max(0, fw), max(0, fh))
+
             if best_known and best_score >= threshold:
                 best_match_name, best_match_type = best_known
+                face_conf = min(0.99, max(0.50, float(best_score)))
+                self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
             else:
-                best_match_name = "Stranger"
-                best_match_type = PersonType.STRANGER
+                # Kiểm tra cơ chế giữ nhận diện nếu người quen vừa ở vị trí này bị che một phần mặt (IoU cao)
+                tracked_match = None
+                for t_time, t_name, t_type, t_box in reversed(self._recent_known_tracks):
+                    if _compute_iou(current_box, t_box) >= 0.30 and best_score >= (threshold * 0.70):
+                        tracked_match = (t_name, t_type)
+                        break
+
+                if tracked_match:
+                    best_match_name, best_match_type = tracked_match
+                    face_conf = min(0.95, max(0.60, float(best_score + 0.15)))
+                    self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
+                else:
+                    best_match_name = "Stranger"
+                    best_match_type = PersonType.STRANGER
+                    det_score = float(face[14]) if len(face) > 14 else 0.90
+                    stranger_divergence = max(0.0, 1.0 - best_score)
+                    # Tính độ tin cậy phát hiện người lạ dựa trên 70% YuNet + 30% độ sai biệt
+                    face_conf = min(0.99, max(0.70, det_score * 0.7 + stranger_divergence * 0.3))
 
             results.append(
                 RecognizedFace(
                     name=best_match_name,
                     person_type=best_match_type,
-                    box=(max(0, fx), max(0, fy), max(0, fw), max(0, fh)),
-                    confidence=float(best_score),
+                    box=current_box,
+                    confidence=float(face_conf),
                 )
             )
 

@@ -1,5 +1,18 @@
-Hãy bỏ các ảnh chụp khuôn mặt người thân vào thư mục này.
+HƯỚNG DẪN THÊM ẢNH NHẬN DIỆN KHUÔN MẶT ĐẠT ĐỘ CHÍNH XÁC CAO NHẤT
 
-Quy tắc đặt tên file:
-1. Người thân bình thường: Me_FAMILY.jpg hoặc Bo.jpg
-2. Người cần chú ý đặc biệt (VIP / Người già): OngNoi_ATTENTION.jpg hoặc BaNoi_VIP.jpg
+1. Quy tắc đặt tên file:
+   - Người thân bình thường:
+     + Ảnh chính: An.jpg hoặc An_FAMILY.jpg
+     + Thêm ảnh các góc khác: An_1.jpg, An_2.jpg, An_3.jpg (hệ thống tự động gom vào tên 'An')
+   - Người cần chú ý đặc biệt (VIP / Người già):
+     + OngNoi_ATTENTION.jpg hoặc BaNoi_VIP.jpg
+     + Thêm ảnh: OngNoi_ATTENTION_1.jpg, OngNoi_ATTENTION_2.jpg
+
+2. Bí quyết để nhận diện nhạy, không bị báo người lạ khi che mặt hoặc đổi góc:
+   - Mỗi người nên có từ 3 đến 5 ảnh mẫu:
+     + Ảnh 1: Chụp thẳng chính diện, đủ sáng, rõ nét mắt - mũi - miệng.
+     + Ảnh 2: Nghiêng nhẹ mặt sang trái khoảng 15-20 độ.
+     + Ảnh 3: Nghiêng nhẹ mặt sang phải khoảng 15-20 độ.
+     + Ảnh 4: Chụp góc thực tế từ camera/webcam nhìn vào (ví dụ hơi cúi xuống nhìn điện thoại, hoặc từ dưới lên).
+     + Ảnh 5: Có đeo kính / đội nón nếu người đó hay đeo lúc sinh hoạt.
+   - Tránh ảnh bị mờ nét, tối quá hoặc bị cháy sáng lóa mắt.

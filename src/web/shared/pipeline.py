@@ -101,6 +101,7 @@ class FallDetectionPipeline:
         self._recent_alerts: list[dict[str, Any]] = []
         self._runtime: dict[str, Any] | None = None
         self._last_stranger_alert_time: float = 0.0
+        self._stranger_consecutive_frames: int = 0
         from collections import deque
         self._frame_buffer = deque(maxlen=200)
 
@@ -244,17 +245,27 @@ class FallDetectionPipeline:
             _draw_faces(frame, cached_faces, person_type_colors, cv2)
 
             now_ts = time.time()
-            has_stranger = any(
-                (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
-                for f in cached_faces
-            )
-            if has_stranger and (now_ts - self._last_stranger_alert_time > 15.0):
-                self._last_stranger_alert_time = now_ts
-                stranger_id = f"STRANGER-{int(now_ts)}"
-                print(f"[Stranger Alert] Phát hiện người lạ! Chụp ảnh sạch & gửi server: {stranger_id}")
+            stranger_faces = [
+                f for f in cached_faces
+                if (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
+            ]
+            has_stranger = len(stranger_faces) > 0
+            if has_stranger:
+                self._stranger_consecutive_frames += 1
+            else:
+                self._stranger_consecutive_frames = max(0, self._stranger_consecutive_frames - 1)
 
-                # Gửi alert vào DB & Danh sách Web Dashboard
-                self._push_stranger_alert(stranger_id)
+            # Cần phát hiện người lạ liên tục ít nhất 8 frame (~0.8 - 1 giây) để tránh che mặt thoáng qua hoặc giật hình
+            if (self._stranger_consecutive_frames >= 8) and (now_ts - self._last_stranger_alert_time > 15.0):
+                self._last_stranger_alert_time = now_ts
+                self._stranger_consecutive_frames = 0
+                stranger_id = f"STRANGER-{int(now_ts)}"
+                best_face_conf = max((getattr(f, "confidence", 0.90) for f in stranger_faces), default=0.90)
+                conf_pct = min(99, max(75, int(round(best_face_conf * 100))))
+                print(f"[Stranger Alert] Phát hiện người lạ liên tục ({self._stranger_consecutive_frames} frames)! Độ tin cậy AI: {conf_pct}% - {stranger_id}")
+
+                # Gửi alert vào DB & Danh sách Web Dashboard với độ tin cậy động
+                self._push_stranger_alert(stranger_id, confidence=conf_pct)
 
                 # Kêu chuông cảnh báo
                 threading.Thread(target=_play_alert_sound, daemon=True).start()
@@ -381,7 +392,7 @@ class FallDetectionPipeline:
         except Exception as e:
             print(f"[Database Error] Khong the luu alert vao Turso: {e}")
 
-    def _push_stranger_alert(self, alert_id: str) -> None:
+    def _push_stranger_alert(self, alert_id: str, confidence: int = 90) -> None:
         from datetime import datetime
 
         alert = {
@@ -389,7 +400,7 @@ class FallDetectionPipeline:
             "time": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "camera": getattr(self, "camera_id", "CAM-LOCAL"),
             "person": "Người lạ xuất hiện",
-            "confidence": 95,
+            "confidence": confidence,
             "status": "Chưa xử lý",
             "level": "Cảnh báo",
             "media": alert_id,
@@ -513,7 +524,8 @@ class FallDetectionPipeline:
                         image_path=str(img_path) if img_path.exists() else None,
                         video_path=str(video_path) if (video_written and video_path.exists()) else None,
                         cloud_img_url=cloud_img_url,
-                        cloud_video_url=cloud_video_url
+                        cloud_video_url=cloud_video_url,
+                        alert_type="stranger" if alert_id.startswith("STRANGER-") else "fall"
                     )
                 except Exception as e:
                     print(f"[Notification Error] Khong gui duoc canh bao: {e}")
@@ -556,11 +568,11 @@ def _draw_status(frame, result, ai_prediction, state_colors, cv2, pose_detected:
         status_text = "SEARCHING POSE... | Camera Active"
 
     if ai_prediction and ai_prediction.enabled:
-        ai_text = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
+        ai_text = f"Fall AI: {ai_prediction.label.upper()} ({ai_prediction.probability:.2f}) | Face: YuNet"
         ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
     else:
-        ai_text = f"AI: Disabled | YuNet: active"
-        ai_color = (170, 175, 180)
+        ai_text = "Fall AI: MediaPipe Active | Face: YuNet"
+        ai_color = (70, 200, 90)
 
     font_scale = max(0.35, min(0.45, h / 950.0))
     font = cv2.FONT_HERSHEY_SIMPLEX

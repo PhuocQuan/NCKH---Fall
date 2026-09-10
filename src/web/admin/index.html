@@ -493,6 +493,67 @@
       transform: translateY(-1px);
       box-shadow: 0 6px 16px rgba(239, 68, 68, 0.25);
     }
+
+    /* Alert Tabboard Navigation */
+    .alert-tabboard {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 12px;
+      align-items: center;
+    }
+    .tabboard-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #475569;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    .tabboard-btn:hover {
+      transform: translateY(-1px);
+      border-color: #94a3b8;
+      background: #f8fafc;
+    }
+    .tabboard-btn.active.tab-fall {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #ffffff;
+      border-color: #ef4444;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    }
+    .tabboard-btn.active.tab-stranger {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #ffffff;
+      border-color: #f59e0b;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+    }
+    .tabboard-badge {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 999px;
+      transition: all 0.2s ease;
+    }
+    .tabboard-btn.active .tabboard-badge {
+      background: rgba(255, 255, 255, 0.28);
+      color: #ffffff;
+    }
+    .tabboard-btn:not(.active) .tabboard-badge.badge-fall {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    .tabboard-btn:not(.active) .tabboard-badge.badge-stranger {
+      background: #fef3c7;
+      color: #b45309;
+    }
   </style>
   <!-- MediaPipe dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -613,7 +674,7 @@ function loadStore(key, fallback) {
     ]);
 
     let settings = loadStore("fg_settings", {
-      confidence: 82, fall: 78, confirmSeconds: 10, email: true, telegram: true, sms: false, zalo: true, storageGb: 500, retentionDays: 180, cloud: true
+      confidence: 82, fall: 78, confirmSeconds: 10, telegram: true, storageGb: 500, retentionDays: 180
     });
 
     const logs = [
@@ -629,18 +690,19 @@ function loadStore(key, fallback) {
       ["Tổng quan", [["dashboard", "01", "Tổng quát", "Thống kê tổng quan camera, khách hàng và nơi lắp đặt"]]],
       ["Vận hành", [
         ["alerts", "02", "Lịch sử sự kiện té ngã", "Cảnh báo ngã và trạng thái xử lý"],
-        ["notifications", "03", "Quản lý thông báo Tele", "Cài đặt Telegram Bot"]
+        ["stranger_alerts", "03", "Cảnh báo người lạ", "Lịch sử phát hiện người lạ xâm nhập"],
+        ["notifications", "04", "Quản lý thông báo Tele", "Cài đặt Telegram Bot"]
       ]],
       ["Quản lý", [
-        ["users", "04", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
-        ["cameras", "05", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
+        ["users", "05", "Danh sách khách hàng", "Quản lý người dùng và cấp quyền xem camera"],
+        ["cameras", "06", "Quản lý camera", "Quản lý liên kết, đường dẫn RTSP camera"]
       ]],
       ["Dữ liệu", [
-        ["logs", "06", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
+        ["logs", "07", "Lịch sử đăng nhập", "Nhật ký truy cập và hoạt động của người dùng"]
       ]],
       ["Hệ thống", [
-        ["settings", "07", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
-        ["api", "08", "API Management", "Quản lý khóa API truy cập hệ thống"]
+        ["settings", "08", "Cài đặt hệ thống", "Ngưỡng AI và cấu hình lưu trữ"],
+        ["api", "09", "API Management", "Quản lý khóa API truy cập hệ thống"]
       ]]
     ];
 
@@ -680,6 +742,57 @@ function loadStore(key, fallback) {
     let selectedLocation = "";
     let alertsViewLevel = "locations"; // "locations", "alerts"
     let selectedAlertsLocation = "";
+    let strangerAlertsViewLevel = "locations"; // "locations", "alerts"
+    let selectedStrangerAlertsLocation = "";
+    let strangerAlertsCurrentPage = 1;
+
+    function isStrangerAlert(a) {
+      if (!a) return false;
+      if (a.state === "STRANGER_DETECTED" || a.state === "STRANGER") return true;
+      if (typeof a.id === "string" && a.id.startsWith("STRANGER-")) return true;
+      if (typeof a.person === "string" && (a.person.includes("Người lạ") || a.person.toLowerCase().includes("stranger"))) return true;
+      if (a.type === "stranger") return true;
+      return false;
+    }
+
+    function isFallAlert(a) {
+      return !isStrangerAlert(a);
+    }
+
+    function renderAlertTabs(activeTab) {
+      const visCamIds = getVisibleCameras().map(c => c.id);
+      const isPrivileged = currentUser.role === "Admin" || currentUser.role === "Quản lý";
+      const fallCount = alerts.filter(a => isFallAlert(a) && (isPrivileged || visCamIds.includes(a.camera))).length;
+      const strangerCount = alerts.filter(a => isStrangerAlert(a) && (isPrivileged || visCamIds.includes(a.camera))).length;
+
+      return `
+        <div class="alert-tabboard">
+          <button class="tabboard-btn ${activeTab === 'alerts' ? 'active tab-fall' : ''}" onclick="switchAlertsBoard('alerts')">
+            <span>🚨 Lịch sử té ngã</span>
+            <span class="tabboard-badge badge-fall">${fallCount}</span>
+          </button>
+          <button class="tabboard-btn ${activeTab === 'stranger_alerts' ? 'active tab-stranger' : ''}" onclick="switchAlertsBoard('stranger_alerts')">
+            <span>👤 Cảnh báo người lạ</span>
+            <span class="tabboard-badge badge-stranger">${strangerCount}</span>
+          </button>
+        </div>
+      `;
+    }
+
+    window.switchAlertsBoard = function(targetTab) {
+      if (targetTab === "stranger_alerts") {
+        if (alertsViewLevel === "alerts" && selectedAlertsLocation) {
+          selectedStrangerAlertsLocation = selectedAlertsLocation;
+          strangerAlertsViewLevel = "alerts";
+        }
+      } else {
+        if (strangerAlertsViewLevel === "alerts" && selectedStrangerAlertsLocation) {
+          selectedAlertsLocation = selectedStrangerAlertsLocation;
+          alertsViewLevel = "alerts";
+        }
+      }
+      render(targetTab);
+    };
     let mediaViewLevel = "locations"; // "locations", "media"
     let selectedMediaLocation = "";
     let alertsLocationFilter = "Tất cả";
@@ -1154,14 +1267,16 @@ function loadStore(key, fallback) {
       const online = visCameras.filter(c => c.status === "online").length;
       const offline = visCameras.filter(c => c.status === "offline").length;
       const totalCustomers = users.filter(u => u.role !== "Admin").length;
-      const filteredAlertsToday = alerts.filter(a => a.time.includes(new Date().toLocaleDateString('vi-VN').split(' ')[0]));
-      const filteredPendingAlerts = alerts.filter(a => a.status === "Chưa xử lý");
+      const todayStr = new Date().toLocaleDateString('vi-VN').split(' ')[0];
+      const filteredFallAlertsToday = alerts.filter(a => isFallAlert(a) && a.time.includes(todayStr));
+      const filteredPendingFall = alerts.filter(a => isFallAlert(a) && a.status === "Chưa xử lý");
+      const strangerPendingCount = alerts.filter(a => isStrangerAlert(a) && a.status === "Chưa xử lý").length;
       
       return `<div class="grid kpis">
         ${card("", `<div class="kpi"><div class="ico blue">CAM</div><div><div class="kpi-label">Tổng số camera</div><div class="kpi-value">${visCameras.length}</div><div class="hint">${online} đang hoạt động, ${offline} ko hoạt động</div></div></div>`)}
         ${card("", `<div class="kpi"><div class="ico green">ON</div><div><div class="kpi-label">Camera đang hoạt động</div><div class="kpi-value">${online}</div><div class="hint">Kết nối realtime ổn định</div></div></div>`)}
         ${card("", `<div class="kpi"><div class="ico violet">KH</div><div><div class="kpi-label">Danh sách khách hàng</div><div class="kpi-value">${totalCustomers}</div><div class="hint">Tài khoản khách hàng</div></div></div>`)}
-        ${card("", `<div class="kpi"><div class="ico red">AL</div><div><div class="kpi-label">Té ngã hôm nay</div><div class="kpi-value">${filteredAlertsToday.length}</div><div class="hint">${filteredPendingAlerts.length} cảnh báo chưa xử lý</div></div></div>`)}
+        ${card("", `<div class="kpi"><div class="ico red">AL</div><div><div class="kpi-label">Té ngã hôm nay</div><div class="kpi-value">${filteredFallAlertsToday.length}</div><div class="hint">${filteredPendingFall.length} té ngã chờ | ${strangerPendingCount} người lạ chờ</div></div></div>`)}
       </div>`;
     }
 
@@ -1357,10 +1472,38 @@ function loadStore(key, fallback) {
     };
 
     window.deleteAllAdminAlerts = async function() {
-      if (!confirm("Bạn có chắc chắn muốn xóa TẤT CẢ cảnh báo? Hành động này sẽ xóa vĩnh viễn toàn bộ dữ liệu trên hệ thống.")) {
+      const isStranger = currentView === "stranger_alerts";
+      const viewLabel = isStranger ? "cảnh báo người lạ" : "cảnh báo té ngã";
+      
+      let targetAlerts = [];
+      if (isStranger) {
+        if (strangerAlertsViewLevel === "alerts" && selectedStrangerAlertsLocation) {
+          const house = getVisibleHouses().find(h => h.name === selectedStrangerAlertsLocation);
+          const camIds = house ? house.cameras.map(id => cameraById(id)).filter(Boolean).map(c => c.id) : [];
+          targetAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
+        } else {
+          targetAlerts = alerts.filter(a => isStrangerAlert(a));
+        }
+      } else {
+        if (alertsViewLevel === "alerts" && selectedAlertsLocation) {
+          const house = getVisibleHouses().find(h => h.name === selectedAlertsLocation);
+          const camIds = house ? house.cameras.map(id => cameraById(id)).filter(Boolean).map(c => c.id) : [];
+          targetAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
+        } else {
+          targetAlerts = alerts.filter(a => isFallAlert(a));
+        }
+      }
+
+      if (targetAlerts.length === 0) {
+        alert(`Không có ${viewLabel} nào để xóa.`);
+        return;
+      }
+
+      if (!confirm(`Bạn có chắc chắn muốn xóa TẤT CẢ ${targetAlerts.length} ${viewLabel}? Hành động này sẽ xóa vĩnh viễn trên hệ thống.`)) {
         return;
       }
       
+      const ids = targetAlerts.map(a => a.id);
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1369,23 +1512,23 @@ function loadStore(key, fallback) {
               "Content-Type": "application/json",
               Authorization: `Bearer ${authToken}`
             },
-            body: JSON.stringify({ delete_all: true })
+            body: JSON.stringify({ ids: ids, delete_all: false })
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || "Lỗi khi xóa toàn bộ cảnh báo.");
+            alert(err.detail || `Lỗi khi xóa ${viewLabel}.`);
             return;
           }
         } catch (e) {
-          alert("Lỗi kết nối khi xóa toàn bộ cảnh báo.");
+          alert(`Lỗi kết nối khi xóa ${viewLabel}.`);
           return;
         }
       }
       
-      alerts = [];
+      alerts = alerts.filter(a => !ids.includes(a.id));
       saveStore("fg_alerts", alerts);
       render(currentView);
-      toast("Đã xóa toàn bộ cảnh báo thành công!");
+      toast(`Đã xóa thành công ${ids.length} ${viewLabel}!`);
     };
 
     window.filterUserAlertsTable = function() {
@@ -1599,15 +1742,16 @@ function loadStore(key, fallback) {
           </div>
         `)}
       </div>`,
-            alerts: () => {
+      alerts: () => {
         const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý" || currentUser.role === "Nhân viên y tế";
         const houses = getVisibleHouses();
+        const tabsHtml = renderAlertTabs('alerts');
         
         if (alertsViewLevel === "locations") {
           const locationCardsHtml = houses.map(house => {
             const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
             const camIds = camsInHouse.map(c => c.id);
-            const houseAlerts = alerts.filter(a => camIds.includes(a.camera));
+            const houseAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
             const totalAlerts = houseAlerts.length;
             const pendingAlerts = houseAlerts.filter(a => a.status === "Chưa xử lý").length;
             
@@ -1618,7 +1762,7 @@ function loadStore(key, fallback) {
                 <div style="font-size: 13px; color: var(--gray-600);">
                   <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
                   <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
-                    <span class="pill blue small" style="padding: 2px 6px; font-size: 11px;">${totalAlerts} cảnh báo</span>
+                    <span class="pill blue small" style="padding: 2px 6px; font-size: 11px;">${totalAlerts} cảnh báo té ngã</span>
                     ${pendingAlerts > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${pendingAlerts} chờ xử lý</span>` : '<span class="pill green small" style="padding: 2px 6px; font-size: 11px;">Đã xử lý xong</span>'}
                   </div>
                 </div>
@@ -1627,9 +1771,10 @@ function loadStore(key, fallback) {
           }).join("");
 
           return `
+            ${tabsHtml}
             <div style="margin-bottom: 20px;">
-              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo)</h3>
-              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo tại đó.</p>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo té ngã)</h3>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo té ngã tại đó.</p>
             </div>
             <div class="grid three" style="gap: 20px;">
               ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
@@ -1641,7 +1786,7 @@ function loadStore(key, fallback) {
           const house = houses.find(h => h.name === selectedAlertsLocation);
           const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
           const camIds = camsInHouse.map(c => c.id);
-          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera));
+          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
 
           const totalAlerts = filteredAlerts.length;
           const totalPages = Math.max(1, Math.ceil(totalAlerts / adminAlertsPerPage));
@@ -1664,7 +1809,7 @@ function loadStore(key, fallback) {
           const paginationHtml = `
             <div class="pagination-bar" style="margin-top: 16px;">
               <span style="font-size: 13px; color: var(--gray-600);">
-                Hiển thị từ <strong>${totalAlerts > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalAlerts}</strong> cảnh báo
+                Hiển thị từ <strong>${totalAlerts > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalAlerts}</strong> cảnh báo té ngã
               </span>
               <div class="pagination-controls">
                 ${pagesHtml}
@@ -1673,6 +1818,7 @@ function loadStore(key, fallback) {
           `;
 
           return `
+            ${tabsHtml}
             <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
               <button class="btn line" onclick="alertsViewLevel='locations'; render('alerts', false);">← Quay lại Nơi lắp đặt</button>
               <div style="display: flex; gap: 8px;">
@@ -1686,12 +1832,115 @@ function loadStore(key, fallback) {
             </div>
             ${table([
               `<input type="checkbox" id="selectAllAdminAlerts" onclick="toggleSelectAllAdminAlerts(this)" style="cursor: pointer; width: 16px; height: 16px;">`,
-              "Mã cảnh báo", "Thời gian", "Camera", "Người phát hiện", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
+              "Mã cảnh báo", "Thời gian", "Camera", "Cảnh báo", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
             ], pageAlerts.map(a => {
               const imgUrl = a.id.startsWith("AL-20260615-") ? a.media : (a.cloud_img_url || `/api/media/${esc(a.id)}.jpg`);
               return [
                 `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
                 a.id, a.time, a.camera, a.person, `<img src="${imgUrl}" onclick="openModal('Ảnh sự kiện ${esc(a.id)}', \`<img src='${imgUrl}' style='width:100%; border-radius:8px;' onerror='this.src=\\\\\\'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60\\\\\\'' >\`, \`<button class='btn block line' onclick='closeModal()'>Đóng</button>\`)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(!this.src.includes('unsplash')){this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=100&auto=format&fit=crop&q=60';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+                isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
+              ];
+            }))}
+            ${paginationHtml}
+          `;
+        }
+      },
+      stranger_alerts: () => {
+        const isEditable = currentUser.role === "Admin" || currentUser.role === "Quản lý" || currentUser.role === "Nhân viên y tế";
+        const houses = getVisibleHouses();
+        const tabsHtml = renderAlertTabs('stranger_alerts');
+        
+        if (strangerAlertsViewLevel === "locations") {
+          const locationCardsHtml = houses.map(house => {
+            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const camIds = camsInHouse.map(c => c.id);
+            const houseStrangerAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
+            const totalAlerts = houseStrangerAlerts.length;
+            const pendingAlerts = houseStrangerAlerts.filter(a => a.status === "Chưa xử lý").length;
+            
+            return `
+              <div class="location-card animate-hover" onclick="selectedStrangerAlertsLocation='${esc(house.name)}'; strangerAlertsViewLevel='alerts'; render('stranger_alerts', false);" style="cursor: pointer; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-top: 15px;">
+                <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+                <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${esc(house.name)}</h3>
+                <div style="font-size: 13px; color: var(--gray-600);">
+                  <div>Nơi lắp đặt: <strong>${esc(house.name)}</strong></div>
+                  <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                    <span class="pill amber small" style="padding: 2px 6px; font-size: 11px; background:#fef3c7; color:#b45309;">${totalAlerts} cảnh báo người lạ</span>
+                    ${pendingAlerts > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${pendingAlerts} chờ xử lý</span>` : '<span class="pill green small" style="padding: 2px 6px; font-size: 11px;">Đã xử lý xong</span>'}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          return `
+            ${tabsHtml}
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo người lạ)</h3>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo phát hiện người lạ tại đó.</p>
+            </div>
+            <div class="grid three" style="gap: 20px;">
+              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+            </div>
+          `;
+        }
+
+        if (strangerAlertsViewLevel === "alerts") {
+          const house = houses.find(h => h.name === selectedStrangerAlertsLocation);
+          const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
+          const camIds = camsInHouse.map(c => c.id);
+          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
+
+          const totalAlerts = filteredAlerts.length;
+          const totalPages = Math.max(1, Math.ceil(totalAlerts / adminAlertsPerPage));
+          if (strangerAlertsCurrentPage > totalPages) strangerAlertsCurrentPage = totalPages;
+          if (strangerAlertsCurrentPage < 1) strangerAlertsCurrentPage = 1;
+          const startIndex = (strangerAlertsCurrentPage - 1) * adminAlertsPerPage;
+          const endIndex = Math.min(startIndex + adminAlertsPerPage, totalAlerts);
+          const pageAlerts = filteredAlerts.slice(startIndex, endIndex);
+
+          let pagesHtml = "";
+          const prevDisabled = strangerAlertsCurrentPage === 1 ? "disabled" : "";
+          pagesHtml += `<button class="pagination-btn" ${prevDisabled} onclick="strangerAlertsCurrentPage=${strangerAlertsCurrentPage - 1}; render('stranger_alerts', false)">Trước</button>`;
+          for (let i = 1; i <= totalPages; i++) {
+            const activeClass = i === strangerAlertsCurrentPage ? "active" : "";
+            pagesHtml += `<button class="pagination-btn ${activeClass}" onclick="strangerAlertsCurrentPage=${i}; render('stranger_alerts', false)">${i}</button>`;
+          }
+          const nextDisabled = strangerAlertsCurrentPage === totalPages ? "disabled" : "";
+          pagesHtml += `<button class="pagination-btn" ${nextDisabled} onclick="strangerAlertsCurrentPage=${strangerAlertsCurrentPage + 1}; render('stranger_alerts', false)">Sau</button>`;
+          
+          const paginationHtml = `
+            <div class="pagination-bar" style="margin-top: 16px;">
+              <span style="font-size: 13px; color: var(--gray-600);">
+                Hiển thị từ <strong>${totalAlerts > 0 ? startIndex + 1 : 0}</strong> đến <strong>${endIndex}</strong> trong tổng số <strong>${totalAlerts}</strong> cảnh báo người lạ
+              </span>
+              <div class="pagination-controls">
+                ${pagesHtml}
+              </div>
+            </div>
+          `;
+
+          return `
+            ${tabsHtml}
+            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <button class="btn line" onclick="strangerAlertsViewLevel='locations'; render('stranger_alerts', false);">← Quay lại Nơi lắp đặt</button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn danger small" onclick="deleteSelectedAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa mục đã chọn</button>
+                <button class="btn danger small" onclick="deleteAllAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa tất cả</button>
+              </div>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedStrangerAlertsLocation)}</h3>
+              <p class="hint" style="margin: 0;">Danh sách các sự kiện phát hiện người lạ tại khu vực này.</p>
+            </div>
+            ${table([
+              `<input type="checkbox" id="selectAllAdminAlerts" onclick="toggleSelectAllAdminAlerts(this)" style="cursor: pointer; width: 16px; height: 16px;">`,
+              "Mã cảnh báo", "Thời gian", "Camera", "Cảnh báo", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
+            ], pageAlerts.map(a => {
+              const imgUrl = a.cloud_img_url || `/api/media/${esc(a.id)}.jpg`;
+              return [
+                `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
+                a.id, a.time, a.camera, `<span style="font-weight:600; color:#b45309;">${esc(a.person || "Người lạ")}</span>`, `<img src="${imgUrl}" onclick="openModal('Ảnh sự kiện ${esc(a.id)}', \`<img src='${imgUrl}' style='width:100%; border-radius:8px;' onerror='this.src=\\\\\\'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60\\\\\\'' >\`, \`<button class='btn block line' onclick='closeModal()'>Đóng</button>\`)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(!this.src.includes('unsplash')){this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=100&auto=format&fit=crop&q=60';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
                 isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
               ];
             }))}
@@ -1914,7 +2163,7 @@ function loadStore(key, fallback) {
             </div>
             
             <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--gray-500); text-align: center;">
-              Để cấu hình nhận thông báo qua Telegram hoặc Zalo, quý khách vui lòng bật switch cài đặt tương ứng trong mục <strong>09 Cài đặt hệ thống</strong>.
+              Để cấu hình nhận thông báo qua Telegram, quý khách vui lòng bật switch cài đặt tương ứng trong mục <strong>08 Cài đặt hệ thống</strong>.
             </div>
           </div>
         `;
@@ -2377,7 +2626,7 @@ function loadStore(key, fallback) {
           <label class="field"><span>Thời gian lưu (ngày)</span><input class="control" name="retentionDays" type="number" value="${esc(settings.retentionDays)}"></label>
         </div>
         <div class="grid three" style="margin:14px 0">
-          ${["email","telegram","sms","zalo","cloud"].map(k => `<label class="setting-row card"><span>${k.toUpperCase()}</span><input class="switch" type="checkbox" name="${k}" ${settings[k] ? "checked" : ""}></label>`).join("")}
+          <label class="setting-row card"><span>TELEGRAM</span><input class="switch" type="checkbox" name="telegram" ${settings.telegram ? "checked" : ""}></label>
         </div>
         <button class="btn primary">Lưu cài đặt</button>
       </form>`;
@@ -3634,7 +3883,7 @@ function loadStore(key, fallback) {
                 }
               } else {
                 const local = alerts[localIndex];
-                if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status) {
+                if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status || local.confidence !== backendAlert.confidence) {
                   alerts[localIndex] = { ...local, ...backendAlert };
                   changed = true;
                 }
@@ -3643,7 +3892,7 @@ function loadStore(key, fallback) {
             if (changed) {
               saveAll();
               updatePendingAlertsCount();
-              if (currentView === "alerts" || currentView === "media" || currentView === "user_alerts" || currentView === "user_history") {
+              if (currentView === "alerts" || currentView === "stranger_alerts" || currentView === "media" || currentView === "user_alerts" || currentView === "user_history") {
                 render(currentView, false);
               }
             }
@@ -3690,17 +3939,26 @@ function loadStore(key, fallback) {
     function updatePendingAlertsCount() {
       const visCamIds = getVisibleCameras().map(c => c.id);
       const isPrivileged = currentUser.role === "Admin" || currentUser.role === "Quản lý";
-      const pendingCount = alerts.filter(a => a.status === "Chưa xử lý" && (isPrivileged || visCamIds.includes(a.camera))).length;
+      const pendingFall = alerts.filter(a => a.status === "Chưa xử lý" && isFallAlert(a) && (isPrivileged || visCamIds.includes(a.camera))).length;
+      const pendingStranger = alerts.filter(a => a.status === "Chưa xử lý" && isStrangerAlert(a) && (isPrivileged || visCamIds.includes(a.camera))).length;
+      const totalPending = pendingFall + pendingStranger;
+
       const badge = $("pendingAlertsBadge");
       if (badge) {
-        badge.textContent = `${pendingCount} cảnh báo chờ`;
-        badge.style.display = pendingCount > 0 ? "inline-flex" : "none";
+        badge.textContent = `${totalPending} cảnh báo chờ`;
+        badge.style.display = totalPending > 0 ? "inline-flex" : "none";
       }
       
       const navAlertBadge = document.querySelector("[data-view='alerts'] .badge") || document.querySelector("[data-view='user_alerts'] .badge");
       if (navAlertBadge) {
-        navAlertBadge.textContent = pendingCount;
-        navAlertBadge.style.display = pendingCount > 0 ? "inline-block" : "none";
+        navAlertBadge.textContent = pendingFall;
+        navAlertBadge.style.display = pendingFall > 0 ? "inline-block" : "none";
+      }
+
+      const navStrangerBadge = document.querySelector("[data-view='stranger_alerts'] .badge");
+      if (navStrangerBadge) {
+        navStrangerBadge.textContent = pendingStranger;
+        navStrangerBadge.style.display = pendingStranger > 0 ? "inline-block" : "none";
       }
     }
 
@@ -3714,6 +3972,8 @@ function loadStore(key, fallback) {
           let badgeHtml = "";
           if (id === "alerts" || id === "user_alerts") {
             badgeHtml = '<span class="badge" id="alertNavBadge">0</span>';
+          } else if (id === "stranger_alerts") {
+            badgeHtml = '<span class="badge" id="strangerAlertNavBadge" style="background:var(--amber, #f59e0b);">0</span>';
           } else if (id === "user_notifications") {
             badgeHtml = '<span class="badge" id="notifNavBadge" style="background:var(--blue)">0</span>';
           }
@@ -3729,6 +3989,7 @@ function loadStore(key, fallback) {
           liveViewLevel = isUser ? "cameras" : "locations";
         }
         if (viewId === "alerts") alertsViewLevel = "locations";
+        if (viewId === "stranger_alerts") strangerAlertsViewLevel = "locations";
         if (viewId === "media") mediaViewLevel = "locations";
         render(viewId);
       }));
@@ -3771,7 +4032,7 @@ function loadStore(key, fallback) {
       }
 
       // Sync alerts from backend automatically when viewing alerts or media
-      if (fetchSync && (id === "alerts" || id === "media" || id === "user_alerts" || id === "user_history")) {
+      if (fetchSync && (id === "alerts" || id === "stranger_alerts" || id === "media" || id === "user_alerts" || id === "user_history")) {
         syncAlertsAndEvents();
       }
       
@@ -3861,7 +4122,7 @@ function loadStore(key, fallback) {
 
     document.addEventListener("click", async (event) => {
       if (event.target.matches("[data-action='notify']")) {
-        toast("Đã gửi thông báo thử qua Web, Email, Telegram, SMS và Zalo OA.");
+        toast("Đã gửi thông báo thử qua Telegram.");
       }
       if (event.target.matches("[data-view-shortcut='live']")) { liveViewLevel = "locations"; render("dashboard"); }
       if (event.target.matches("[data-action='test-notif-channel']")) {
@@ -4112,18 +4373,25 @@ function loadStore(key, fallback) {
               </div>
             `;
           }
+          const isStranger = isStrangerAlert(alertItem);
+          const alertHeaderTitle = isStranger ? "CẢNH BÁO PHÁT HIỆN NGƯỜI LẠ" : "CẢNH BÁO TÉ NGÃ";
+          const alertCardBg = isStranger ? "#fffbeb" : "#fff5f5";
+          const alertCardBorder = isStranger ? "#fef3c7" : "#fee2e2";
+          const alertTextColor = isStranger ? "var(--amber, #d97706)" : "var(--red)";
+
           const content = `
             <div style="display:flex; flex-direction:column; gap:16px;">
               <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
                 <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';}">
               </div>
               ${videoHtml}
-              <div class="card" style="background:#fff5f5; border:1px solid #fee2e2;">
+              <div class="card" style="background:${alertCardBg}; border:1px solid ${alertCardBorder};">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                  <strong style="color:var(--red); font-size:16px;">CẢNH BÁO TÉ NGÃ</strong>
+                  <strong style="color:${alertTextColor}; font-size:16px;">${alertHeaderTitle}</strong>
                   ${statusPill(alertItem.level)}
                 </div>
                 <div class="metric-row"><span>Thời gian</span><strong>${alertItem.time}</strong></div>
+                <div class="metric-row"><span>Cảnh báo</span><strong>${esc(alertItem.person || (isStranger ? "Người lạ" : "Chưa rõ"))}</strong></div>
                 <div class="metric-row"><span>Độ tin cậy AI</span><strong>${alertItem.confidence}%</strong></div>
                 <div class="metric-row"><span>Trạng thái</span><strong>${statusPill(alertItem.status)}</strong></div>
               </div>
@@ -4450,11 +4718,7 @@ function loadStore(key, fallback) {
           confirmSeconds: Number(data.confirmSeconds),
           storageGb: Number(data.storageGb),
           retentionDays: Number(data.retentionDays),
-          email: Boolean(data.email),
           telegram: Boolean(data.telegram),
-          sms: Boolean(data.sms),
-          zalo: Boolean(data.zalo),
-          cloud: Boolean(data.cloud),
         };
         saveAll();
         toast("Đã lưu cài đặt hệ thống.");

@@ -1,5 +1,3 @@
-"""Module hỗ trợ gửi cảnh báo thực tế qua Telegram, Email SMTP và SMS."""
-
 """
 File: src/web/shared/notifications.py
 Chức năng chính: Gửi tin nhắn cảnh báo qua Telegram (thông qua Bot).
@@ -193,9 +191,14 @@ def send_all_alerts(
     image_path: str | None = None,
     video_path: str | None = None,
     cloud_img_url: str | None = None,
-    cloud_video_url: str | None = None
+    cloud_video_url: str | None = None,
+    alert_type: str | None = None,
 ) -> None:
-    msg = f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện sự cố té ngã tại hệ thống FallGuard! Mã cảnh báo: {alert_id}."
+    is_stranger = (alert_type == "stranger") or (isinstance(alert_id, str) and alert_id.upper().startswith("STRANGER"))
+    if is_stranger:
+        msg = f"⚠️ CẢNH BÁO NGƯỜI LẠ: Phát hiện người lạ tại hệ thống FallGuard! Mã cảnh báo: {alert_id}."
+    else:
+        msg = f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện sự cố té ngã tại hệ thống FallGuard! Mã cảnh báo: {alert_id}."
     
     if cloud_img_url or cloud_video_url:
         msg += "\n☁️ Link Cloud Backup:\n"
@@ -205,5 +208,3 @@ def send_all_alerts(
             msg += f"- Video: {cloud_video_url}\n"
             
     send_telegram_alert(msg, image_path, video_path)
-    send_email_alert(f"[FallGuard Alert] Phát hiện té ngã {alert_id}", msg, image_path)
-    send_sms_alert(msg)

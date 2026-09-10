@@ -165,7 +165,7 @@
       { email: "guest@nckh.vn", name: "Quân", role: "Khachhang", status: "Bị khóa", assignedCameras: [] }
     ]);
 
-    let settings = loadStore("fg_settings", { confidence: 75, fall: 60, confirmSeconds: 3, storageGb: 50, retentionDays: 30, email: true, telegram: true, sms: false, zalo: false, cloud: true });
+    let settings = loadStore("fg_settings", { confidence: 75, fall: 60, confirmSeconds: 3, storageGb: 50, retentionDays: 30, telegram: true });
     let apiKeys = loadStore("fg_api_keys", [{ name: "Khu A IoT Gateway", desc: "Kết nối thiết bị báo động đầu giường", status: "Hoạt động", key: "fg_live_kpa_89237482" }]);
     let auditLogs = loadStore("fg_audit_logs", [{ time: "25/06/2026 09:12", user: "admin@nckh.vn", action: "Đăng nhập hệ thống", ip: "127.0.0.1" }]);
 
@@ -390,7 +390,7 @@
     };
 
     window.sendGeneralTestNotif = function(btn) {
-      alert("Đã gửi thông báo thử qua Web, Email, Telegram, SMS và Zalo OA.");
+      alert("Đã gửi thông báo thử qua Telegram.");
     };
 
     window.changeMobileLogsPage = function(page) {
@@ -803,11 +803,7 @@
 
             <div class="mobile-list">
               ${[
-                ["email", "Web & Email tự động", "Gửi thư điện tử kèm cảnh báo."],
-                ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."],
-                ["sms", "SMS tin nhắn", "Gửi tin nhắn SMS khẩn cấp tới số điện thoại."],
-                ["zalo", "Zalo OA cảnh báo", "Gửi cảnh báo qua tài khoản Zalo Official Account."],
-                ["cloud", "Cloud Backup", "Đồng bộ video sự kiện lên đám mây."]
+                ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."]
               ].map(([key, title, desc]) => {
                 const connectBtn = key === "telegram" ? `<button class="btn small primary" onclick="window.connectTelegramBot(this)" style="margin-right:8px;">Kết nối Bot</button>` : "";
                 return `
@@ -848,12 +844,10 @@
 
               <h4 style="margin:20px 0 14px;">Kênh thông báo cảnh báo</h4>
               <div class="mobile-list" style="margin-bottom:15px;">
-                ${["email", "telegram", "sms", "zalo", "cloud"].map(k => `
-                  <div class="mobile-list-card-row" style="background:#f8fafc; padding:8px 12px; border-radius:8px; margin-bottom:6px;">
-                    <span style="font-weight:600;">${k.toUpperCase()}</span>
-                    <input type="checkbox" class="switch" name="${k}" ${settings[k] ? "checked" : ""}>
-                  </div>
-                `).join("")}
+                <div class="mobile-list-card-row" style="background:#f8fafc; padding:8px 12px; border-radius:8px; margin-bottom:6px;">
+                  <span style="font-weight:600;">TELEGRAM</span>
+                  <input type="checkbox" class="switch" name="telegram" ${settings.telegram ? "checked" : ""}>
+                </div>
               </div>
               <button type="submit" class="btn primary block" style="width:100%; height:42px;">Lưu cài đặt</button>
             </form>
@@ -1239,11 +1233,7 @@
         confirmSeconds: Number(data.confirmSeconds),
         storageGb: settings.storageGb,
         retentionDays: settings.retentionDays,
-        email: Boolean(form.querySelector("[name='email']").checked),
-        telegram: Boolean(form.querySelector("[name='telegram']").checked),
-        sms: Boolean(form.querySelector("[name='sms']").checked),
-        zalo: Boolean(form.querySelector("[name='zalo']").checked),
-        cloud: Boolean(form.querySelector("[name='cloud']").checked),
+        telegram: Boolean(form.querySelector("[name='telegram']")?.checked),
       };
 
       saveAll();

@@ -1,6 +1,5 @@
-"""Xác thực đơn giản cho dashboard NCKH sử dụng JWT."""
+"""Xác thực đơn giản cho dashboard NCKH sử dụng JWT.
 
-"""
 File: src/web/shared/auth.py
 Chức năng chính: Mã hóa và kiểm tra mã xác thực (JWT Token).
 Giúp bảo mật API, đảm bảo chỉ người dùng đã đăng nhập mới gọi được API.
