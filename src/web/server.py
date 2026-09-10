@@ -29,7 +29,7 @@ PROJECT_ROOT = WEB_ROOT.parents[1]
 MEDIA_DIR = PROJECT_ROOT / "data" / "media"
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="FallGuard AI API", version="1.0.5")
+app = FastAPI(title="FallGuard AI API", version="1.0.6")
 
 # Database constraint exception handling
 @app.exception_handler(LibsqlError)
