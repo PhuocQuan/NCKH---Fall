@@ -21,7 +21,7 @@ Kiểm tra camera laptop trước:
 
 ```powershell
 pip install -r requirements-camera.txt
-python -m src.check_camera --camera 0
+python -m src.camera.check_camera --camera 0
 ```
 
 Cài đầy đủ để chạy phát hiện té ngã:
@@ -35,19 +35,19 @@ pip install -r requirements.txt
 ## Chạy demo webcam
 
 ```powershell
-python -m src.app --source 0
+python -m src.core.app --source 0
 ```
 
 Chạy với video:
 
 ```powershell
-python -m src.app --source path\to\video.mp4
+python -m src.core.app --source path\to\video.mp4
 ```
 
 Chạy với IP camera/RTSP trong tương lai:
 
 ```powershell
-python -m src.app --source rtsp://user:password@192.168.1.10:554/stream
+python -m src.core.app --source rtsp://user:password@192.168.1.10:554/stream
 ```
 
 ## Chạy test
@@ -79,3 +79,39 @@ Một sự kiện chỉ được ghi log cảnh báo khi có chuỗi chuyển đ
 * So sánh thuật toán ngưỡng với mô hình học máy như LSTM/GRU trên chuỗi landmark.
 * Đo các chỉ số Accuracy, Precision, Recall, F1-score, FPS.
 * Thêm cảnh báo qua email, Telegram, loa, hoặc dashboard web.
+
+## FallGuard App Client
+Các bản cập nhật về giao diện ứng dụng Flutter (thêm tính năng thông báo, xử lý video bằng video_player, sửa lại Android Manifest và chuẩn hóa UI/UX) có thể được tìm thấy trong thư mục [app_fall/README.md](app_fall/README.md).
+
+## Hướng dẫn Chạy Hệ thống & Tải iOS
+
+Chi tiết về cách chạy Server (Webcam), Cloudflare Tunnel, App Fall (Flutter) và tải bản build iOS (.ipa), vui lòng xem tại file: [app_fall/README.md](app_fall/README.md).
+
+### 1. Bật Server (Webcam & API)
+Mở terminal tại thư mục gốc của project (chứa src, app_fall, cloudflared.exe) và chạy:
+`powershell
+.\.venv\Scripts\Activate.ps1
+python -m src.web.server
+`
+Server sẽ chạy ở http://localhost:8000 và bật webcam để nhận diện.
+
+### 2. Bật Cloudflare Tunnel
+Mở một terminal khác tại thư mục gốc, chạy lệnh sau để public port 8000:
+`powershell
+.\cloudflared.exe tunnel --url http://localhost:8000
+`
+Copy đường link .trycloudflare.com được tạo ra. Dán link này vào file cấu hình API trong app Flutter (ví dụ: app_fall/lib/core/api_client.dart).
+
+### 3. Bật App Fall (Flutter)
+Mở một terminal khác tại thư mục app_fall:
+`powershell
+cd app_fall
+flutter run
+`
+Hoặc mở thư mục app_fall bằng Android Studio / VS Code để chạy.
+
+### Các bước tải iOS (File .ipa)
+1. Truy cập trang **Releases** của repository trên GitHub.
+2. Tải file FallGuard.ipa tại phần **Assets** của bản release mới nhất.
+3. Để cài đặt lên iPhone/iPad, sử dụng các công cụ Sideload như **Sideloadly**, **AltStore**, hoặc **TrollStore** (Cài qua máy tính).
+4. Sau khi cài đặt thành công, trên thiết bị iOS, vào **Cài đặt (Settings)** > **Cài đặt chung (General)** > **Quản lý thiết bị & VPN**, chọn tin cậy (Trust) chứng chỉ nhà phát triển để mở được app.

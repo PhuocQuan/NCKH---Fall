@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <script>
+    function checkRedirectBack() {
+      if (!/Mobi|Android|iPhone/i.test(navigator.userAgent) && window.innerWidth >= 768) {
+        window.location.replace("../user/index.html" + window.location.search);
+      }
+    }
+    checkRedirectBack();
+    window.addEventListener('resize', checkRedirectBack);
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FallGuard AI - Mobile User</title>
+  <link rel="stylesheet" href="mobile_user.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <section class="app" id="app">
+    <header class="header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="hamburger-btn" onclick="openMenuDrawer()">☰</button>
+        <span style="font-weight: 850; font-size: 18px; color: var(--blue);">FG Client</span>
+        <span class="pill green small" id="backendStatusPill" style="font-size: 10px; padding: 2px 6px; display: none;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <a href="tel:0356726513" class="mobile-hotline-btn" title="Gọi Hotline">
+          <span>📞</span>
+          <span>0356 726 513</span>
+        </a>
+        <div class="user">
+          <span id="headerUserName" style="display: none;"></span>
+          <button onclick="performLogout()" style="background: none; border: none; padding: 4px 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Đăng xuất">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main" style="flex: 1; overflow-y: auto;">
+      <div style="margin-bottom: 12px;">
+        <h2 id="pageTitle" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--ink);">Dashboard</h2>
+        <p id="pageSub" class="hint" style="margin: 4px 0 0 0; font-size: 12px; color: var(--muted);">Giám sát camera được phân quyền</p>
+      </div>
+      
+      <div id="content">
+        <!-- View Content Injected Here -->
+      </div>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="mobile-nav">
+      <button class="mobile-nav-item active" data-view="dashboard" onclick="switchTab('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Trang chủ</span>
+      </button>
+      <button class="mobile-nav-item" data-view="alerts" onclick="switchTab('alerts')">
+        <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 4l7.5 13h-15L12 6zm-1 3v4h2V9h-2zm0 6v2h2v-2h-2z"/></svg>
+        <span>Cảnh báo</span>
+      </button>
+      <button class="mobile-nav-item" data-view="notifications" onclick="switchTab('notifications')">
+        <svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        <span>Thông báo</span>
+      </button>
+      <button class="mobile-nav-item" data-view="profile" onclick="switchTab('profile')">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Hồ sơ</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- Sidebar Menu Drawer (for mobile screen) -->
+  <div class="menu-drawer-backdrop" id="menuDrawerBackdrop" onclick="closeMenuDrawer()"></div>
+  <div class="menu-drawer" id="menuDrawer">
+    <div class="menu-drawer-header">
+      <div class="menu-drawer-title">FallGuard AI</div>
+      <button class="menu-drawer-close" onclick="closeMenuDrawer()">✕</button>
+    </div>
+    <div class="menu-drawer-content">
+      
+      <div>
+        <div class="menu-drawer-group-title">TỔNG QUAN</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item active" id="drawer-dashboard" onclick="selectMenuView('dashboard')">
+            🏠 Trang chủ
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <div class="menu-drawer-group-title">GIÁM SÁT</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item" id="drawer-alerts" onclick="selectMenuView('alerts')">
+            ⚠️ Danh sách cảnh báo
+          </button>
+        </div>
+      </div>
+      
+      <div>
+        <div class="menu-drawer-group-title">CÁ NHÂN & LIÊN HỆ</div>
+        <div class="menu-drawer-items">
+          <button class="menu-drawer-item" id="drawer-contacts" onclick="selectMenuView('contacts')">
+            📞 Liên hệ khẩn cấp
+          </button>
+          <button class="menu-drawer-item" id="drawer-notifications" onclick="selectMenuView('notifications')">
+            🔔 Thông báo
+          </button>
+          <button class="menu-drawer-item" id="drawer-profile" onclick="selectMenuView('profile')">
+            ⚙️ Thông tin cá nhân
+          </button>
+        </div>
+      </div>
+
+    </div>
+    
+    <!-- Sidebar Footer (User Info & Logout) -->
+    <div class="menu-drawer-footer" id="menuDrawerFooter"></div>
+  </div>
+
+  <!-- Bottom Sheet / Modal Backdrop -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()"></div>
+
+  <script>
+    function loadStore(key, fallback) {
+      try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+    }
+    function saveStore(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    let cameras = loadStore("fg_cameras", [
+      { id: "CAM-001", name: "Camera phòng 101", ip: "192.168.1.101", rtsp: "rtsp://192.168.1.101/live", area: "Khu A", target: "BN-001", state: "normal", status: "online", fps: 30, resolution: "1920x1080", threshold: 78 },
+      { id: "CAM-002", name: "Camera hành lang A", ip: "192.168.1.102", rtsp: "rtsp://192.168.1.102/live", area: "Khu A", target: "BN-002", state: "walking", status: "online", fps: 25, resolution: "1280x720", threshold: 76 },
+      { id: "CAM-003", name: "Camera phòng 203", ip: "192.168.1.103", rtsp: "rtsp://192.168.1.103/live", area: "Khu B", target: "BN-003", state: "fallen", status: "online", fps: 30, resolution: "1920x1080", threshold: 82 },
+      { id: "CAM-004", name: "Camera phòng phục hồi", ip: "192.168.1.104", rtsp: "rtsp://192.168.1.104/live", area: "Khu C", target: "BN-004", state: "sitting", status: "maintenance", fps: 20, resolution: "1280x720", threshold: 74 },
+      { id: "CAM-005", name: "Camera phòng 305", ip: "192.168.1.105", rtsp: "rtsp://192.168.1.105/live", area: "Khu C", target: "BN-005", state: "normal", status: "offline", fps: 0, resolution: "1920x1080", threshold: 80 },
+      { id: "CAM-006", name: "Camera phòng khách", ip: "192.168.1.106", rtsp: "rtsp://192.168.1.106/live", area: "Nhà riêng", target: "BN-006", state: "lying", status: "online", fps: 30, resolution: "1920x1080", threshold: 75 }
+    ]);
+
+    let alerts = loadStore("fg_alerts", [
+      { id: "AL-20260615-001", time: "15/06/2026 16:22", camera: "CAM-003", person: "Nguyễn Văn Minh", confidence: 94, status: "Chưa xử lý", level: "Khẩn cấp", media: "Ảnh + video 12s" },
+      { id: "AL-20260615-002", time: "15/06/2026 14:10", camera: "CAM-006", person: "Lê Thị Hoa", confidence: 81, status: "Đang xử lý", level: "Cao", media: "Ảnh" },
+      { id: "AL-20260615-003", time: "15/06/2026 09:40", camera: "CAM-002", person: "Trần Văn An", confidence: 68, status: "Báo động giả", level: "Trung bình", media: "Video 8s" }
+    ]);
+
+    let users = loadStore("fg_users", [
+      { email: "bao@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] }
+    ]);
+
+    let monitoredProfile = loadStore("fg_monitored_profile", { name: "Nguyễn Văn Minh", age: 72, gender: "Nam", address: "Phòng 203, Khu B", emergencyContact: "Bảo (Con trai) - 0912345678" });
+    let emergencyContacts = loadStore("fg_emergency_contacts", [{ name: "Lê Thị Hoa", relationship: "Con gái", phone: "0987654321", email: "hoa@nckh.vn" }]);
+
+    let userNotifications = loadStore("fg_user_notifications", [
+      { id: "NT-001", type: "fall", title: "Cảnh báo ngã khẩn cấp", content: "Phát hiện té ngã tại Camera phòng 203 lúc 16:22 ngày 15/06/2026.", time: "15/06/2026 16:22", read: false },
+      { id: "NT-002", type: "disconnect", title: "Camera mất kết nối", content: "Camera phòng 305 đã mất kết nối lúc 13:00 ngày 15/06/2026.", time: "15/06/2026 13:00", read: true },
+      { id: "NT-003", type: "maintenance", title: "Hội hệ thống bảo trì", content: "Hệ thống FallGuard AI sẽ tiến hành bảo trì nâng cấp thuật toán từ 01:00 đến 03:00 ngày 20/06/2026.", time: "14/06/2026 18:00", read: true }
+    ]);
+
+    let currentUser = { email: "bao@nckh.vn", name: "Cao Đình Bảo", role: "Khachhang", phone: "0987.654.321", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
+    let authToken = localStorage.getItem("nckh_auth_token") || "";
+    let isBackendOnline = false;
+    let currentView = "dashboard";
+    let selectedCameraId = "";
+    
+    // Live stream control
+    let liveViewLevel = "locations"; // "locations", "cameras", "stream"
+    let selectedLocation = "";
+    let localStream = null;
+    let isPoseEstimating = false;
+    let aiFallTestOn = false;
+
+    // MediaPipe & Client-side Pose FallDetector state
+    const DETECTOR_CONFIG = {
+      torso_fall_angle_deg: 62,
+      torso_upright_angle_deg: 35,
+      head_hip_height_ratio: 0.18,
+      hip_drop_velocity: 0.035,
+      angle_change_velocity_deg: 18,
+      min_fall_frames: 7,
+      warning_frames: 3,
+      alert_after_seconds: 10,
+      alert_on_long_lying_without_fall: false,
+      assumed_fps: 30,
+      cooldown_frames: 20
+    };
+    let prevHipY = null;
+    let prevTorsoAngle = null;
+    let abnormalFrames = 0;
+    let lyingFrames = 0;
+    let recentUprightFrames = 0;
+    let fallCandidate = false;
+    let alertActive = false;
+    let cooldown = 0;
+
+    let audioCtx = null;
+    let alarmInterval = null;
+
+    function resetDetector() {
+      prevHipY = null;
+      prevTorsoAngle = null;
+      abnormalFrames = 0;
+      lyingFrames = 0;
+      recentUprightFrames = 0;
+      fallCandidate = false;
+      alertActive = false;
+      cooldown = 0;
+    }
+
+    function angleFromVertical(shoulder, hip) {
+      const dx = shoulder.x - hip.x;
+      const dy = shoulder.y - hip.y;
+      return Math.abs(Math.atan2(Math.abs(dx), Math.abs(dy)) * (180 / Math.PI));
+    }
+
+    function playAlarmSound() {
+      if (!window.AudioContext && !window.webkitAudioContext) return;
+      stopAlarmSound();
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      
+      let beepCount = 0;
+      alarmInterval = setInterval(() => {
+        if (beepCount >= 10) { // beep 10 times then stop
+          stopAlarmSound();
+          return;
+        }
+        
+        try {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          
+          osc.type = "sine";
+          // Siren sound sweep from 600Hz to 1200Hz
+          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+          osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+          
+          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+          
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.5);
+        } catch (e) {
+          console.error("Lỗi phát âm thanh alarm:", e);
+        }
+        
+        beepCount++;
+      }, 600);
+    }
+
+    function stopAlarmSound() {
+      if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+      }
+    }
+
+    // JS Implementation of FallDetector rules
+    function updateDetector(landmarks) {
+      const nose = landmarks[0];
+      const lShoulder = landmarks[11];
+      const rShoulder = landmarks[12];
+      const lHip = landmarks[23];
+      const rHip = landmarks[24];
+      
+      if (!nose || !lShoulder || !rShoulder || !lHip || !rHip) {
+        return null;
+      }
+      
+      // Midpoints
+      const shoulder = {
+        x: (lShoulder.x + rShoulder.x) / 2.0,
+        y: (lShoulder.y + rShoulder.y) / 2.0
+      };
+      const hip = {
+        x: (lHip.x + rHip.x) / 2.0,
+        y: (lHip.y + rHip.y) / 2.0
+      };
+      
+      const torsoAngle = angleFromVertical(shoulder, hip);
+      const headHipDelta = hip.y - nose.y;
+      
+      const hipVelocity = prevHipY === null ? 0.0 : hip.y - prevHipY;
+      const angleVelocity = prevTorsoAngle === null ? 0.0 : torsoAngle - prevTorsoAngle;
+      
+      prevHipY = hip.y;
+      prevTorsoAngle = torsoAngle;
+      
+      const torsoIsHorizontal = torsoAngle >= DETECTOR_CONFIG.torso_fall_angle_deg;
+      const torsoIsUpright = torsoAngle <= DETECTOR_CONFIG.torso_upright_angle_deg;
+      const headIsLow = headHipDelta <= DETECTOR_CONFIG.head_hip_height_ratio;
+      const hipDroppedFast = hipVelocity >= DETECTOR_CONFIG.hip_drop_velocity;
+      const bodyRotatedFast = angleVelocity >= DETECTOR_CONFIG.angle_change_velocity_deg;
+      const lying = torsoIsHorizontal && headIsLow;
+      
+      if (torsoIsUpright) {
+        recentUprightFrames = Math.min(recentUprightFrames + 1, 30);
+      } else {
+        recentUprightFrames = Math.max(0, recentUprightFrames - 1);
+      }
+      
+      const fallLikeTransition = torsoIsHorizontal && (
+        hipDroppedFast || bodyRotatedFast || recentUprightFrames >= 2
+      );
+      
+      if (fallLikeTransition) {
+        fallCandidate = true;
+      }
+      
+      if (lying) {
+        lyingFrames++;
+      } else {
+        lyingFrames = 0;
+        fallCandidate = false;
+        alertActive = false;
+      }
+      
+      const abnormal = lying && (
+        fallCandidate || DETECTOR_CONFIG.alert_on_long_lying_without_fall
+      );
+      
+      if (abnormal) {
+        abnormalFrames++;
+      } else {
+        abnormalFrames = Math.max(0, abnormalFrames - 1);
+      }
+      
+      let state = "normal";
+      let eventStarted = false;
+      const lyingSeconds = lyingFrames / Math.max(DETECTOR_CONFIG.assumed_fps, 1.0);
+      
+      if (abnormalFrames >= DETECTOR_CONFIG.min_fall_frames && lyingSeconds >= DETECTOR_CONFIG.alert_after_seconds) {
+        state = "alert";
+        if (!alertActive && cooldown === 0) {
+          eventStarted = true;
+          alertActive = true;
+          cooldown = DETECTOR_CONFIG.cooldown_frames;
+        }
+      } else if (abnormalFrames >= DETECTOR_CONFIG.min_fall_frames) {
+        state = "fallen";
+      } else if (abnormalFrames >= DETECTOR_CONFIG.warning_frames) {
+        state = "possible_fall";
+      } else if (lying) {
+        state = "lying";
+      } else if (abnormalFrames >= DETECTOR_CONFIG.warning_frames) {
+        state = "warning";
+      } else {
+        state = "normal";
+      }
+      
+      if (cooldown > 0) {
+        cooldown--;
+      }
+      
+      return {
+        state,
+        torsoAngle,
+        headHipDelta,
+        hipVelocity,
+        angleVelocity,
+        abnormalFrames,
+        lyingSeconds,
+        fallLikeTransition,
+        eventStarted
+      };
+    }
+
+
+    // Helpers
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    function card(title, body) { return `<div class="card" style="padding:16px; margin-bottom:14px;"><h3 style="margin:0 0 12px; font-size:14px; font-weight:700; color:var(--muted);">${title}</h3>${body}</div>`; }
+    function statusPill(status) {
+      const cls = status === "online" || status === "Đang hoạt động" || status === "Hoạt động" || status === "ĐANG CHẠY" || status === "NORMAL" || status === "WALKING" || status === "SITTING" || status === "LYING" ? "green" : status === "Bảo trì" || status === "maintenance" || status === "Đang xử lý" || status === "Warning" ? "amber" : "red";
+      return `<span class="pill ${cls}">${esc(status)}</span>`;
+    }
+    function apiBaseUrl() { return window.location.port === "5500" ? "http://127.0.0.1:8000" : window.location.origin; }
+
+    function getInitials(name) {
+      if (!name) return "US";
+      const words = name.trim().split(/\s+/);
+      if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+      const first = words[0].charAt(0);
+      const last = words[words.length - 1].charAt(0);
+      return (first + last).toUpperCase();
+    }
+
+    function formatRole(role) {
+      if (!role) return "User (Khách hàng)";
+      if (role.toLowerCase() === "admin") return "Quản trị viên";
+      if (role.toLowerCase() === "khachhang" || role.toLowerCase() === "user" || role.toLowerCase() === "khách hàng") return "User (Khách hàng)";
+      return role;
+    }
+
+    function updateDrawerFooter() {
+      const footerEl = $("menuDrawerFooter");
+      if (!footerEl) return;
+      const name = currentUser.name || "Khách hàng";
+      const initials = getInitials(name);
+      const displayRole = formatRole(currentUser.role);
+      
+      footerEl.innerHTML = `
+        <div class="menu-drawer-user-info">
+          <div class="menu-drawer-avatar">${esc(initials)}</div>
+          <div class="menu-drawer-user-detail">
+            <span class="menu-drawer-user-name">${esc(name)}</span>
+            <span class="menu-drawer-user-role">${esc(displayRole)}</span>
+          </div>
+        </div>
+        <button class="menu-drawer-logout-btn" onclick="performLogout()">Đăng xuất</button>
+      `;
+    }
+
+    function performLogout() {
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/auth/logout`, { method: "POST", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
+      }
+      localStorage.removeItem("nckh_auth_token");
+      localStorage.removeItem("nckh_current_user_email");
+      localStorage.removeItem("fg_monitored_profile");
+      localStorage.removeItem("fg_emergency_contacts");
+      localStorage.removeItem("fg_user_notifications");
+      window.location.replace("index.html");
+    }
+
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/health`);
+        if (res.ok) {
+          isBackendOnline = true;
+          const p = $("backendStatusPill");
+          if (p) { p.textContent = "AI Online"; p.className = "pill green small"; }
+          return true;
+        }
+      } catch (e) {}
+      isBackendOnline = false;
+      const p = $("backendStatusPill");
+      if (p) { p.textContent = "Simulator"; p.className = "pill grey small"; }
+      return false;
+    }
+
+    function saveAll() {
+      saveStore("fg_monitored_profile", monitoredProfile);
+      saveStore("fg_emergency_contacts", emergencyContacts);
+      saveStore("fg_user_notifications", userNotifications);
+      if (typeof syncAppStateToBackend === 'function') {
+        syncAppStateToBackend();
+      }
+    }
+
+    async function syncAppStateFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/appstate`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let changed = false;
+          
+          if (typeof monitoredProfile !== 'undefined' && data.monitored_profile_json) {
+            const remote = JSON.parse(data.monitored_profile_json);
+            if (JSON.stringify(remote) !== JSON.stringify(monitoredProfile)) {
+              monitoredProfile = remote;
+              saveStore("fg_monitored_profile", monitoredProfile);
+              changed = true;
+            }
+          }
+          if (typeof emergencyContacts !== 'undefined' && data.emergency_contacts_json) {
+            const remote = JSON.parse(data.emergency_contacts_json);
+            if (JSON.stringify(remote) !== JSON.stringify(emergencyContacts)) {
+              emergencyContacts = remote;
+              saveStore("fg_emergency_contacts", emergencyContacts);
+              changed = true;
+            }
+          }
+          if (typeof userNotifications !== 'undefined' && data.user_notifications_json) {
+            const remote = JSON.parse(data.user_notifications_json);
+            if (JSON.stringify(remote) !== JSON.stringify(userNotifications)) {
+              userNotifications = remote;
+              saveStore("fg_user_notifications", userNotifications);
+              changed = true;
+            }
+          }
+          
+          if (changed && typeof render === 'function') {
+            render(currentView, false);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate từ backend:", e);
+      }
+    }
+
+    async function syncAppStateToBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const payload = {};
+        if (typeof monitoredProfile !== 'undefined') payload.monitored_profile_json = JSON.stringify(monitoredProfile);
+        if (typeof emergencyContacts !== 'undefined') payload.emergency_contacts_json = JSON.stringify(emergencyContacts);
+        if (typeof userNotifications !== 'undefined') payload.user_notifications_json = JSON.stringify(userNotifications);
+        
+        await fetch(`${apiBaseUrl()}/api/appstate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error("Lỗi đồng bộ appstate lên backend:", e);
+      }
+    }
+
+    function selectCameraMobile(cameraId) {
+      const cam = cameras.find(c => c.id === cameraId);
+      if (cam) {
+        if (cam.status === "offline") {
+          alert(`Camera "${cam.name}" đang không hoạt động.`);
+          return;
+        }
+        if (cam.status === "maintenance" || cam.status === "Bảo trì") {
+          alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
+          return;
+        }
+      }
+      selectedCameraId = cameraId;
+      liveViewLevel = "stream";
+      switchTab("live");
+      // Auto-start camera khi click vào camera card
+      setTimeout(() => startTestCamera(), 150);
+    }
+
+    function aiStreamUrl() {
+      return `${apiBaseUrl()}/api/camera/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
+    }
+
+    async function backendLogin(force = false) {
+      if (authToken && !force) {
+        try {
+          const check = await fetch(`${apiBaseUrl()}/api/detection/status`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (check.status === 401) {
+            force = true;
+          } else {
+            return authToken;
+          }
+        } catch (e) {
+          return authToken;
+        }
+      }
+      
+      const savedEmail = localStorage.getItem("nckh_current_user_email") || "bao@nckh.vn";
+      const username = savedEmail;
+      const password = "nckh2025";
+      
+      const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.detail || "Không đăng nhập được backend AI.");
+      authToken = payload.token;
+      localStorage.setItem("nckh_auth_token", authToken);
+      return authToken;
+    }
+
+    // Modal Control (Bottom Sheet)
+    function openModal(title, body, footer = "") {
+      const b = $("modalBackdrop");
+      b.innerHTML = `
+        <div class="modal animate-slide-up">
+          <div class="modal-head">
+            <h3>${title}</h3>
+            <button onclick="closeModal()" style="background:none; border:none; font-size:16px; font-weight:bold; color:var(--muted);">✕</button>
+          </div>
+          <div class="modal-body">${body}</div>
+          ${footer ? `<div class="modal-foot">${footer}</div>` : ""}
+        </div>
+      `;
+      b.classList.add("open");
+    }
+
+    function closeModal() {
+      $("modalBackdrop").classList.remove("open");
+      stopTestCamera();
+    }
+
+    // Tab view logic
+    function switchTab(viewName) {
+      if (viewName !== "live") {
+        stopTestCamera(true);
+      }
+      currentView = viewName;
+      document.querySelectorAll(".mobile-nav-item").forEach(item => {
+        const targetView = item.dataset.view;
+        if (viewName === 'live') {
+          item.classList.toggle("active", targetView === 'dashboard');
+        } else {
+          item.classList.toggle("active", targetView === viewName);
+        }
+      });
+
+      // Sync drawer item highlight
+      let activeDrawerId = `drawer-${viewName}`;
+      document.querySelectorAll(".menu-drawer-item").forEach(item => {
+        item.classList.toggle("active", item.id === activeDrawerId);
+      });
+
+      render(viewName);
+    }
+
+    function openMenuDrawer() {
+      $("menuDrawer").classList.add("open");
+      $("menuDrawerBackdrop").classList.add("open");
+    }
+
+    function closeMenuDrawer() {
+      $("menuDrawer").classList.remove("open");
+      $("menuDrawerBackdrop").classList.remove("open");
+    }
+
+    function selectMenuView(viewName) {
+      closeMenuDrawer();
+      if (viewName === "dashboard") {
+        switchTab("dashboard");
+      } else if (viewName === "live") {
+        liveViewLevel = "locations";
+        switchTab("live");
+      } else if (viewName === "alerts") {
+        switchTab("alerts");
+      } else if (viewName === "profile" || viewName === "contacts") {
+        switchTab("profile");
+        if (viewName === "contacts") {
+          setTimeout(() => {
+            const cards = document.querySelectorAll(".card");
+            if (cards.length >= 2) cards[1].scrollIntoView({ behavior: "smooth" });
+          }, 100);
+        }
+      } else if (viewName === "notifications") {
+        switchTab("notifications");
+      }
+    }
+
+    function toggleReadNotification(idx) {
+      if (userNotifications[idx]) {
+        userNotifications[idx].read = !userNotifications[idx].read;
+        saveAll();
+        render(currentView);
+      }
+    }
+
+    function deleteNotification(idx) {
+      if (confirm("Xóa thông báo này?")) {
+        userNotifications.splice(idx, 1);
+        saveAll();
+        render(currentView);
+      }
+    }
+
+    function markAllNotificationsAsRead() {
+      userNotifications.forEach(n => n.read = true);
+      saveAll();
+      render(currentView);
+    }
+
+    function hasVideo(a) {
+      if (!a) return false;
+      const isMock = a.id === "AL-20260615-001" || a.id === "AL-20260615-002" || a.id === "AL-20260615-003";
+      if (isMock) {
+        return a.media && a.media.toLowerCase().includes("video");
+      }
+      if (a.cloud_video_url) return true;
+      if (a.media && a.media.toLowerCase().includes("video")) return true;
+      return false;
+    }
+
+    // Filter cameras permitted to current user
+    function getVisibleCameras() {
+      return cameras.filter(c => (currentUser.assignedCameras || []).includes(c.id));
+    }
+
+    function render(view, sync = true) {
+      if (sync) checkBackendStatus();
+      
+      const titleEl = $("pageTitle");
+      const subEl = $("pageSub");
+      const contentEl = $("content");
+
+      if (view === "dashboard") {
+        titleEl.textContent = "Trang chủ";
+        subEl.textContent = "Trạng thái các thiết bị bảo vệ người thân";
+        contentEl.innerHTML = views.dashboard();
+      } else if (view === "live") {
+        titleEl.textContent = "Giám sát Camera";
+        subEl.textContent = "Nhận luồng hình ảnh trực tiếp từ AI";
+        contentEl.innerHTML = views.live();
+      } else if (view === "alerts") {
+        titleEl.textContent = "Cảnh báo ngã";
+        subEl.textContent = "Nhật ký cảnh báo té ngã";
+        contentEl.innerHTML = views.alerts();
+      } else if (view === "profile") {
+        titleEl.textContent = "Hồ sơ";
+        subEl.textContent = "Cập nhật hồ sơ bệnh nhân và liên hệ";
+        contentEl.innerHTML = views.profile();
+      } else if (view === "notifications") {
+        titleEl.textContent = "Thông báo";
+        subEl.textContent = "Danh sách thông báo hệ thống";
+        contentEl.innerHTML = views.notifications();
+      }
+    }
+
+    const views = {
+      dashboard: () => {
+        const visCams = getVisibleCameras();
+
+        return `
+          ${card("Camera trực tiếp", `
+            <div class="mobile-list">
+              ${visCams.map(c => `
+                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
+                  <div class="mobile-list-card-row">
+                    <strong style="color:var(--ink); font-size:13px;">${esc(c.name)}</strong>
+                    <span>${statusPill(c.status)}</span>
+                  </div>
+                  <div style="font-size:11px; color:var(--muted); display:flex; justify-content:space-between; align-items:center;">
+                    <span>Nhãn AI: <strong>${c.state.toUpperCase()}</strong></span>
+                    <span style="color:var(--blue); font-weight:bold;">Nhấn để xem live →</span>
+                  </div>
+                </div>
+              `).join("")}
+              ${visCams.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Bạn chưa được cấp quyền xem camera nào.</div>` : ""}
+            </div>
+          `)}
+        `;
+      },
+
+      live: () => {
+        const visCams = getVisibleCameras();
+        const houses = Array.from(new Set(visCams.map(c => c.area || "Khác")));
+
+        if (liveViewLevel === "locations") {
+          return `
+            <div style="margin-bottom:12px;"><h4 style="margin:0;">Nơi lắp đặt camera</h4></div>
+            <div class="mobile-list">
+              ${houses.map(h => {
+                const cams = visCams.filter(c => (c.area || "Khác") === h);
+                const onlineCount = cams.filter(c => c.status === "online").length;
+                return `
+                  <div class="mobile-list-card" onclick="selectedLocation='${esc(h)}'; liveViewLevel='cameras'; render('live', false);">
+                    <div class="mobile-list-card-row">
+                      <strong style="font-size:14px; color:var(--ink);">🏠 ${esc(h)}</strong>
+                      <span class="pill green small">${onlineCount} / ${cams.length} Online</span>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `;
+        }
+
+        if (liveViewLevel === "cameras") {
+          const camsInHouse = visCams.filter(c => (c.area || "Khác") === selectedLocation);
+          return `
+            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <button class="btn line small" onclick="liveViewLevel='locations'; render('live', false);">← Quay lại</button>
+              <span style="font-weight:700; color:var(--muted);">${esc(selectedLocation)}</span>
+            </div>
+            <div class="mobile-list">
+              ${camsInHouse.map(c => `
+                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
+                  <div class="mobile-list-card-row">
+                    <span class="mobile-list-card-title">${esc(c.name)}</span>
+                    <span>${statusPill(c.status)}</span>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }
+
+        if (liveViewLevel === "stream") {
+          const cam = visCams.find(c => c.id === selectedCameraId) || visCams[0];
+          if (!cam) return `<div class="card" style="padding:20px; text-align:center;">Bạn chưa được cấp quyền xem camera nào.</div>`;
+          const isFallen = cam.state === "fallen" || aiFallTestOn;
+          const statusText = isFallen ? "FALL DETECTED" : cam.state.toUpperCase();
+          const badgeClass = isFallen ? "pill red" : "pill green";
+
+          return `
+            <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap: 8px;">
+              <button class="btn line small" onclick="stopTestCamera(false); switchTab('dashboard');">← Quay lại</button>
+              <select class="control" id="cameraModeSelect" onchange="startTestCamera()" style="width:auto; height:32px; padding:0 6px; border-radius:6px; border:1px solid var(--line); font-size:12px; font-weight:600; background-color:#fff;">
+                <option value="client" ${!isBackendOnline ? "selected" : ""}>Webcam thiết bị</option>
+                <option value="server" ${isBackendOnline ? "selected" : ""}>AI Server Stream</option>
+              </select>
+            </div>
+
+            <article class="cam ${isFallen ? 'fallen' : ''}" style="margin-bottom:14px;">
+              <div class="cam-head">
+                <span>${esc(cam.name)} (${cam.id})</span>
+                <span class="live">LIVE</span>
+              </div>
+              <div class="cam-view" style="position:relative; aspect-ratio:16/9; background:#000;">
+                <video id="testCameraVideo" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+                <canvas id="testCameraCanvas" style="position:absolute; left:0; top:0; width:100%; height:100%; object-fit:cover; z-index:5; pointer-events:none; display:none;"></canvas>
+                <img id="testCameraImg" style="width:100%; height:100%; object-fit:cover; display:none;">
+                
+                <span class="state ${badgeClass}" id="liveStateBadge" style="position:absolute; bottom:8px; right:8px; z-index:10; font-weight:bold;">${statusText}</span>
+              </div>
+            </article>
+
+          `;
+        }
+      },
+
+      alerts: () => {
+        const visCams = getVisibleCameras();
+        const visCamIds = visCams.map(c => c.id);
+        const clientAlerts = alerts.filter(a => visCamIds.includes(a.camera));
+
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); background: white; margin-bottom: 10px; border-radius: 8px;">
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="checkbox" id="selectAllUserAlerts" onclick="toggleSelectAllUserAlerts(this)" style="cursor: pointer; width: 18px; height: 18px;">
+              <label for="selectAllUserAlerts" style="font-size: 13px; font-weight: bold; cursor: pointer; user-select: none;">Chọn tất cả</label>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn danger small" onclick="deleteSelectedUserAlerts()" style="font-size:11px; padding: 6px 12px; background: var(--red); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Xóa đã chọn</button>
+              <button class="btn danger small" onclick="deleteAllUserAlerts()" style="font-size:11px; padding: 6px 12px; background: var(--red); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Xóa tất cả</button>
+            </div>
+          </div>
+          <div class="mobile-list">
+            ${clientAlerts.map(a => `
+              <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
+                <div class="mobile-list-card-row">
+                  <div style="display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="user-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 18px; height: 18px;">
+                    <span class="mobile-list-card-title" style="color:var(--red); font-size:14px; font-weight:700; margin:0;">⚠️ Cảnh báo ngã</span>
+                  </div>
+                  <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
+                </div>
+                <div class="mobile-list-card-detail">
+                  <div>Vị trí phòng: <strong>${esc(a.camera)}</strong></div>
+                  <div>Người thân: <strong>${esc(a.person)}</strong></div>
+                  <div>Trạng thái xử lý: <strong>${statusPill(a.status)}</strong></div>
+                </div>
+              </div>
+            `).join("")}
+            ${clientAlerts.length === 0 ? `<div style="text-align:center; padding:40px; color:var(--muted);">Chưa có cảnh báo nào được ghi nhận.</div>` : ""}
+          </div>
+        `;
+      },
+
+      profile: () => {
+        const phone = currentUser.phone || "";
+        const email = currentUser.email || "";
+
+        return `
+          ${card("Thông tin liên lạc cá nhân", `
+            <form id="editUserProfileForm" onsubmit="window.handleUserProfileSubmit(event); return false;">
+              <label class="field" style="margin-bottom:10px;">
+                <span>Họ và tên</span>
+                <input class="control" type="text" name="name" value="${esc(currentUser.name)}" required>
+              </label>
+              <label class="field" style="margin-bottom:10px;">
+                <span>Số điện thoại</span>
+                <input class="control" type="text" name="phone" value="${esc(phone)}">
+              </label>
+              <label class="field" style="margin-bottom:14px;">
+                <span>Email tài khoản</span>
+                <input class="control" type="email" name="email" value="${esc(email)}" required>
+              </label>
+              <button type="submit" class="btn primary block" style="width:100%; height:40px;">Lưu thay đổi</button>
+            </form>
+          `)}
+
+          ${card("Người liên hệ khẩn cấp", `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span class="hint" style="margin:0;">Liên hệ khi có sự cố khẩn cấp</span>
+              <button class="btn primary small" onclick="addEmergencyContactModal()">+ Thêm</button>
+            </div>
+            <div class="mobile-list">
+              ${emergencyContacts.map((c, i) => {
+                const isEmailMatch = c.email && currentUser.email && c.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                const isNameMatch = c.name && currentUser.name && c.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+                const isSelf = isEmailMatch || isNameMatch;
+                
+                const displayName = isSelf ? (currentUser.name || c.name) : c.name;
+                const displayPhone = isSelf ? (currentUser.phone || c.phone) : c.phone;
+                const displayEmail = isSelf ? (currentUser.email || c.email) : c.email;
+                
+                let displayRelationship = c.relationship;
+                if (isSelf) {
+                  displayRelationship = "Bản thân";
+                } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+                  displayRelationship = "Người giám sát";
+                }
+
+                return `
+                <div class="mobile-list-card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+                  <div class="mobile-list-card-row">
+                    <strong>${esc(displayName)} (${esc(displayRelationship)})</strong>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                      <button class="btn small primary" onclick="editEmergencyContactModal(${i})" style="border:none; background:none; color:#3b82f6; font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Sửa</button>
+                      <button class="btn small danger" onclick="deleteEmergencyContact(${i})" style="border:none; background:none; color:var(--red); font-weight:bold; font-size:13px; padding:0; cursor:pointer;">Xóa</button>
+                    </div>
+                  </div>
+                  <div style="font-size:12px; color:var(--muted);">
+                    <div>SĐT: <strong>${esc(displayPhone)}</strong></div>
+                    <div>Email: <strong>${esc(displayEmail)}</strong></div>
+                  </div>
+                  <div class="contact-actions" style="border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 8px;">
+                    <a href="tel:${esc(displayPhone)}" class="contact-btn-call" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none;">📞 Gọi ngay</a>
+                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;"> Gửi cảnh báo</button>
+                  </div>
+                </div>
+              `}).join("")}
+            </div>
+          `)}
+
+          ${card("Đổi mật khẩu", `
+            <form id="changePasswordForm" onsubmit="window.handleChangePasswordSubmit(event); return false;">
+              <label class="field" style="margin-bottom:10px;">
+                <span>Mật khẩu cũ</span>
+                <input class="control" type="password" name="oldPassword" required>
+              </label>
+              <label class="field" style="margin-bottom:10px;">
+                <span>Mật khẩu mới</span>
+                <input class="control" type="password" name="newPassword" required>
+              </label>
+              <label class="field" style="margin-bottom:14px;">
+                <span>Xác nhận mật khẩu mới</span>
+                <input class="control" type="password" name="confirmPassword" required>
+              </label>
+              <button type="submit" class="btn primary block" style="width:100%; height:40px;">Cập nhật mật khẩu</button>
+            </form>
+          `)}
+        `;
+      },
+
+      notifications: () => {
+        return `
+          <div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span class="hint" style="margin:0;">Thông báo từ hệ thống</span>
+            <button class="btn line small" onclick="markAllNotificationsAsRead()">Đọc tất cả</button>
+          </div>
+          <div class="mobile-list">
+            ${userNotifications.map((notif, idx) => {
+              const borderLeft = notif.type === 'fall' ? '4px solid var(--red)' : notif.type === 'disconnect' ? '4px solid var(--amber)' : '4px solid var(--blue)';
+              const icon = notif.type === 'fall' ? '🚨' : notif.type === 'disconnect' ? '⚠️' : '🔧';
+              const bg = notif.read ? '#ffffff' : '#f0f5ff';
+              const readLabel = notif.read ? 'Chưa đọc' : 'Đã đọc';
+              
+              return `
+                <div class="mobile-list-card" style="border-left:${borderLeft}; background:${bg}; padding:12px;">
+                  <div style="display:flex; gap:10px; align-items:start; margin-bottom:8px;">
+                    <div style="font-size:20px;">${icon}</div>
+                    <div style="flex:1;">
+                      <h4 style="margin:0 0 2px; font-size:13px; font-weight:800; color:var(--ink);">${esc(notif.title)} ${notif.read ? "" : '<span class="pill blue small" style="font-size: 8px; padding: 1px 4px;">Mới</span>'}</h4>
+                      <p style="margin:0; font-size:11px; color:var(--gray-600); line-height:1.4;">${esc(notif.content)}</p>
+                      <div class="hint" style="margin-top:4px; font-size:9px;">${esc(notif.time)}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; justify-content:flex-end; gap:6px; border-top:1px solid var(--line); padding-top:6px;">
+                    <button class="btn line extra-small" onclick="toggleReadNotification(${idx})" style="padding: 2px 6px; font-size: 10px;">${readLabel}</button>
+                    <button class="btn danger line extra-small" onclick="deleteNotification(${idx})" style="padding: 2px 6px; font-size: 10px; border:none; color:var(--red);">Xóa</button>
+                  </div>
+                </div>
+              `;
+            }).join("") || '<div style="text-align:center; padding:30px; color:var(--muted); font-size:12px;">Không có thông báo nào.</div>'}
+          </div>
+        `;
+      }
+    };
+
+    // Modal Sheet Forms
+    function editMonitoredProfileModal() {
+      openModal("Sửa hồ sơ người thân", `
+        <form id="editProfileForm" onsubmit="window.handleEditProfileSubmit(event); return false;">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(monitoredProfile.name)}" required></label>
+            <label class="field"><span>Tuổi</span><input class="control" type="number" name="age" value="${monitoredProfile.age}" required></label>
+            <label class="field"><span>Giới tính</span>
+              <select class="control" name="gender">
+                <option ${monitoredProfile.gender === 'Nam' ? 'selected' : ''}>Nam</option>
+                <option ${monitoredProfile.gender === 'Nữ' ? 'selected' : ''}>Nữ</option>
+              </select>
+            </label>
+            <label class="field"><span>Địa chỉ / Số phòng</span><input class="control" name="address" value="${esc(monitoredProfile.address)}" required></label>
+            <label class="field"><span>Liên hệ khẩn cấp chính</span><input class="control" name="emergencyContact" value="${esc(monitoredProfile.emergencyContact)}" required></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="editProfileForm" class="btn primary">Lưu thay đổi</button>
+      `);
+    }
+
+    function addEmergencyContactModal() {
+      openModal("Thêm liên hệ khẩn cấp", `
+        <form id="addContactForm" onsubmit="window.handleAddContactSubmit(event); return false;">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" type="email" required></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="addContactForm" class="btn primary">Thêm</button>
+      `);
+    }
+
+    window.editEmergencyContactModal = function(index) {
+      const contact = emergencyContacts[index];
+      const isEmailMatch = contact.email && currentUser.email && contact.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+      const isNameMatch = contact.name && currentUser.name && contact.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      const isSelf = isEmailMatch || isNameMatch;
+      
+      const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
+      const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
+      const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
+      
+      let displayRelationship = contact.relationship;
+      if (isSelf) {
+        displayRelationship = "Bản thân";
+      } else if (displayRelationship && displayRelationship.toLowerCase() === "bản thân") {
+        displayRelationship = "Người giám sát";
+      }
+
+      openModal("Sửa liên hệ khẩn cấp", `
+        <form id="editContactForm" onsubmit="window.handleEditContactSubmit(event, ${index}); return false;">
+          <div class="form-grid">
+            <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(displayName)}" required></label>
+            <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(displayRelationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" required></label>
+            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(displayEmail)}" type="email" required></label>
+          </div>
+        </form>
+      `, `
+        <button type="button" class="btn line" onclick="closeModal()">Hủy</button>
+        <button type="submit" form="editContactForm" class="btn primary">Lưu thay đổi</button>
+      `);
+    }
+
+    // Submit handlers
+    window.handleEditProfileSubmit = function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      monitoredProfile = {
+        name: data.name,
+        age: Number(data.age),
+        gender: data.gender,
+        address: data.address,
+        emergencyContact: data.emergencyContact
+      };
+      saveAll();
+      closeModal();
+      render("dashboard");
+    };
+
+    window.handleAddContactSubmit = function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      emergencyContacts.push({
+        name: data.name,
+        relationship: data.relationship,
+        phone: data.phone,
+        email: data.email
+      });
+      saveAll();
+      closeModal();
+      render("profile");
+    };
+
+    window.handleEditContactSubmit = function(event, index) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      emergencyContacts[index] = {
+        name: data.name,
+        relationship: data.relationship,
+        phone: data.phone,
+        email: data.email
+      };
+      saveAll();
+      closeModal();
+      render("profile");
+    };
+
+
+    window.handleUserProfileSubmit = async function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      
+      const oldEmail = currentUser.email;
+      const newEmail = data.email.trim().toLowerCase();
+      
+      if (!newEmail.includes("@")) {
+        alert("Email không hợp lệ.");
+        return;
+      }
+
+      const updatedUser = {
+        ...currentUser,
+        name: data.name.trim(),
+        email: newEmail,
+        phone: data.phone.trim() || null
+      };
+
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(oldEmail)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify(updatedUser)
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            alert(errData.detail || "Không thể đồng bộ thay đổi thông tin.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi đồng bộ thay đổi thông tin.");
+          return;
+        }
+      }
+
+      currentUser = updatedUser;
+      localStorage.setItem("nckh_current_user_email", newEmail);
+      $("headerUserName").textContent = currentUser.name;
+      updateDrawerFooter();
+      alert("Đã lưu thông tin liên lạc thành công!");
+      render("profile");
+    };
+
+    window.handleChangePasswordSubmit = async function(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+
+      if (data.newPassword !== data.confirmPassword) {
+        alert("Xác nhận mật khẩu mới không khớp!");
+        return;
+      }
+
+      const updatedUser = {
+        ...currentUser,
+        password: data.newPassword
+      };
+
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/users/${encodeURIComponent(currentUser.email)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify(updatedUser)
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            alert(errData.detail || "Không thể đồng bộ đổi mật khẩu.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi đổi mật khẩu.");
+          return;
+        }
+      }
+
+      alert("Đã đổi mật khẩu tài khoản thành công!");
+      form.reset();
+    };
+
+    function deleteEmergencyContact(index) {
+      if (!confirm("Xóa liên hệ khẩn cấp này?")) return;
+      emergencyContacts.splice(index, 1);
+      saveAll();
+      render("profile");
+    }
+
+    window.toggleSelectAllUserAlerts = function(master) {
+      const checkboxes = document.querySelectorAll(".user-alert-checkbox");
+      checkboxes.forEach(cb => cb.checked = master.checked);
+    }
+
+    window.deleteSelectedUserAlerts = async function() {
+      const checkboxes = document.querySelectorAll(".user-alert-checkbox:checked");
+      if (checkboxes.length === 0) {
+        alert("Vui lòng chọn ít nhất một cảnh báo để xóa.");
+        return;
+      }
+      if (!confirm(`Bạn có chắc chắn muốn xóa ${checkboxes.length} cảnh báo đã chọn?`)) {
+        return;
+      }
+      
+      const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ ids: ids, delete_all: false })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Lỗi khi xóa cảnh báo.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi xóa cảnh báo.");
+          return;
+        }
+      }
+      
+      alerts = alerts.filter(a => !ids.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+    }
+
+    window.deleteAllUserAlerts = async function() {
+      if (!confirm("Bạn có chắc chắn muốn xóa tất cả cảnh báo của bạn?")) {
+        return;
+      }
+      
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ delete_all: true })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || "Lỗi khi xóa tất cả cảnh báo.");
+            return;
+          }
+        } catch (e) {
+          alert("Lỗi kết nối khi xóa tất cả cảnh báo.");
+          return;
+        }
+      }
+      
+      alerts = [];
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+    }
+
+    function sendEmergencyAlertMsg(phone) {
+      alert(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+      if (isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/camera/test-snapshot`, {
+          method: "POST",
+          headers: { 
+            "Authorization": `Bearer ${authToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ camera_id: "SOS-" + phone.replace(/\s+/g, '') })
+        }).catch(() => {});
+      }
+    };
+
+    function viewAlertMediaModal(id) {
+      const a = alerts.find(x => x.id === id);
+      if (!a) return;
+      
+      const isMock = id.startsWith("AL-20260615-");
+      const hasVideoClip = hasVideo(a);
+      
+      let mediaHtml = "";
+      let cloudLinkHtml = "";
+      
+      let imgSrc = `${apiBaseUrl()}/media/${id}.jpg`;
+      let videoSrc = `${apiBaseUrl()}/media/${id}.mp4`;
+      
+      if (a) {
+        if (a.cloud_img_url) imgSrc = a.cloud_img_url;
+        if (a.cloud_video_url) videoSrc = a.cloud_video_url;
+        if (a.cloud_img_url || a.cloud_video_url) {
+          const activeUrl = a.cloud_video_url || a.cloud_img_url;
+          cloudLinkHtml = `
+            <div style="margin-top:12px; padding:10px 14px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.2); border-radius:8px; font-size:12px; text-align:left;">
+              <div style="color:#22c55e; font-weight:700; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <span>☁️</span> Lưu trữ Cloudinary thành công
+              </div>
+              <a href="${activeUrl}" target="_blank" style="color:#4f46e5; word-break:break-all; text-decoration:underline; font-weight:600;">Xem link gốc →</a>
+            </div>
+          `;
+        }
+      }
+      
+      if (hasVideoClip) {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center; position:relative;">
+              <div style="color:#fff; text-align:center;">
+                <div style="font-size:48px; margin-bottom:10px;">▶</div>
+                <div style="font-size:14px; font-weight:bold;">Video ghi hình sự kiện té ngã ${id}</div>
+                <div class="hint" style="margin-top:5px; color:#94a3b8; font-size:11px;">(Độ dài 12 giây - Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <video src="${videoSrc}" controls autoplay playsinline style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; background:#000;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';"></video>
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Video không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      } else {
+        if (isMock) {
+          mediaHtml = `
+            <div style="background:#1e293b; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center;">
+              <div style="color:#fff; text-align:center; padding: 20px;">
+                <div style="font-size:48px; margin-bottom:10px;">📷</div>
+                <div style="font-size:14px; font-weight:bold;">Ảnh chụp sự kiện lúc phát hiện té ngã</div>
+                <div class="hint" style="color:#94a3b8; margin-top:5px; font-size:11px;">Đã lưu trữ đám mây (Bản ghi mô phỏng)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          mediaHtml = `
+            <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';">
+            <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
+              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Hình ảnh không khả dụng</p>
+              <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
+            </div>
+          `;
+        }
+      }
+      
+      openModal(`Chi tiết té ngã ${id}`, `
+        ${mediaHtml}
+        ${cloudLinkHtml}
+        <div class="mobile-list-card-detail" style="font-size:13px; margin-top:12px; border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px;">
+          <div>Mã cảnh báo: <strong>${a.id}</strong></div>
+          <div>Thời gian: <strong>${a.time}</strong></div>
+          <div>Camera phòng: <strong>${a.camera}</strong></div>
+          <div>Bệnh nhân: <strong>${a.person}</strong></div>
+          <div>Độ tin cậy: <strong>${a.confidence}%</strong></div>
+          <div>Trạng thái: <strong>${a.status}</strong></div>
+        </div>
+      `, `<button class="btn line" onclick="closeModal()">Đóng</button>`);
+    }
+
+    // Trigger local fall alert
+    function triggerLocalFallAlert(det) {
+      const cam = cameras.find(c => c.id === selectedCameraId);
+      const camName = cam ? cam.name : "Camera local";
+      const now = new Date();
+      const timeStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      // Auto-capture camera snapshot with skeleton overlay
+      let capturedMedia = "Ảnh (Browser)";
+      const video = $("testCameraVideo");
+      if (video && video.srcObject && video.videoWidth) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0);
+          
+          const overlayCanvas = $("testCameraCanvas");
+          if (overlayCanvas && overlayCanvas.style.display !== "none") {
+            ctx.drawImage(overlayCanvas, 0, 0);
+          }
+          capturedMedia = canvas.toDataURL("image/jpeg", 0.7); // compress to JPEG
+        } catch (e) {
+          console.error("Lỗi tự động chụp ảnh té ngã:", e);
+        }
+      }
+
+      const newAlert = {
+        id: `AL-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`,
+        time: timeStr,
+        camera: selectedCameraId || "CAM-LOCAL",
+        person: "Người dùng (Webcam khách)",
+        confidence: Math.round(70 + det.torsoAngle / 2),
+        status: "Chưa xử lý",
+        level: "Khẩn cấp",
+        media: capturedMedia
+      };
+      
+      alerts.unshift(newAlert);
+      saveStore("fg_alerts", alerts);
+      
+      // Play Audio Alarm (Siren sweep)
+      playAlarmSound();
+      
+      // Show custom popup alert for mobile
+      openModal("🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP", `
+        <div style="text-align: center; font-family: inherit; padding: 10px 0;">
+          <div style="font-size: 48px; margin-bottom: 12px; animation: pulse 1s infinite;">🚨</div>
+          <h3 style="color: var(--red); font-size: 18px; font-weight: 800; margin: 0 0 12px;">PHÁT HIỆN TÉ NGÃ</h3>
+          <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện té ngã tại <strong>${esc(camName)}</strong> lúc <strong>${timeStr.split(" ")[1]}</strong>.</p>
+          
+          ${capturedMedia.startsWith("data:image") ? `
+            <img src="${capturedMedia}" style="width: 100%; border-radius: 8px; border: 1px solid var(--line); aspect-ratio: 16/9; object-fit: cover; margin-bottom: 12px;">
+          ` : ""}
+          
+          <div style="background: #fff5f5; border: 1px solid #fee2e2; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
+            <strong>Thông tin chi tiết:</strong>
+            <ul style="margin: 6px 0 0; padding-left: 18px;">
+              <li>Độ tin cậy AI: ${Math.round(70 + det.torsoAngle / 2)}%</li>
+              <li>Góc nghiêng thân: ${Math.round(det.torsoAngle)}°</li>
+              <li>Thời gian nằm: ${Math.round(det.lyingSeconds)} giây</li>
+            </ul>
+          </div>
+        </div>
+      `, `
+        <button class="btn danger" onclick="stopAlarmSound(); closeModal();" style="width: 100%;">Tắt báo động & Đóng</button>
+      `);
+      
+      // Web speech synthesis alert
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          console.error("Speech Synthesis error:", e);
+        }
+      }
+    }
+
+    // Camera Livestream Control
+    async function startTestCamera() {
+      const video = $("testCameraVideo");
+      const canvas = $("testCameraCanvas");
+      const img = $("testCameraImg");
+      const select = $("cameraModeSelect");
+      const mode = select ? select.value : "client";
+
+      resetDetector();
+
+      if (mode === "client") {
+        img.style.display = "none";
+        video.style.display = "block";
+        canvas.style.display = "block";
+
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
+          video.srcObject = localStream;
+          video.play();
+          
+          isPoseEstimating = true;
+          startPoseEstimator(video, canvas);
+        } catch (e) {
+          alert("Không thể mở Webcam: " + e.message);
+        }
+      } else {
+        video.style.display = "none";
+        canvas.style.display = "none";
+        img.style.display = "block";
+        
+        try {
+          await backendLogin();
+          const cam = cameras.find(c => c.id === selectedCameraId);
+          const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+            body: JSON.stringify({ source: (cam && cam.rtsp) ? cam.rtsp : "0", camera_id: selectedCameraId }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok && res.status !== 409) {
+            throw new Error(payload.detail || "Không khởi động được camera trên AI backend.");
+          }
+          img.src = aiStreamUrl();
+        } catch (err) {
+          alert("Lỗi Backend: " + (err.message || err));
+        }
+      }
+    }
+
+    function stopTestCamera(stopBackend = false) {
+      isPoseEstimating = false;
+      stopAlarmSound();
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      const video = $("testCameraVideo");
+      if (video) {
+        video.srcObject = null;
+        video.style.display = "none";
+      }
+      const canvas = $("testCameraCanvas");
+      if (canvas) {
+        canvas.style.display = "none";
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      const img = $("testCameraImg");
+      if (img) {
+        img.removeAttribute("src");
+        img.style.display = "none";
+      }
+      
+      if (stopBackend && isBackendOnline && authToken) {
+        fetch(`${apiBaseUrl()}/api/control/stop`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch(() => {});
+      }
+    }
+
+    function toggleStreamMode() {
+      stopTestCamera(true);
+    }
+
+    function startPoseEstimator(video, canvas) {
+      const ctx = canvas.getContext("2d");
+      const pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      pose.onResults((results) => {
+        if (!isPoseEstimating) return;
+        
+        if (canvas.width !== results.image.width || canvas.height !== results.image.height) {
+          canvas.width = results.image.width;
+          canvas.height = results.image.height;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (results.poseLandmarks) {
+          drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+          drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2, radius: 4 });
+
+          // Run detection rules
+          const detection = updateDetector(results.poseLandmarks);
+          let localState = "normal";
+          if (detection) {
+            localState = detection.state;
+            if (detection.eventStarted) {
+              triggerLocalFallAlert(detection);
+            }
+          }
+
+          // Bounding Box
+          let minX = 1.0, maxX = 0.0, minY = 1.0, maxY = 0.0;
+          results.poseLandmarks.forEach(kp => {
+            if (kp.x < minX) minX = kp.x;
+            if (kp.x > maxX) maxX = kp.x;
+            if (kp.y < minY) minY = kp.y;
+            if (kp.y > maxY) maxY = kp.y;
+          });
+          
+          const padX = (maxX - minX) * 0.15;
+          const padY = (maxY - minY) * 0.15;
+          minX = Math.max(0, minX - padX);
+          maxX = Math.min(1, maxX + padX);
+          minY = Math.max(0, minY - padY);
+          maxY = Math.min(1, maxY + padY);
+
+          const isFallen = localState === "alert" || localState === "fallen" || aiFallTestOn;
+          ctx.strokeStyle = isFallen ? "#f43f5e" : "#10b981";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(
+            minX * canvas.width, 
+            minY * canvas.height, 
+            (maxX - minX) * canvas.width, 
+            (maxY - minY) * canvas.height
+          );
+          
+          // Draw label: Đứng / Nằm / Ngồi / Đi / Té ngã
+          let labelText = "ĐỨNG";
+          if (isFallen) {
+            labelText = "TÉ NGÃ";
+          } else if (localState === "lying" || localState === "possible_fall") {
+            labelText = "NẰM";
+          } else if (localState === "sitting") {
+            labelText = "NGỒI";
+          } else if (localState === "walking") {
+            labelText = "ĐI";
+          }
+          
+          ctx.fillStyle = isFallen ? "#f43f5e" : "#10b981";
+          ctx.font = "bold 16px Arial";
+          ctx.fillText(labelText, minX * canvas.width, Math.max(20, minY * canvas.height - 8));
+
+          // Update Mobile stream page status badge
+          const stateBadge = $("liveStateBadge");
+          if (stateBadge) {
+            stateBadge.textContent = isFallen ? "FALL DETECTED" : localState.toUpperCase();
+            stateBadge.className = `state pill ${isFallen ? 'red' : 'green'}`;
+          }
+        }
+      });
+
+      async function detectionFrame() {
+        if (!isPoseEstimating) return;
+        if (video.readyState >= 2) {
+          await pose.send({ image: video });
+        }
+        requestAnimationFrame(detectionFrame);
+      }
+      
+      video.addEventListener('loadeddata', () => {
+        detectionFrame();
+      });
+    }
+
+    async function syncFromBackend() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const [cRes, aRes] = await Promise.all([
+          fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } }),
+          fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } })
+        ]);
+        
+        let changed = false;
+        if (cRes.ok) {
+          const c = await cRes.json();
+          if (c && Array.isArray(c)) {
+            if (JSON.stringify(c) !== JSON.stringify(cameras)) {
+              cameras = c;
+              saveStore("fg_cameras", cameras);
+              changed = true;
+            }
+          }
+        }
+        if (aRes.ok) {
+          const a = await aRes.json();
+          if (a && a.alerts && Array.isArray(a.alerts)) {
+            if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
+              alerts = a.alerts;
+              saveStore("fg_alerts", alerts);
+              changed = true;
+            }
+          }
+        }
+        
+        await syncAppStateFromBackend();
+        
+        if (changed) {
+          render(currentView, false);
+        }
+      } catch (e) {
+        console.error("Lỗi đồng bộ:", e);
+      }
+    }
+
+    async function initClientApp() {
+      await checkBackendStatus();
+      
+      // Load current client profile
+      const savedEmail = localStorage.getItem("nckh_current_user_email") || "bao@nckh.vn";
+      
+      if (isBackendOnline && authToken) {
+        await syncAppStateFromBackend();
+        
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/users`, { headers: { Authorization: `Bearer ${authToken}` } });
+          if (res.ok) {
+            const allUsers = await res.json();
+            const me = allUsers.find(x => x.email.toLowerCase() === savedEmail.toLowerCase());
+            if (me) {
+              currentUser = me;
+              $("headerUserName").textContent = me.name;
+            }
+          }
+          
+          // Sync camera list
+          const camRes = await fetch(`${apiBaseUrl()}/api/cameras`, { headers: { Authorization: `Bearer ${authToken}` } });
+          if (camRes.ok) {
+            cameras = await camRes.json();
+          }
+
+          // Sync alerts
+          const alertRes = await fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } });
+          if (alertRes.ok) {
+            const data = await alertRes.json();
+            if (data && data.alerts && Array.isArray(data.alerts)) {
+              alerts = data.alerts;
+            }
+          }
+        } catch (e) {}
+      }
+      
+      updateDrawerFooter();
+      render("dashboard", false);
+    }
+
+    window.onload = initClientApp;
+  </script>
+</body>
+</html>
