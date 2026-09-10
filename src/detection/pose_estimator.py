@@ -8,6 +8,7 @@ File liên kết:
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import cv2
@@ -88,36 +89,29 @@ class PoseEstimator:
         ]
         avg_key_vis = sum(key_visibilities) / len(key_visibilities)
 
-        # Đồ vật thường có độ tin cậy điểm mốc rất thấp (< 0.40) hoặc thiếu nhiều bộ phận quan trọng
-        if avg_key_vis < 0.40:
+        # Ngưỡng trung bình 0.22 giúp nhận diện tốt người ngã/nằm sàn mà vẫn lọc được đồ vật vô tri
+        if avg_key_vis < 0.22:
             self._prev_points = None
             return None, results
 
-        # Vai và mũi phải đủ rõ nét
-        if points["nose"].visibility < 0.30 or points["left_shoulder"].visibility < 0.35 or points["right_shoulder"].visibility < 0.35:
-            self._prev_points = None
-            return None, results
-
-        # 2. Phân tích khuôn mặt: Đảm bảo có mắt/tai/mũi hợp lệ của người
+        # 2. Vai và đầu: Ít nhất 1 bên vai và 1 điểm trên khuôn mặt nhận diện được
+        sh_max_vis = max(points["left_shoulder"].visibility, points["right_shoulder"].visibility)
+        sh_avg_vis = (points["left_shoulder"].visibility + points["right_shoulder"].visibility) / 2.0
         face_vis = [left_eye.visibility, right_eye.visibility, left_ear.visibility, right_ear.visibility]
-        if not any(v >= 0.25 for v in face_vis):
+        head_vis = max(points["nose"].visibility, max(face_vis))
+
+        if sh_max_vis < 0.25 or sh_avg_vis < 0.18 or head_vis < 0.18:
             self._prev_points = None
             return None, results
 
-        # Khoảng cách 2 vai phải đủ hợp lý (tránh nhiễu đồ vật nhỏ)
-        shoulder_width = abs(points["left_shoulder"].x - points["right_shoulder"].x)
-        if shoulder_width < 0.035:
+        # Khoảng cách 2 vai theo đường chéo Euclidean - hỗ trợ khi nằm nghiêng (2 vai xếp dọc)
+        shoulder_dist = math.hypot(
+            points["left_shoulder"].x - points["right_shoulder"].x,
+            points["left_shoulder"].y - points["right_shoulder"].y,
+        )
+        if shoulder_dist < 0.030:
             self._prev_points = None
             return None, results
-
-        # Handle cut-off hips: Extrapolate hip positions when lower body is below frame boundary
-        sh_x = (points["left_shoulder"].x + points["right_shoulder"].x) / 2.0
-        sh_y = (points["left_shoulder"].y + points["right_shoulder"].y) / 2.0
-
-        if points["left_hip"].visibility < 0.30 or points["right_hip"].visibility < 0.30:
-            est_hip_y = min(0.98, sh_y + max(0.28, shoulder_width * 1.5))
-            points["left_hip"] = Point(x=points["left_shoulder"].x, y=est_hip_y, visibility=0.75)
-            points["right_hip"] = Point(x=points["right_shoulder"].x, y=est_hip_y, visibility=0.75)
 
         # 3. Lọc đồ vật đứng yên tuyệt đối (Static Object Filter)
         # Đồ vật bất động (ghế, bàn, áo treo) có tọa độ không thay đổi dù chỉ 1 pixel qua nhiều frame

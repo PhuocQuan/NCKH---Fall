@@ -294,8 +294,9 @@ class FallDetectionPipeline:
                 # Xử lý Cảnh báo Té ngã -> BẢO TOÀN KHUNG XƯƠNG làm bằng chứng
                 if event_triggered:
                     alert_id = f"AL-{int(time.time())}"
+                    print(f"[Fall Alert] 🚨 PHÁT HIỆN TÉ NGÃ: {alert_id} | Người: {current_person_name} | Góc thân: {result.torso_angle_deg:.1f}° | Trạng thái: {result.state.value}")
                     self._logger.write(result, person_name=current_person_name, person_type=current_person_type)
-                    self._push_alert(result, alert_id)
+                    self._push_alert(result, alert_id, person_name=current_person_name)
 
                     # Phát chuông cảnh báo
                     threading.Thread(target=_play_alert_sound, daemon=True).start()
@@ -359,18 +360,19 @@ class FallDetectionPipeline:
 
             time.sleep(0.001)
 
-    def _push_alert(self, result, alert_id: str) -> None:
+    def _push_alert(self, result, alert_id: str, person_name: str | None = None) -> None:
         from datetime import datetime
 
         FallState = self._runtime["FallState"] if self._runtime else None
         level = "Cao"
         if FallState and result.state == FallState.ALERT:
             level = "Khẩn cấp"
+        display_person = person_name if (person_name and person_name != "Unknown") else "Phát hiện từ AI"
         alert = {
             "id": alert_id,
             "time": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "camera": getattr(self, "camera_id", "CAM-LOCAL"),
-            "person": "Phat hien tu AI",
+            "person": display_person,
             "confidence": min(99, int(70 + result.torso_angle_deg / 2)),
             "status": "Chưa xử lý",
             "level": level,

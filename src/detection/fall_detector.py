@@ -72,6 +72,7 @@ class FallDetector:
         self._abnormal_frames = 0
         self._lying_frames = 0
         self._recent_upright_frames = 0
+        self._non_lying_consecutive_frames = 0
         self._fall_candidate = False
         self._alert_active = False
         self._cooldown = 0
@@ -83,6 +84,7 @@ class FallDetector:
         self._abnormal_frames = 0
         self._lying_frames = 0
         self._recent_upright_frames = 0
+        self._non_lying_consecutive_frames = 0
         self._fall_candidate = False
         self._alert_active = False
         self._cooldown = 0
@@ -126,7 +128,9 @@ class FallDetector:
         head_is_low = head_hip_delta <= self.config.head_hip_height_ratio
         hip_dropped_fast = hip_velocity >= self.config.hip_drop_velocity
         body_rotated_fast = angle_velocity >= self.config.angle_change_velocity_deg
-        lying = torso_is_horizontal and head_is_low
+        
+        # Nhận diện nằm: thân nghiêng ngang và đầu thấp, hoặc góc nghiêng rõ rệt (>= 60°)
+        lying = (torso_is_horizontal and head_is_low) or (torso_angle >= 60.0 and head_hip_delta <= max(0.30, self.config.head_hip_height_ratio * 1.5))
 
         if torso_is_upright:
             self._recent_upright_frames = min(self._recent_upright_frames + 1, 30)
@@ -140,26 +144,32 @@ class FallDetector:
             self._fall_candidate = True
 
         if lying:
+            self._non_lying_consecutive_frames = 0
             self._lying_frames += 1
         else:
-            self._lying_frames = 0
-            self._fall_candidate = False
-            self._alert_active = False
-            self._abnormal_frames = 0
+            self._non_lying_consecutive_frames += 1
+            if torso_is_upright or self._non_lying_consecutive_frames >= 5:
+                # Đứng dậy hoặc hết nằm sau nhiều frames liên tục -> Reset trạng thái
+                self._lying_frames = 0
+                self._fall_candidate = False
+                self._alert_active = False
+                self._abnormal_frames = 0
+            else:
+                # Khung hình giật hoặc che khuất tạm thời trên sàn -> Giảm dần thay vì xóa về 0 ngay lập tức
+                self._lying_frames = max(0, self._lying_frames - 1)
+                self._abnormal_frames = max(0, self._abnormal_frames - 1)
 
-        abnormal = lying and (
+        abnormal = (self._lying_frames > 0) and (
             self._fall_candidate or self.config.alert_on_long_lying_without_fall
         )
 
-        if abnormal:
+        if abnormal and lying:
             self._abnormal_frames += 1
-        else:
-            self._abnormal_frames = 0
 
         event_started = False
         lying_seconds = self._lying_frames / max(self.config.assumed_fps, 1.0)
         
-        if torso_is_upright or not lying:
+        if torso_is_upright or (not lying and self._non_lying_consecutive_frames >= 5):
             state = FallState.NORMAL
             self._abnormal_frames = 0
         elif (
