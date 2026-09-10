@@ -1,17 +1,11 @@
-/// File: lib/core/api_client.dart
-/// Chức năng chính: Lớp Singleton bao bọc HTTP Client để gọi API lên Server.
-/// Tự động gắn Token vào Header để xác thực và xử lý lỗi 401 (Hết hạn đăng nhập).
-///
-/// File liên kết:
-/// - Ảnh hưởng tới: Hầu hết các file trong app (auth_service.dart, home_screen.dart) đều phải dùng API này.
-/// - Quan trọng: Biến `baseUrl` ở đây chứa link Cloudflare Tunnel.
-// lib/core/api_client.dart
+
+
+// File: lib/core/api_client.dart
 // HTTP client wrapper — tự gắn auth header, cấu hình base URL
 
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-
 
 /// Lớp quản lý gọi API. Dùng mẫu Singleton (chỉ tạo 1 instance duy nhất trong toàn app).
 class ApiClient {

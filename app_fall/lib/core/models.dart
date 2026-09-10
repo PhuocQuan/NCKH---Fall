@@ -179,6 +179,13 @@ class AlertModel {
   bool get hasVideo =>
       (cloudVideoUrl != null && cloudVideoUrl!.isNotEmpty) ||
       (media != null && media!.toLowerCase().contains('video'));
+
+  bool get isStranger =>
+      id.toUpperCase().startsWith('STRANGER') ||
+      person.toLowerCase().contains('người lạ') ||
+      level.toLowerCase().contains('người lạ');
+
+  bool get isFall => !isStranger;
 }
 
 class EmergencyContact {

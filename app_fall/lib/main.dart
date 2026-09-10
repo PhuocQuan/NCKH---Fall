@@ -1,11 +1,4 @@
-/// File: lib/main.dart
-/// Chức năng chính: Điểm khởi chạy (Entry point) của ứng dụng Flutter FallGuard.
-/// Khởi tạo các dịch vụ (Services) cần thiết trước khi vẽ UI.
-///
-/// File liên kết:
-/// - Khởi tạo từ: core/auth_service.dart, core/app_state_service.dart
-/// - Gọi màn hình: screens/login_screen.dart, screens/home_screen.dart
-// lib/main.dart
+// File: lib/main.dart
 // Entry point — FallGuard AI Flutter Client
 
 import 'package:flutter/material.dart';

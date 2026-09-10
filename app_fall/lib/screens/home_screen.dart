@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _currentTab = 0; // 0=dashboard, 1=alerts, 2=notifications, 3=profile
   int _alertsPage = 0;
+  int _alertFilter = 0; // 0=all, 1=fall, 2=stranger
   bool _isBackendOnline = false;
   bool _isViewingCamera = false;
   Timer? _statusTimer;
@@ -99,7 +100,10 @@ class _HomeScreenState extends State<HomeScreen> {
              type: 'update',
           ));
           _state.saveToLocal();
-          if (mounted) setState(() {});
+          if (mounted) {
+            setState(() {});
+            _showUpdateDialog(latestTagName, url);
+          }
         }
       }
     } catch (e) {
@@ -362,11 +366,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
 
                   _drawerGroupTitle('GIÁM SÁT'),
-                  _drawerItem('⚠️ Danh sách cảnh báo', 1, () { Navigator.pop(context); _switchTab(1); }),
+                  _drawerItem(
+                    '🚨 Cảnh báo té ngã',
+                    1,
+                    () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _alertFilter = 1;
+                        _alertsPage = 0;
+                        _currentTab = 1;
+                      });
+                    },
+                    badgeCount: _state.getVisibleAlerts().where((a) => a.isFall && a.status == 'Chưa xử lý').length,
+                    badgeColor: kRed,
+                    isActive: _currentTab == 1 && _alertFilter == 1,
+                  ),
+                  _drawerItem(
+                    '👤 Cảnh báo người lạ',
+                    1,
+                    () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _alertFilter = 2;
+                        _alertsPage = 0;
+                        _currentTab = 1;
+                      });
+                    },
+                    badgeCount: _state.getVisibleAlerts().where((a) => a.isStranger && a.status == 'Chưa xử lý').length,
+                    badgeColor: kAmber,
+                    isActive: _currentTab == 1 && _alertFilter == 2,
+                  ),
                   const SizedBox(height: 20),
 
                   _drawerGroupTitle('CÁ NHÂN & LIÊN HỆ'),
-                  _drawerItem('🔔 Thông báo', 2, () { Navigator.pop(context); _switchTab(2); }),
+                  _drawerItem(
+                    '🔔 Thông báo',
+                    2,
+                    () { Navigator.pop(context); _switchTab(2); },
+                    badgeCount: _state.notifications.where((n) => !n.read).length,
+                    badgeColor: kBlue,
+                    isActive: _currentTab == 2,
+                  ),
                   _drawerItem('⚙️ Thông tin cá nhân', 3, () { Navigator.pop(context); _switchTab(3); }),
                 ],
               ),
@@ -428,25 +468,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _drawerItem(String label, int tabIndex, VoidCallback onTap) {
-    final isActive = _currentTab == tabIndex;
+  Widget _drawerItem(
+    String label,
+    int tabIndex,
+    VoidCallback onTap, {
+    int? badgeCount,
+    Color? badgeColor,
+    bool? isActive,
+  }) {
+    final active = isActive ?? (_currentTab == tabIndex);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 2),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF4f46e5).withAlpha(38) : Colors.transparent,
+          color: active ? const Color(0xFF4f46e5).withAlpha(38) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isActive ? const Border(left: BorderSide(color: Color(0xFF818CF8), width: 3)) : null,
+          border: active ? const Border(left: BorderSide(color: Color(0xFF818CF8), width: 3)) : null,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? const Color(0xFF818CF8) : const Color(0xFF94a3b8),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: active ? const Color(0xFF818CF8) : const Color(0xFF94a3b8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (badgeCount != null && badgeCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor ?? kRed,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -455,11 +520,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── BOTTOM NAV ─────────────────────────────────────────────────────────────
 
   Widget _buildBottomNav() {
+    final visibleAlerts = _state.getVisibleAlerts();
+    final pendingCount = visibleAlerts.where((a) => a.status == 'Chưa xử lý').length;
+    final unreadNotifs = _state.notifications.where((n) => !n.read).length;
+
     final items = [
-      (Icons.grid_view_rounded, Icons.grid_view, 'Trang chủ'),
-      (Icons.warning_amber_rounded, Icons.warning_amber_outlined, 'Cảnh báo'),
-      (Icons.notifications_rounded, Icons.notifications_outlined, 'Thông báo'),
-      (Icons.person_rounded, Icons.person_outline_rounded, 'Hồ sơ'),
+      (Icons.grid_view_rounded, Icons.grid_view, 'Trang chủ', 0),
+      (Icons.warning_amber_rounded, Icons.warning_amber_outlined, 'Cảnh báo', pendingCount),
+      (Icons.notifications_rounded, Icons.notifications_outlined, 'Thông báo', unreadNotifs),
+      (Icons.person_rounded, Icons.person_outline_rounded, 'Hồ sơ', 0),
     ];
 
     return Container(
@@ -472,16 +541,40 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: List.generate(items.length, (i) {
           final isActive = _currentTab == i;
+          final badge = items[i].$4;
           return Expanded(
             child: InkWell(
               onTap: () => _switchTab(i),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    isActive ? items[i].$1 : items[i].$2,
-                    color: isActive ? kBlue : kMuted,
-                    size: 22,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(
+                        isActive ? items[i].$1 : items[i].$2,
+                        color: isActive ? kBlue : kMuted,
+                        size: 22,
+                      ),
+                      if (badge > 0)
+                        Positioned(
+                          top: -4,
+                          right: -8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: i == 1 ? kRed : kBlue,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Text(
+                              badge > 99 ? '99+' : '$badge',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -641,7 +734,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── TAB 1: ALERTS ────────────────────────────────────────────────────────
 
   Widget _buildAlertsView() {
-    final visibleAlerts = _state.getVisibleAlerts();
+    final allVisibleAlerts = _state.getVisibleAlerts();
+    final fallCount = allVisibleAlerts.where((a) => a.isFall).length;
+    final strangerCount = allVisibleAlerts.where((a) => a.isStranger).length;
+
+    final visibleAlerts = switch (_alertFilter) {
+      1 => allVisibleAlerts.where((a) => a.isFall).toList(),
+      2 => allVisibleAlerts.where((a) => a.isStranger).toList(),
+      _ => allVisibleAlerts,
+    };
     final selected = <String>{};
     const int alertsPerPage = 10;
 
@@ -660,6 +761,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Column(
           children: [
+            // Filter segmented chips
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              color: kCard,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _alertFilterChip('Tất cả (${allVisibleAlerts.length})', 0, setSt),
+                    const SizedBox(width: 8),
+                    _alertFilterChip('🚨 Té ngã ($fallCount)', 1, setSt, color: kRed),
+                    const SizedBox(width: 8),
+                    _alertFilterChip('👤 Người lạ ($strangerCount)', 2, setSt, color: const Color(0xFFD97706)),
+                  ],
+                ),
+              ),
+            ),
+
             // Toolbar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -711,7 +830,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Expanded(
               child: pagedAlerts.isEmpty
-                  ? const Center(child: _EmptyState(message: 'Chưa có cảnh báo nào được ghi nhận.', icon: Icons.check_circle_outline))
+                  ? Center(
+                      child: _EmptyState(
+                        message: _alertFilter == 1
+                            ? 'Chưa có sự cố té ngã nào được ghi nhận.'
+                            : _alertFilter == 2
+                                ? 'Chưa có người lạ nào xuất hiện.'
+                                : 'Chưa có cảnh báo nào được ghi nhận.',
+                        icon: Icons.check_circle_outline,
+                      ),
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: pagedAlerts.length,
@@ -759,10 +887,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _alertFilterChip(String label, int filterIndex, StateSetter setSt, {Color color = kBlue}) {
+    final isSelected = _alertFilter == filterIndex;
+    return GestureDetector(
+      onTap: () {
+        setSt(() {
+          _alertFilter = filterIndex;
+          _alertsPage = 0;
+        });
+        setState(() {});
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: isSelected ? color : const Color(0xFFCBD5E1),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF475569),
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _alertCard(AlertModel alert, bool isSelected, VoidCallback onToggle) {
-    final isStranger = alert.id.startsWith('STRANGER');
-    final title = isStranger ? '👤 Người lạ xuất hiện' : '⚠️ Cảnh báo ngã';
-    final titleColor = isStranger ? kBlue : kRed;
+    final isStranger = alert.isStranger;
+    final title = isStranger ? '👤 Phát hiện người lạ' : '🚨 Cảnh báo té ngã';
+    final titleColor = isStranger ? const Color(0xFFD97706) : kRed;
+    final pillBg = isStranger ? const Color(0xFFFEF3C7) : const Color(0xFFFEE2E2);
+    final pillBorder = isStranger ? const Color(0xFFFDE68A) : const Color(0xFFFECACA);
+    final tagText = isStranger ? 'Người lạ' : 'Té ngã';
 
     return GestureDetector(
       onTap: () => _showAlertDetail(alert),
@@ -790,8 +954,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                Text(title, style: TextStyle(color: titleColor, fontSize: 14, fontWeight: FontWeight.w700)),
-                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: pillBg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: pillBorder),
+                  ),
+                  child: Text(tagText, style: TextStyle(color: titleColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+                Expanded(
+                  child: Text(title, style: TextStyle(color: titleColor, fontSize: 13, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+                ),
                 Text(alert.time, style: const TextStyle(fontSize: 11, color: kMuted)),
               ],
             ),
@@ -803,7 +978,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _alertRow('Vị trí', alert.camera),
-                  _alertRow('Người thân', alert.person),
+                  _alertRow(isStranger ? 'Đối tượng' : 'Người thân', alert.person),
+                  _alertRow('Độ tin cậy', '${alert.confidence}% ${isStranger ? '(YuNet)' : '(MediaPipe)'}'),
                   Row(
                     children: [
                       const Text('Trạng thái: ', style: TextStyle(fontSize: 12, color: kMuted)),
@@ -1375,9 +1551,9 @@ class _AlertDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final imgSrc = alert.cloudImgUrl ?? '$apiBaseUrl/media/${alert.id}.jpg';
     final videoSrc = alert.cloudVideoUrl ?? '$apiBaseUrl/media/${alert.id}.mp4';
-    final isStranger = alert.id.startsWith('STRANGER');
-    final title = isStranger ? 'Chi tiết người lạ' : 'Chi tiết cảnh báo ngã';
-    final titleColor = isStranger ? kBlue : kInk;
+    final isStranger = alert.isStranger;
+    final title = isStranger ? '👤 Chi tiết người lạ xuất hiện' : '🚨 Chi tiết sự cố té ngã';
+    final titleColor = isStranger ? const Color(0xFFD97706) : kRed;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -1452,8 +1628,8 @@ class _AlertDetailSheet extends StatelessWidget {
                     _detailRow('ID cảnh báo', alert.id),
                     _detailRow('Thời gian', alert.time),
                     _detailRow('Camera', alert.camera),
-                    _detailRow('Người thân', alert.person),
-                    _detailRow('Độ tin cậy AI', '${alert.confidence}%'),
+                    _detailRow(isStranger ? 'Đối tượng' : 'Người thân', alert.person),
+                    _detailRow('Độ tin cậy AI', '${alert.confidence}% ${isStranger ? '(YuNet / SFace)' : '(MediaPipe Pose)'}'),
                     _detailRow('Mức độ', alert.level),
                     _detailRow('Trạng thái', alert.status),
                     if (alert.cloudVideoUrl != null) ...[
@@ -1668,7 +1844,7 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
                     const Text('Mối quan hệ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kInk)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
-                      value: _relationship,
+                      initialValue: _relationship,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF8FAFC),
@@ -1926,8 +2102,9 @@ class _UserProfileFormState extends State<_UserProfileForm> {
       widget.onSaved(updated);
       if (mounted) setState(() => _isEditing = false);
       
-      if (emailChanged && mounted) {
+      if (emailChanged) {
         await AuthService().clearSession();
+        if (!mounted) return;
         Navigator.of(context).pushReplacementNamed('/login');
       }
     } on ApiException catch (e) {
