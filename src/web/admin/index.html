@@ -1253,13 +1253,23 @@ function loadStore(key, fallback) {
     const stateLabel = (cam) => cam.state === "fallen" ? "FALL" : cam.state === "walking" || cam.state === "sitting" || cam.state === "lying" ? "WARNING" : "NORMAL";
     const stateClass = (cam) => cam.state === "fallen" ? "fallen" : cam.state === "walking" || cam.state === "sitting" || cam.state === "lying" ? "warning" : "";
     
-    const cameraCard = (cam, index = 0) => `<article class="cam ${stateClass(cam)}" data-open-camera="${esc(cam.id)}">
-      <div class="cam-head"><span>${cameraRoomName(cam, index)}</span><span class="live">Live</span></div>
-      <div class="cam-view">
-        <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
-        <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
-      </div>
-    </article>`;
+    const cameraCard = (cam, index = 0) => {
+      const isOnline = cam.status === "online";
+      return `<article class="cam ${stateClass(cam)}" data-open-camera="${esc(cam.id)}">
+        <div class="cam-head"><span>${cameraRoomName(cam, index)}</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
+        <div class="cam-view" style="position:relative; background:#0f172a; min-height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+          ${isOnline ? `
+            <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}" onerror="setTimeout(() => { if (this.isConnected) this.src = aiStreamUrl(); }, 2000);">
+          ` : `
+            <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:8px; padding:40px 0;">
+              <div style="font-size:40px;">📹</div>
+              <div style="font-size:12px; font-weight:600;">Camera đang Offline</div>
+            </div>
+          `}
+          <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+        </div>
+      </article>`;
+    };
 
 
     function kpis() {
@@ -1297,8 +1307,14 @@ function loadStore(key, fallback) {
     const dashboardCameras = () => {
       const visCameras = getVisibleCameras();
       return `<section class="dashboard-cameras">
-      <div class="row" style="margin-bottom:12px">
-        <h2>Camera Monitoring</h2>
+      <div class="row" style="margin-bottom:12px; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div class="row" style="gap:12px; align-items:center;">
+          <h2 style="margin:0;">Camera Monitoring</h2>
+          <span style="background:rgba(34, 197, 94, 0.12); color:#16a34a; border:1px solid rgba(34, 197, 94, 0.3); font-size:12px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:6px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; display:inline-block;"></span>
+            AI Giám Sát Ngầm 24/7
+          </span>
+        </div>
         ${visCameras.length > 0 ? `
         <div class="row" style="gap:8px">
           <button class="btn small primary" data-start-test-camera>Mở camera tất cả</button>
@@ -2267,16 +2283,25 @@ function loadStore(key, fallback) {
         const houses = getVisibleHouses();
         const house = houses.find(h => h.name === selectedLocation);
         const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
-        const cameraCardsHtml = camsInHouse.map((c, index) => `
+        const cameraCardsHtml = camsInHouse.map((c, index) => {
+          const isOnline = c.status === "online";
+          return `
           <article class="cam ${stateClass(c)}" data-open-camera="${esc(c.id)}" style="cursor: pointer;">
-            <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live">Live</span></div>
-            <div class="cam-view">
-              <video class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
-              <img class="real-camera-video backend-stream dashboard-camera-video" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
-              <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(c.status === "online" ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+            <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
+            <div class="cam-view" style="position:relative; background:#0f172a; min-height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+              ${isOnline ? `
+                <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}" onerror="setTimeout(() => { if (this.isConnected) this.src = aiStreamUrl(); }, 2000);">
+              ` : `
+                <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:8px; padding:40px 0;">
+                  <div style="font-size:40px;">📹</div>
+                  <div style="font-size:12px; font-weight:600;">Camera đang Offline</div>
+                </div>
+              `}
+              <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
             </div>
           </article>
-        `).join("");
+        `;
+        }).join("");
 
         const isEditable = currentUser.role === "Admin";
         const permissionBtn = (isEditable && house && house.ownerEmail)
@@ -3349,10 +3374,18 @@ function loadStore(key, fallback) {
         video.style.display = "none";
       });
       
-      document.querySelectorAll(".backend-stream").forEach((img) => {
-        img.removeAttribute("src");
-        img.style.display = "none";
-      });
+      if (stopBackend) {
+        document.querySelectorAll(".backend-stream").forEach((img) => {
+          img.removeAttribute("src");
+          img.style.display = "none";
+        });
+      } else {
+        const detailImg = $("testCameraImg");
+        if (detailImg) {
+          detailImg.removeAttribute("src");
+          detailImg.style.display = "none";
+        }
+      }
       
       const canvas = document.getElementById("testCameraCanvas");
       if (canvas) {
@@ -3997,10 +4030,10 @@ function loadStore(key, fallback) {
 
 
     function render(id = "dashboard", fetchSync = true) {
-      // Tắt camera khi rời khỏi màn hình giám sát trực tiếp
+      // Khi rời màn hình chi tiết, chỉ reset UI/webcam local, KHÔNG tắt pipeline AI ngầm trên server
       const isLiveView = (id === "user_dashboard" || id === "dashboard");
       if (!isLiveView || liveViewLevel !== "stream") {
-        stopTestCamera(false, true);
+        stopTestCamera(false, false);
       }
 
       const vis = getVisibleCameras();
@@ -4879,6 +4912,21 @@ function loadStore(key, fallback) {
               if (res.ok) {
                 console.log("Auto-login session verified with backend.");
                 await syncFromBackend();
+                // Đảm bảo pipeline AI ngầm đang hoạt động
+                try {
+                  const healthRes = await fetch(`${apiBaseUrl()}/api/health`).then(r => r.json()).catch(() => ({}));
+                  if (healthRes.ok && !healthRes.pipeline_running) {
+                    const firstOnlineCam = (cameras || []).find(c => c.status === "online") || (cameras || [])[0];
+                    if (firstOnlineCam) {
+                      await fetch(`${apiBaseUrl()}/api/control/start`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+                        body: JSON.stringify({ source: firstOnlineCam.rtsp || "0", camera_id: firstOnlineCam.id })
+                      }).catch(() => {});
+                    }
+                  }
+                } catch(e) {}
+                render(currentView, false);
               } else {
                 console.warn("Session token expired or invalid.");
                 performLogout();

@@ -1202,8 +1202,15 @@ function loadStore(key, fallback) {
     function userLiveGridHtml() {
       const visCameras = getVisibleCameras();
       return `<section class="dashboard-cameras">
-        <div class="row" style="margin-bottom:16px">
-          <h2 style="font-weight: 850; letter-spacing: -0.5px;">Camera Đang Giám Sát Trực Tiếp</h2>
+        <div class="row" style="margin-bottom:16px; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 style="font-weight: 850; letter-spacing: -0.5px; margin:0 0 4px;">Camera Đang Giám Sát Trực Tiếp</h2>
+            <p class="hint" style="margin:0; font-size:13px; color:var(--gray-600);">Hệ thống AI giám sát ngầm 24/7: Tự động phát hiện người lạ, té ngã và cảnh báo tức thì.</p>
+          </div>
+          <span style="background:rgba(34, 197, 94, 0.12); color:#16a34a; border:1px solid rgba(34, 197, 94, 0.3); font-size:12px; font-weight:700; padding:6px 12px; border-radius:20px; display:inline-flex; align-items:center; gap:8px;">
+            <span style="width:8px; height:8px; border-radius:50%; background:#22c55e; display:inline-block;"></span>
+            AI Đang Giám Sát Ngầm 24/7
+          </span>
         </div>
         <div class="grid camera-grid">
           ${visCameras.length === 0 ? `
@@ -1222,7 +1229,7 @@ function loadStore(key, fallback) {
                 <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
                 <div class="cam-view" style="position:relative; background:#0f172a; min-height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
                   ${isOnline ? `
-                    <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}">
+                    <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}" onerror="setTimeout(() => { if (this.isConnected) this.src = aiStreamUrl(); }, 2000);">
                   ` : `
                     <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:8px; padding:40px 0;">
                       <div style="font-size:40px;">📹</div>
@@ -3264,10 +3271,18 @@ function loadStore(key, fallback) {
         video.style.display = "none";
       });
       
-      document.querySelectorAll(".backend-stream").forEach((img) => {
-        img.removeAttribute("src");
-        img.style.display = "none";
-      });
+      if (stopBackend) {
+        document.querySelectorAll(".backend-stream").forEach((img) => {
+          img.removeAttribute("src");
+          img.style.display = "none";
+        });
+      } else {
+        const detailImg = $("testCameraImg");
+        if (detailImg) {
+          detailImg.removeAttribute("src");
+          detailImg.style.display = "none";
+        }
+      }
       
       const canvas = document.getElementById("testCameraCanvas");
       if (canvas) {
@@ -3913,10 +3928,10 @@ function loadStore(key, fallback) {
 
 
     function render(id = "dashboard", fetchSync = true) {
-      // Tắt camera khi rời khỏi màn hình giám sát trực tiếp
+      // Khi rời màn hình chi tiết, chỉ reset UI/webcam local, KHÔNG tắt pipeline AI ngầm trên server
       const isLiveView = (id === "user_dashboard" || id === "live");
       if (!isLiveView || liveViewLevel !== "stream") {
-        stopTestCamera(false, true);
+        stopTestCamera(false, false);
       }
 
       const vis = getVisibleCameras();
@@ -4749,8 +4764,24 @@ function loadStore(key, fallback) {
                 headers: { Authorization: `Bearer ${authToken}` }
               });
               if (res.ok) {
-                console.log("Auto-login session verified with backend.");
                 await syncFromBackend();
+                
+                // Đảm bảo pipeline AI ngầm đang hoạt động
+                try {
+                  const healthRes = await fetch(`${apiBaseUrl()}/api/health`).then(r => r.json()).catch(() => ({}));
+                  if (healthRes.ok && !healthRes.pipeline_running) {
+                    const firstOnlineCam = (cameras || []).find(c => c.status === "online") || (cameras || [])[0];
+                    if (firstOnlineCam) {
+                      await fetch(`${apiBaseUrl()}/api/control/start`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+                        body: JSON.stringify({ source: firstOnlineCam.rtsp || "0", camera_id: firstOnlineCam.id })
+                      }).catch(() => {});
+                    }
+                  }
+                } catch(e) {}
+                
+                render(currentView, false);
               } else {
                 console.warn("Session token expired or invalid.");
                 performLogout();

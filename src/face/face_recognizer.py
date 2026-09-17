@@ -188,7 +188,15 @@ class FaceRecognizer:
                 self.detector.setScoreThreshold(orig_thresh)
 
         if faces is not None and len(faces) > 0:
-            face = faces[0]  # Lấy khuôn mặt đầu tiên
+            # Lọc các khuôn mặt có độ tin cậy tốt (score >= 0.45) để loại bỏ các khối texture/vải áo giả mạo
+            valid_faces = [f for f in faces if float(f[-1]) >= 0.45]
+            if not valid_faces:
+                valid_faces = [f for f in faces if float(f[-1]) >= 0.30]
+            if not valid_faces:
+                valid_faces = list(faces)
+
+            # Chọn khuôn mặt có diện tích lớn nhất (chủ thể chính ở tiền cảnh gần ống kính)
+            face = max(valid_faces, key=lambda f: float(f[2]) * float(f[3]))
             aligned_face = self.recognizer.alignCrop(image, face)
             feature = self.recognizer.feature(aligned_face)
             return feature
@@ -205,9 +213,9 @@ class FaceRecognizer:
         h, w = frame.shape[:2]
 
         current_time = time.time()
-        # Dọn dẹp các track nhận diện cũ hơn 2.5 giây
+        # Dọn dẹp các track nhận diện người quen cũ hơn 6.0 giây (giữ nhận diện khi quay mặt đi hoặc uống nước)
         self._recent_known_tracks = [
-            t for t in self._recent_known_tracks if (current_time - t[0]) <= 2.5
+            t for t in self._recent_known_tracks if (current_time - t[0]) <= 6.0
         ]
 
         if self._initialized and self.detector is not None and self.recognizer is None:
@@ -241,7 +249,6 @@ class FaceRecognizer:
         _, faces = self.detector.detect(det_frame)
         
         num_faces = len(faces) if faces is not None else 0
-        print(f"[DEBUG] YuNet detected {num_faces} faces at threshold {self.detector.getScoreThreshold()}", flush=True)
 
         if faces is None or len(faces) == 0:
             return results
@@ -253,17 +260,13 @@ class FaceRecognizer:
         for face in faces:
             bbox = face[:4].astype(int)
             fx, fy, fw, fh = bbox[0], bbox[1], bbox[2], bbox[3]
-            
-            print(f"[DEBUG] Face bbox: {bbox}, fw: {fw}, fh: {fh}", flush=True)
 
             # Bỏ qua các vật thể nhỏ hơn 35x35 pixel hoặc hình dạng dị dạng
             if fw < 35 or fh < 35:
-                print(f"[DEBUG] Skipped due to small size: {fw}x{fh}", flush=True)
                 continue
             aspect_ratio = fw / float(max(1, fh))
             # Nới lỏng tỷ lệ khung hình vì góc quay từ dưới lên (laptop) có thể làm bóp méo khung
             if aspect_ratio < 0.30 or aspect_ratio > 2.50:
-                print(f"[DEBUG] Skipped due to aspect ratio: {aspect_ratio:.2f}", flush=True)
                 continue
 
             aligned_face = self.recognizer.alignCrop(frame, face)
@@ -290,18 +293,24 @@ class FaceRecognizer:
                 face_conf = min(0.99, max(0.50, float(best_score)))
                 self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
             else:
-                # Kiểm tra cơ chế giữ nhận diện nếu người quen vừa ở vị trí này bị che một phần mặt (IoU cao)
+                # Kiểm tra cơ chế giữ nhận diện: nếu người quen vừa ở vị trí này bị quay nghiêng mặt hoặc uống nước (IoU >= 0.18)
                 tracked_match = None
                 for t_time, t_name, t_type, t_box in reversed(self._recent_known_tracks):
-                    if _compute_iou(current_box, t_box) >= 0.30 and best_score >= (threshold * 0.70):
+                    if _compute_iou(current_box, t_box) >= 0.18 and best_score >= (threshold * 0.55):
                         tracked_match = (t_name, t_type)
                         break
 
                 if tracked_match:
                     best_match_name, best_match_type = tracked_match
-                    face_conf = min(0.95, max(0.60, float(best_score + 0.15)))
+                    face_conf = min(0.95, max(0.55, float(best_score + 0.15)))
                     self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
                 else:
+                    # Bỏ qua khuôn mặt bị cắt cụt ở sát viền mép khung hình (người đang bước vào / đi ra ngoài)
+                    # vì khuôn mặt bị cắt nửa không trích xuất đủ vector đặc trưng, dễ gây báo động giả người lạ
+                    is_touching_edge = (fx <= 8 or fy <= 8 or (fx + fw) >= (w - 8) or (fy + fh) >= (h - 8))
+                    if is_touching_edge:
+                        continue
+
                     best_match_name = "Stranger"
                     best_match_type = PersonType.STRANGER
                     det_score = float(face[14]) if len(face) > 14 else 0.90

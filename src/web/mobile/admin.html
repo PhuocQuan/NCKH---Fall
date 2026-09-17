@@ -438,13 +438,12 @@
       setTimeout(() => startTestCamera(), 150);
     }
 
-    // Tab Switching
     function switchTab(viewName) {
       if (viewName !== "live") {
-        stopTestCamera(true);
+        stopTestCamera(false);
       } else {
         if (liveViewLevel === "stream") {
-          stopTestCamera(true);
+          stopTestCamera(false);
           liveViewLevel = "locations";
         }
       }

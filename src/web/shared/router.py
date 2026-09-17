@@ -118,7 +118,13 @@ def health(request: Request) -> dict[str, Any]:
     except Exception as e:
         print(f"[Health Check DB Error] {e}")
         db_connected = False
-    return {"ok": True, "version": request.app.version, "pipeline_running": pipeline.is_running(), "db_connected": db_connected}
+    return {
+        "ok": True,
+        "version": request.app.version,
+        "pipeline_running": pipeline.is_running(),
+        "camera_id": getattr(pipeline, "camera_id", "CAM-LOCAL"),
+        "db_connected": db_connected,
+    }
 
 
 @router.post("/api/auth/login")
@@ -182,6 +188,15 @@ def update_app_state(body: AppStateModel, user: str = Depends(require_user)):
 
 @router.post("/api/control/start")
 def control_start(body: ControlRequest, user: str = Depends(require_user)) -> dict[str, Any]:
+    current_cam = getattr(pipeline, "camera_id", "")
+    current_source = pipeline.status.source
+    target_cam = body.camera_id or "CAM-LOCAL"
+    target_source = str(body.source)
+
+    # Nếu pipeline AI ngầm đang chạy đúng camera này, tái sử dụng mà không gián đoạn luồng
+    if pipeline.is_running() and (current_cam == target_cam) and (current_source == target_source):
+        return {"ok": True, "source": body.source, "status": pipeline.status.to_dict(), "reused": True}
+
     try:
         pipeline.start(body.source, camera_id=body.camera_id)
     except Exception as exc:
@@ -190,9 +205,12 @@ def control_start(body: ControlRequest, user: str = Depends(require_user)) -> di
 
 
 @router.post("/api/control/stop")
-def control_stop(user: str = Depends(require_user)) -> dict[str, bool]:
+def control_stop(user: str = Depends(require_user), force: bool = False) -> dict[str, Any]:
+    if not force:
+        # Giữ luồng AI giám sát ngầm 24/7 luôn chạy liên tục, không tắt khi người dùng chỉ chuyển trang hoặc đóng tab
+        return {"ok": True, "stopped": False, "message": "AI giam sat ngam 24/7 dang hoat dong lien tuc."}
     pipeline.stop()
-    return {"ok": True}
+    return {"ok": True, "stopped": True}
 
 
 def _mjpeg_generator():
@@ -220,6 +238,18 @@ def _placeholder_frame() -> bytes:
     return jpeg.tobytes() if ok else b""
 
 
+@router.get("/api/camera/status")
+def camera_status(request: Request):
+    if not verify_token(_extract_token(request)):
+        raise HTTPException(status_code=401, detail="Token khong hop le.")
+    return {
+        "ok": True,
+        "running": pipeline.is_running(),
+        "camera_id": getattr(pipeline, "camera_id", "CAM-LOCAL"),
+        "status": pipeline.status.to_dict(),
+    }
+
+
 @router.get("/api/camera/stream.mjpg")
 def camera_stream(request: Request):
     if not verify_token(_extract_token(request)):
@@ -240,9 +270,7 @@ def camera_stream(request: Request):
 @router.get("/api/camera/snapshot")
 def camera_snapshot(request: Request):
     t = _extract_token(request)
-    print(f"[DEBUG] Snapshot token: {t}")
     if not verify_token(t):
-        print(f"[DEBUG] verify_token failed for token: {t}")
         raise HTTPException(status_code=401, detail="Token khong hop le.")
     placeholder = _placeholder_frame()
     frame = pipeline.get_jpeg_frame() or placeholder

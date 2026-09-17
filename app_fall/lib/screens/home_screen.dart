@@ -725,8 +725,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ).then((_) {
-      // Khi đóng BottomSheet, tự động gửi lệnh stop camera lên server để tắt webcam
-      ApiClient().stopCamera();
       if (mounted) setState(() => _isViewingCamera = false);
     });
   }

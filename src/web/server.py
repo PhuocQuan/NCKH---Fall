@@ -12,6 +12,9 @@ File liên kết:
 from __future__ import annotations
 
 import argparse
+import threading
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -29,7 +32,71 @@ PROJECT_ROOT = WEB_ROOT.parents[1]
 MEDIA_DIR = PROJECT_ROOT / "data" / "media"
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="FallGuard AI API", version="1.0.6")
+
+_starting_lock = threading.Lock()
+
+
+def _auto_start_monitoring() -> None:
+    """Tự động khởi chạy AI giám sát ngầm 24/7 ngay khi server bật."""
+    if not _starting_lock.acquire(blocking=False):
+        return
+    try:
+        if pipeline.is_running():
+            return
+        time.sleep(1.0)
+        from src.web.shared.db import get_db_client
+        source = "0"
+        camera_id = "CAM-LOCAL"
+        try:
+            with get_db_client() as client:
+                res = client.execute("SELECT id, rtsp, status FROM cameras WHERE status = 'online' ORDER BY id ASC LIMIT 1")
+                if res.rows:
+                    camera_id = str(res.rows[0][0])
+                    rtsp = res.rows[0][1]
+                    if rtsp and str(rtsp).strip():
+                        source = str(rtsp).strip()
+                else:
+                    res2 = client.execute("SELECT id, rtsp FROM cameras ORDER BY id ASC LIMIT 1")
+                    if res2.rows:
+                        camera_id = str(res2.rows[0][0])
+                        rtsp = res2.rows[0][1]
+                        if rtsp and str(rtsp).strip():
+                            source = str(rtsp).strip()
+        except Exception as db_err:
+            print(f"[Auto-Start AI] Khong the truy van camera tu DB ({db_err}), dung mac dinh.")
+        
+        print(f"[Auto-Start AI] 🚀 Khoi dong giam sat AI ngam 24/7 cho Camera: {camera_id} (Nguon: {source})...")
+        pipeline.start(source=source, camera_id=camera_id)
+        print(f"[Auto-Start AI] ✅ He thong AI dang hoat dong ngam: tu dong phat hien nguoi la, te nga!")
+    except Exception as exc:
+        print(f"[Auto-Start AI Error] Loi khoi dong pipeline ngam: {exc}")
+    finally:
+        _starting_lock.release()
+
+
+def _watchdog_loop() -> None:
+    """Tự động kiểm tra và hồi sinh pipeline AI nếu bị dừng đột ngột."""
+    time.sleep(25.0)
+    while True:
+        try:
+            if not pipeline.is_running():
+                print("[Watchdog AI] 🔄 Phat hien pipeline AI ngam bi dung, tu dong khoi dong lai...")
+                _auto_start_monitoring()
+        except Exception as e:
+            print(f"[Watchdog AI Warning] {e}")
+        time.sleep(15.0)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    threading.Thread(target=_auto_start_monitoring, daemon=True).start()
+    threading.Thread(target=_watchdog_loop, daemon=True).start()
+    yield
+    print("[Shutdown] Dung pipeline AI...")
+    pipeline.stop()
+
+
+app = FastAPI(title="FallGuard AI API", version="1.0.6", lifespan=lifespan)
 
 # Database constraint exception handling
 @app.exception_handler(LibsqlError)

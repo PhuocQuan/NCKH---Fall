@@ -59,9 +59,9 @@ class VideoSource:
 
         is_rtsp = isinstance(self.source, str) and self.source.lower().startswith("rtsp://")
         if is_rtsp:
-            # Low-latency settings for FFmpeg RTSP stream decoding
+            # Low-latency settings for FFmpeg RTSP stream decoding using TCP with 5s socket timeout
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                "rtsp_transport;udp|max_delay;0|flags;low_delay|fflags;nobuffer|analyzeduration;0|probesize;32"
+                "rtsp_transport;tcp|stimeout;5000000|max_delay;500000|flags;low_delay|fflags;nobuffer|analyzeduration;1000000|probesize;1000000"
             )
 
         capture = None
@@ -90,13 +90,15 @@ class VideoSource:
             ok = False
             frame = None
             with self._lock:
-                if not self._running:
-                    break
-                if self.capture is not None and self.capture.isOpened():
-                    try:
-                        ok, frame = self.capture.read()
-                    except Exception:
-                        ok = False
+                cap = self.capture
+                running = self._running
+            if not running:
+                break
+            if cap is not None and cap.isOpened():
+                try:
+                    ok, frame = cap.read()
+                except Exception:
+                    ok, frame = False, None
 
             if ok and frame is not None:
                 consecutive_failures = 0
@@ -127,6 +129,7 @@ class VideoSource:
             if self._thread and self._thread.is_alive():
                 if self._latest_frame is not None:
                     return True, self._latest_frame.copy()
+                return False, None
 
             if self.capture and self.capture.isOpened():
                 ok, frame = self.capture.read()

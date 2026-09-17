@@ -143,12 +143,29 @@ class PoseEstimator:
         self._prev_points = points
         return points, results
 
-    def draw(self, frame_bgr: Any, results: Any) -> None:
-        if results and results.pose_landmarks:
-            self._drawing.draw_landmarks(
-                frame_bgr,
-                results.pose_landmarks,
-                self._mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=self._drawing.DrawingSpec(color=(0, 220, 110), thickness=2, circle_radius=3),
-                connection_drawing_spec=self._drawing.DrawingSpec(color=(245, 245, 245), thickness=2),
-            )
+    def draw(self, frame_bgr: Any, results: Any, include_face: bool = False) -> None:
+        if not results or not results.pose_landmarks:
+            return
+        h, w = frame_bgr.shape[:2]
+        landmarks = results.pose_landmarks.landmark
+
+        # Chỉ vẽ khung xương từ vai trở xuống (loại bỏ điểm trên mặt để nhìn rõ khuôn mặt)
+        body_conns = [
+            (a, b) for a, b in self._mp_pose.POSE_CONNECTIONS
+            if (include_face or (a >= 11 and b >= 11))
+        ]
+        drawn_points = set()
+
+        for a, b in body_conns:
+            lm1 = landmarks[a]
+            lm2 = landmarks[b]
+            if getattr(lm1, "visibility", 0) > 0.30 and getattr(lm2, "visibility", 0) > 0.30:
+                x1, y1 = int(lm1.x * w), int(lm1.y * h)
+                x2, y2 = int(lm2.x * w), int(lm2.y * h)
+                cv2.line(frame_bgr, (x1, y1), (x2, y2), (245, 245, 245), 2)
+                if a not in drawn_points:
+                    cv2.circle(frame_bgr, (x1, y1), 4, (0, 220, 110), -1)
+                    drawn_points.add(a)
+                if b not in drawn_points:
+                    cv2.circle(frame_bgr, (x2, y2), 4, (0, 220, 110), -1)
+                    drawn_points.add(b)

@@ -604,10 +604,9 @@
       stopTestCamera();
     }
 
-    // Tab view logic
     function switchTab(viewName) {
       if (viewName !== "live") {
-        stopTestCamera(true);
+        stopTestCamera(false);
       }
       currentView = viewName;
       document.querySelectorAll(".mobile-nav-item").forEach(item => {
