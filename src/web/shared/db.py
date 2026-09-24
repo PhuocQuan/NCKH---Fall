@@ -140,7 +140,12 @@ def _init_db_schema(client):
         )
 
 
+OFFLINE_LOG_PATH = Path("data/system_logs_offline.csv")
+
+
 def log_action(log_type: str, user: str, content: str) -> None:
+    import datetime
+    now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     try:
         with get_db_client() as client:
             client.execute("""
@@ -152,8 +157,6 @@ def log_action(log_type: str, user: str, content: str) -> None:
                     content TEXT
                 )
             """)
-            import datetime
-            now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             client.execute(
                 "INSERT INTO system_logs (time, type, user, content) VALUES (?, ?, ?, ?)",
                 [now_str, log_type, user, content]
@@ -163,5 +166,11 @@ def log_action(log_type: str, user: str, content: str) -> None:
                 "DELETE FROM system_logs WHERE id NOT IN (SELECT id FROM system_logs ORDER BY id DESC LIMIT 50)"
             )
     except Exception as e:
-        print(f"[Database Logging Error] {e}")
+        print(f"[Database Logging Warning - Falling back to offline log] {e}")
+        try:
+            OFFLINE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with OFFLINE_LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(f'"{now_str}","{log_type}","{user}","{content}"\n')
+        except Exception as file_err:
+            print(f"[Offline Log Error] {file_err}")
 

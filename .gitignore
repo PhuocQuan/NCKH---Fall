@@ -16,4 +16,8 @@ configs/db.json
 cloudflared.exe
 config.yml
 config.yaml
-data/pytest_tmp/
+data/pytest_tmp/
+data/*.sqlite
+data/*.csv
+data/test*
+data/video_stream_frame.jpg

@@ -104,9 +104,52 @@ class FallDetector:
         7. Đếm số frame nằm liên tục. Nếu vượt ngưỡng cảnh báo (alert_after_seconds) -> kích hoạt ALERT.
         8. Trả về kết quả (DetectionResult).
         """
-        shoulder = _midpoint(landmarks["left_shoulder"], landmarks["right_shoulder"])
-        hip = _midpoint(landmarks["left_hip"], landmarks["right_hip"])
-        nose = landmarks["nose"]
+        left_hip = landmarks.get("left_hip")
+        right_hip = landmarks.get("right_hip")
+        left_shoulder = landmarks.get("left_shoulder")
+        right_shoulder = landmarks.get("right_shoulder")
+        nose = landmarks.get("nose")
+
+        if not left_hip or not right_hip or not left_shoulder or not right_shoulder or not nose:
+            return DetectionResult(
+                state=FallState.NORMAL,
+                torso_angle_deg=0.0,
+                head_hip_delta=1.0,
+                hip_velocity=0.0,
+                angle_velocity_deg=0.0,
+                abnormal_frames=0,
+                lying_seconds=0.0,
+                profile=self.config.profile,
+                fall_like_transition=False,
+                event_started=False,
+            )
+
+        hip_vis = max(getattr(left_hip, "visibility", 1.0), getattr(right_hip, "visibility", 1.0))
+        shoulder_vis = max(getattr(left_shoulder, "visibility", 1.0), getattr(right_shoulder, "visibility", 1.0))
+
+        # QUAN TRỌNG: Khi camera chỉ thấy phần trên cơ thể (ngồi bàn, webcam góc hẹp, chỉ thấy đầu/ngực),
+        # MediaPipe ước lượng toạ độ hông ảo ngoài màn hình với visibility cực thấp (< 0.25).
+        # Cần ít nhất một bên hông và vai hiển thị rõ để thẩm định tư thế té ngã.
+        if hip_vis < 0.25 or shoulder_vis < 0.25:
+            self._lying_frames = 0
+            self._abnormal_frames = 0
+            self._fall_candidate = False
+            self._alert_active = False
+            return DetectionResult(
+                state=FallState.NORMAL,
+                torso_angle_deg=0.0,
+                head_hip_delta=1.0,
+                hip_velocity=0.0,
+                angle_velocity_deg=0.0,
+                abnormal_frames=0,
+                lying_seconds=0.0,
+                profile=self.config.profile,
+                fall_like_transition=False,
+                event_started=False,
+            )
+
+        shoulder = _midpoint(left_shoulder, right_shoulder)
+        hip = _midpoint(left_hip, right_hip)
 
         torso_angle = _angle_from_vertical(shoulder, hip)
         if nose.visibility >= 0.35:
@@ -129,11 +172,9 @@ class FallDetector:
         hip_dropped_fast = hip_velocity >= self.config.hip_drop_velocity
         body_rotated_fast = angle_velocity >= self.config.angle_change_velocity_deg
         
-        # Nhận diện nằm: thân nghiêng ngang (>= 50°) và đầu không quá cao so với hông
+        # Nhận diện nằm: thân nghiêng ngang (>= torso_fall_angle_deg) và đầu không quá cao so với hông
         max_lying_head_delta = max(0.38, self.config.head_hip_height_ratio * 1.5)
-        lying = (torso_is_horizontal and head_hip_delta <= max_lying_head_delta) or (
-            torso_angle >= 50.0 and head_hip_delta <= max_lying_head_delta
-        )
+        lying = torso_is_horizontal and (head_hip_delta <= max_lying_head_delta)
 
         if torso_is_upright:
             self._recent_upright_frames = min(self._recent_upright_frames + 1, 30)
@@ -141,7 +182,7 @@ class FallDetector:
             self._recent_upright_frames = max(0, self._recent_upright_frames - 1)
 
         fall_like_transition = torso_is_horizontal and (
-            hip_dropped_fast or body_rotated_fast or self._recent_upright_frames >= 2
+            hip_dropped_fast or body_rotated_fast or (self._recent_upright_frames >= 4 and torso_angle >= 62.0)
         )
         if fall_like_transition:
             self._fall_candidate = True

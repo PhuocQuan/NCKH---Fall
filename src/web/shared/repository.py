@@ -75,10 +75,92 @@ def soft_delete_alert_db(alert_id: str, deleted_by_users_json: str) -> None:
         )
 
 
+def batch_soft_delete_alerts_db(user: str, alert_ids: list[str] | None = None, cameras: list[str] | None = None) -> None:
+    """SQL UPDATE BATCH: Ẩn hàng loạt cảnh báo đối với User trong 1 truy vấn duy nhất."""
+    if not alert_ids and not cameras:
+        return
+    user_json = json.dumps([user])
+    user_tag = f',"{user}"]'
+    user_find = f'"{user}"'
+
+    with get_db_client() as client:
+        if alert_ids:
+            chunk_size = 400
+            for i in range(0, len(alert_ids), chunk_size):
+                chunk = alert_ids[i:i + chunk_size]
+                placeholders = ", ".join("?" for _ in chunk)
+                sql = f"""
+                    UPDATE alerts 
+                    SET deleted_by_users = CASE 
+                        WHEN deleted_by_users IS NULL OR deleted_by_users = '' OR deleted_by_users = '[]' THEN ?
+                        WHEN INSTR(deleted_by_users, ?) = 0 THEN REPLACE(deleted_by_users, ']', ?)
+                        ELSE deleted_by_users
+                    END
+                    WHERE id IN ({placeholders})
+                """
+                params = [user_json, user_find, user_tag] + chunk
+                client.execute(sql, params)
+        elif cameras:
+            placeholders = ", ".join("?" for _ in cameras)
+            sql = f"""
+                UPDATE alerts 
+                SET deleted_by_users = CASE 
+                    WHEN deleted_by_users IS NULL OR deleted_by_users = '' OR deleted_by_users = '[]' THEN ?
+                    WHEN INSTR(deleted_by_users, ?) = 0 THEN REPLACE(deleted_by_users, ']', ?)
+                    ELSE deleted_by_users
+                END
+                WHERE camera IN ({placeholders})
+            """
+            params = [user_json, user_find, user_tag] + cameras
+            client.execute(sql, params)
+
+
 def hard_delete_alert_db(alert_id: str) -> None:
     """SQL DELETE: Xóa vĩnh viễn cảnh báo khỏi DB (Dành cho Admin)."""
     with get_db_client() as client:
         client.execute("DELETE FROM alerts WHERE id = ?", [alert_id])
+
+
+def batch_hard_delete_alerts_db(alert_ids: list[str]) -> None:
+    """SQL DELETE BATCH: Xóa hàng loạt cảnh báo trong 1 câu truy vấn."""
+    if not alert_ids:
+        return
+    chunk_size = 400
+    with get_db_client() as client:
+        for i in range(0, len(alert_ids), chunk_size):
+            chunk = alert_ids[i:i + chunk_size]
+            placeholders = ", ".join("?" for _ in chunk)
+            client.execute(f"DELETE FROM alerts WHERE id IN ({placeholders})", chunk)
+
+
+def hard_delete_all_alerts_db() -> None:
+    """SQL DELETE ALL: Xóa sạch toàn bộ cảnh báo trong DB (Admin)."""
+    with get_db_client() as client:
+        client.execute("DELETE FROM alerts")
+
+
+def batch_get_alert_media_urls_db(alert_ids: list[str] | None = None) -> list[str]:
+    """SQL SELECT: Lấy danh sách URL Cloudinary của các cảnh báo cần xóa."""
+    urls = []
+    with get_db_client() as client:
+        if alert_ids is None:
+            res = client.execute("SELECT cloud_img_url, cloud_video_url FROM alerts WHERE cloud_img_url IS NOT NULL OR cloud_video_url IS NOT NULL")
+            for r in res.rows:
+                if r[0]: urls.append(r[0])
+                if r[1]: urls.append(r[1])
+        elif alert_ids:
+            chunk_size = 400
+            for i in range(0, len(alert_ids), chunk_size):
+                chunk = alert_ids[i:i + chunk_size]
+                placeholders = ", ".join("?" for _ in chunk)
+                res = client.execute(
+                    f"SELECT cloud_img_url, cloud_video_url FROM alerts WHERE id IN ({placeholders})",
+                    chunk
+                )
+                for r in res.rows:
+                    if r[0]: urls.append(r[0])
+                    if r[1]: urls.append(r[1])
+    return urls
 
 
 def solve_alert_db(alert_id: str) -> None:

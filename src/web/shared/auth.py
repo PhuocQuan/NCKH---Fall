@@ -6,6 +6,10 @@ Giúp bảo mật API, đảm bảo chỉ người dùng đã đăng nhập mớ
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
+import secrets
 import time
 import jwt
 
@@ -18,8 +22,47 @@ VALID_USERS = {
 }
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12
-JWT_SECRET_KEY = "nckh-fallguard-production-secret-key-secure-2026-v2-32byte-min-length"
+JWT_SECRET_KEY = os.environ.get(
+    "FALLGUARD_JWT_SECRET",
+    "nckh-fallguard-production-secret-key-secure-2026-v2-32byte-min-length"
+)
 JWT_ALGORITHM = "HS256"
+
+
+def hash_password(password: str) -> str:
+    """Băm mật khẩu sử dụng PBKDF2-HMAC-SHA256 với salt 16 bytes ngẫu nhiên."""
+    salt = secrets.token_hex(16)
+    iterations = 100000
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations
+    ).hex()
+    return f"$pbkdf2-sha256${iterations}${salt}${derived}"
+
+
+def verify_password(plain_password: str, stored_hash_or_plain: str) -> bool:
+    """Xác thực mật khẩu với hỗ trợ tương thích ngược (hash hoặc plaintext)."""
+    if not stored_hash_or_plain:
+        return False
+    if stored_hash_or_plain.startswith("$pbkdf2-sha256$"):
+        parts = stored_hash_or_plain.split("$")
+        if len(parts) == 5:
+            _, algo, iterations_str, salt, expected_hash = parts
+            try:
+                iterations = int(iterations_str)
+                derived = hashlib.pbkdf2_hmac(
+                    "sha256",
+                    plain_password.encode("utf-8"),
+                    salt.encode("utf-8"),
+                    iterations
+                ).hex()
+                return hmac.compare_digest(derived, expected_hash)
+            except Exception:
+                return False
+    # Fallback cho mật khẩu cũ dạng plaintext (constant-time so sánh)
+    return hmac.compare_digest(plain_password, stored_hash_or_plain)
 
 
 def login(username: str, password: str, source: str = "web") -> str:
@@ -43,7 +86,7 @@ def login(username: str, password: str, source: str = "web") -> str:
         if db_status != 'Đang hoạt động':
             raise ValueError("Tài khoản của bạn đã bị khóa.")
             
-        if db_pwd != password:
+        if not verify_password(password, str(db_pwd)):
             raise ValueError("Sai tài khoản hoặc mật khẩu.")
             
         if source == "app_fall" and db_role.lower() == "admin":
@@ -55,7 +98,8 @@ def login(username: str, password: str, source: str = "web") -> str:
             raise exc
         print(f"[Auth Error] Database check failed, falling back to local auth: {exc}")
         prefix = user.split("@", 1)[0] if "@" in user else user
-        if VALID_USERS.get(prefix) != password:
+        fallback_pwd = VALID_USERS.get(prefix)
+        if not fallback_pwd or not verify_password(password, fallback_pwd):
             raise ValueError("Sai tai khoan hoac mat khau.")
         logged_in_user = f"{prefix}@nckh.vn"
 

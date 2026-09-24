@@ -193,15 +193,26 @@ def control_start(body: ControlRequest, user: str = Depends(require_user)) -> di
     target_cam = body.camera_id or "CAM-LOCAL"
     target_source = str(body.source)
 
-    # Nếu pipeline AI ngầm đang chạy đúng camera này, tái sử dụng mà không gián đoạn luồng
-    if pipeline.is_running() and (current_cam == target_cam) and (current_source == target_source):
-        return {"ok": True, "source": body.source, "status": pipeline.status.to_dict(), "reused": True}
+    # Nếu nguồn là "0" hoặc rỗng, thử tìm trong CSDL xem camera này có đường dẫn RTSP không
+    if (not target_source or target_source == "0") and target_cam:
+        try:
+            with get_db_client() as client:
+                res = client.execute("SELECT rtsp FROM cameras WHERE id = ?", [target_cam])
+                if res.rows and res.rows[0][0]:
+                    target_source = str(res.rows[0][0]).strip()
+        except Exception:
+            pass
+
+    # Nếu pipeline AI ngầm đang chạy đúng nguồn này (hoặc cùng RTSP), tái sử dụng ngay lập tức mà không gián đoạn luồng
+    if pipeline.is_running() and (current_source == target_source):
+        pipeline.camera_id = target_cam
+        return {"ok": True, "source": target_source, "status": pipeline.status.to_dict(), "reused": True}
 
     try:
-        pipeline.start(body.source, camera_id=body.camera_id)
+        pipeline.start(target_source, camera_id=target_cam)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Khong khoi dong camera: {exc}") from exc
-    return {"ok": True, "source": body.source, "status": pipeline.status.to_dict()}
+    return {"ok": True, "source": target_source, "status": pipeline.status.to_dict()}
 
 
 @router.post("/api/control/stop")
@@ -215,16 +226,25 @@ def control_stop(user: str = Depends(require_user), force: bool = False) -> dict
 
 def _mjpeg_generator():
     placeholder = _placeholder_frame()
-    last_jpeg = None
+    last_frame_id = -1
     while True:
-        frame = pipeline.get_jpeg_frame() or placeholder
-        if frame != last_jpeg:
-            last_jpeg = frame
+        try:
+            if hasattr(pipeline, "get_next_jpeg_frame"):
+                frame_id, frame = pipeline.get_next_jpeg_frame(last_frame_id=last_frame_id, timeout=0.04)
+                if frame is not None:
+                    last_frame_id = frame_id
+                else:
+                    frame = placeholder
+            else:
+                frame = pipeline.get_jpeg_frame(wait_new=True, timeout=0.035) or placeholder
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
             )
-        time.sleep(0.035)
+        except GeneratorExit:
+            break
+        except Exception:
+            break
 
 
 def _placeholder_frame() -> bytes:
@@ -233,7 +253,7 @@ def _placeholder_frame() -> bytes:
 
     img = np.zeros((480, 640, 3), dtype=np.uint8)
     cv2.putText(img, "FallGuard AI", (170, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
-    cv2.putText(img, "Nhan Mo camera de bat dau", (120, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 1)
+    cv2.putText(img, "Dang tai luong truc tiep...", (140, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 1)
     ok, jpeg = cv2.imencode(".jpg", img)
     return jpeg.tobytes() if ok else b""
 

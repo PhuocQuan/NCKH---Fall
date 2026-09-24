@@ -1246,6 +1246,11 @@
         return;
       }
       
+      const prevAlerts = [...alerts];
+      alerts = [];
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1258,18 +1263,20 @@
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || "Lỗi khi xóa tất cả cảnh báo.");
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            render(currentView);
+            alert(err.detail || "Lỗi khi xóa tất cả cảnh báo trên máy chủ.");
             return;
           }
         } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          render(currentView);
           alert("Lỗi kết nối khi xóa tất cả cảnh báo.");
           return;
         }
       }
-      
-      alerts = [];
-      saveStore("fg_alerts", alerts);
-      render(currentView);
     }
 
     function sendEmergencyAlertMsg(phone) {

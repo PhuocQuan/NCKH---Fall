@@ -140,3 +140,39 @@ def test_notification(body: TestNotifRequest, user: str = Depends(require_user))
         raise HTTPException(status_code=400, detail=str(val_err)) from val_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi gửi tin nhắn test: {e}") from e
+
+
+class CameraAutoBindRequest(BaseModel):
+    camera_id: str | None = None
+    new_ip: str
+    safety_code: str = "L223Xr!w"
+
+
+@router.get("/api/cameras/discover")
+def discover_cameras(user: str = Depends(require_user)) -> dict[str, Any]:
+    """Tự động quét mạng Wi-Fi/LAN để tìm các camera IP (Imou, Dahua, ONVIF)."""
+    try:
+        from src.camera.camera_discovery import discover_all_cameras, get_local_ip, get_subnet_prefix
+        local_ip = get_local_ip()
+        subnet = f"{get_subnet_prefix(local_ip)}0/24"
+        print(f"[Discovery API] Dang quet camera tren subnet: {subnet} (Local IP: {local_ip})...")
+        cams = discover_all_cameras()
+        print(f"[Discovery API] Hoan tat! Tim thay {len(cams)} camera.")
+        return {
+            "ok": True,
+            "local_ip": local_ip,
+            "subnet": subnet,
+            "cameras": cams,
+            "count": len(cams)
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[Discovery API Error] {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi khi quét mạng Wi-Fi: {e}") from e
+
+
+@router.post("/api/cameras/auto-bind")
+def auto_bind_camera(body: CameraAutoBindRequest, user: str = Depends(require_user)) -> dict[str, Any]:
+    """Tự động cập nhật IP mới và tái kết nối camera khi bị đổi IP."""
+    return service.auto_bind_camera(body.camera_id or "", body.new_ip, body.safety_code, user)

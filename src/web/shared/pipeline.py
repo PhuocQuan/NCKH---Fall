@@ -88,9 +88,15 @@ class FallDetectionPipeline:
     def __init__(self, config_path: str = "configs/default.yaml") -> None:
         self.config_path = config_path
         self._lock = threading.Lock()
+        self._overlay_lock = threading.Lock()
+        self._new_jpeg_event = threading.Event()
+        self._frame_cond = threading.Condition(self._lock)
+        self._frame_id = 0
         self._latest_jpeg: bytes | None = None
         self._status = PipelineStatus()
         self._thread: threading.Thread | None = None
+        self._stream_thread: threading.Thread | None = None
+        self._ai_thread: threading.Thread | None = None
         self._running = False
         self._video: VideoSource | None = None
         self._estimator: PoseEstimator | None = None
@@ -107,8 +113,28 @@ class FallDetectionPipeline:
         from collections import deque
         self._frame_buffer = deque(maxlen=200)
 
+        # Decoupled AI pipeline state
+        self._latest_ai_frame: Any = None
+        self._ai_trigger_event = threading.Event()
+        self._cached_pose_results: Any = None
+        self._cached_points: dict | None = None
+        self._cached_faces: list = []
+        self._cached_faces_ts: float = 0.0
+        self._cached_fall_result: Any = None
+        self._cached_ai_prediction: Any = None
+        self._cached_track_box: tuple | None = None
 
-
+    def _buffer_frame(self, frame, cv2) -> None:
+        """Lưu frame vào buffer để ghi clip khi té ngã. Tối ưu kích thước để không tràn RAM."""
+        try:
+            h, w = frame.shape[:2]
+            if w > 640 or h > 360:
+                buf_frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+            else:
+                buf_frame = frame.copy()
+            self._frame_buffer.append(buf_frame)
+        except Exception:
+            self._frame_buffer.append(frame.copy())
 
     @property
     def status(self) -> PipelineStatus:
@@ -119,21 +145,34 @@ class FallDetectionPipeline:
         with self._lock:
             return list(self._recent_alerts)
 
-    def get_jpeg_frame(self) -> bytes | None:
+    def get_jpeg_frame(self, wait_new: bool = False, timeout: float = 0.04) -> bytes | None:
+        if wait_new:
+            self._new_jpeg_event.wait(timeout=timeout)
+            self._new_jpeg_event.clear()
         with self._lock:
             return self._latest_jpeg
 
+    def get_next_jpeg_frame(self, last_frame_id: int = -1, timeout: float = 0.04) -> tuple[int, bytes | None]:
+        with self._frame_cond:
+            if self._frame_id == last_frame_id or self._latest_jpeg is None:
+                self._frame_cond.wait(timeout=timeout)
+            return self._frame_id, self._latest_jpeg
+
     def is_running(self) -> bool:
         with self._lock:
-            return bool(self._running and self._thread and self._thread.is_alive())
+            stream_alive = bool(self._stream_thread and self._stream_thread.is_alive())
+            return bool(self._running and stream_alive)
 
     def start(self, source: str | int = "0", camera_id: str | None = None) -> None:
+        target_cam = camera_id or "CAM-LOCAL"
+        target_source = str(source)
         with self._lock:
-            if self._running:
+            if self._running and self._status.source == target_source and self._stream_thread and self._stream_thread.is_alive():
+                self.camera_id = target_cam
                 return
 
         self.stop()
-        self.camera_id = camera_id or "CAM-LOCAL"
+        self.camera_id = target_cam
         try:
             runtime = _import_runtime()
         except ImportError as exc:
@@ -159,7 +198,6 @@ class FallDetectionPipeline:
         self._logger = EventLogger(config.app.event_log_path)
         self._face_recognizer = FaceRecognizer(config.face)
 
-
         normalized = int(source) if str(source).isdigit() else source
         self._video = VideoSource(
             source=normalized,
@@ -170,15 +208,33 @@ class FallDetectionPipeline:
         self._running = True
         with self._lock:
             self._status = PipelineStatus(running=True, source=str(source))
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
+
+        # Khởi chạy luồng AI inference ngầm (chạy song song, không nghẽn luồng video)
+        self._ai_thread = threading.Thread(target=self._ai_worker_loop, daemon=True)
+        self._ai_thread.start()
+
+        # Khởi chạy luồng render stream (chạy ở tốc độ gốc 25-30 FPS của camera, mượt mà 0ms delay)
+        self._stream_thread = threading.Thread(target=self._stream_loop, daemon=True)
+        self._stream_thread.start()
+        self._thread = self._stream_thread
 
     def stop(self) -> None:
-        """Tắt Camera và dừng luồng AI."""
+        """Tắt Camera và dừng các luồng AI/Stream."""
         self._running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2.0)
+        self._ai_trigger_event.set()
+        with self._frame_cond:
+            self._frame_cond.notify_all()
+        self._new_jpeg_event.set()
+
+        if self._stream_thread and self._stream_thread.is_alive() and threading.current_thread() != self._stream_thread:
+            self._stream_thread.join(timeout=1.0)
+        self._stream_thread = None
+
+        if self._ai_thread and self._ai_thread.is_alive() and threading.current_thread() != self._ai_thread:
+            self._ai_thread.join(timeout=1.0)
+        self._ai_thread = None
         self._thread = None
+
         if self._estimator:
             self._estimator.close()
             self._estimator = None
@@ -189,11 +245,24 @@ class FallDetectionPipeline:
         self._feature_buffer = None
         self._ai_classifier = None
         self._runtime = None
+        with self._overlay_lock:
+            self._latest_ai_frame = None
+            self._cached_pose_results = None
+            self._cached_points = None
+            self._cached_faces = []
+            self._cached_faces_ts = 0.0
+            self._cached_fall_result = None
+            self._cached_ai_prediction = None
+            self._cached_track_box = None
         with self._lock:
             self._status = PipelineStatus()
             self._latest_jpeg = None
 
     def _loop(self) -> None:
+        """Alias tương thích ngược."""
+        self._stream_loop()
+
+    def _stream_loop(self) -> None:
         runtime = self._runtime
         if not runtime:
             return
@@ -213,97 +282,212 @@ class FallDetectionPipeline:
             PersonType.ATTENTION: (0, 220, 255),
             PersonType.STRANGER: (40, 40, 230),
         }
+
         frames = 0
         started = time.perf_counter()
-        cached_faces = []
-        raw_faces = None
-        last_face_nose = None
+        fps_counter = 0
+        fps_last_time = time.perf_counter()
+        current_fps = 0.0
 
-        while self._running and self._video and self._estimator and self._detector:
+        encode_params = [
+            int(cv2.IMWRITE_JPEG_QUALITY), 68,
+            int(cv2.IMWRITE_JPEG_OPTIMIZE), 0,
+        ]
+
+        while self._running and self._video:
             try:
                 frame_start = time.perf_counter()
-                ok, frame = self._video.read()
+                ok, frame = self._video.read(timeout=0.04)
                 if not ok or frame is None:
                     with self._lock:
                         self._status.last_error = "Dang ket noi camera..."
-                    time.sleep(0.02)
+                    time.sleep(0.01)
                     continue
 
-                clean_frame = frame.copy()
-                points, pose_results = self._estimator.estimate(frame)
+                # Chuẩn hóa kích thước khung hình stream: Giảm tải CPU khi camera Full HD/2K
+                h_orig, w_orig = frame.shape[:2]
+                if w_orig > 800:
+                    scale = 800.0 / w_orig
+                    frame = cv2.resize(frame, (800, int(h_orig * scale)), interpolation=cv2.INTER_LINEAR)
 
-                # Xử lý nhận diện đa khuôn mặt thời gian thực
+                # Gửi bản frame sạch cho AI worker xử lý ngầm (không chờ AI, không delay stream)
+                with self._overlay_lock:
+                    self._latest_ai_frame = frame
+                self._ai_trigger_event.set()
+
+                # Sao chép frame để vẽ overlay (frame gốc được giữ sạch cho AI)
+                display_frame = frame.copy()
+
+                # Lấy kết quả AI mới nhất từ bộ nhớ đệm
+                now_overlay = time.time()
+                with self._overlay_lock:
+                    # TTL: Chỉ vẽ khuôn mặt nếu kết quả nhận diện mới cập nhật trong vòng 0.40s
+                    # Tránh tuyệt đối hiện tượng khung mặt bị đông cứng/đứng hình khi người di chuyển
+                    if (now_overlay - self._cached_faces_ts) <= 0.40:
+                        cached_faces = list(self._cached_faces)
+                    else:
+                        cached_faces = []
+                    cached_pose = self._cached_pose_results
+                    cached_result = self._cached_fall_result
+                    cached_ai = self._cached_ai_prediction
+                    cached_track = self._cached_track_box
+                    pose_detected = (self._cached_points is not None)
+
+                # 1. Vẽ nhận diện khuôn mặt
+                if cached_faces:
+                    show_stranger_badge = bool(self._stranger_active_session or self._stranger_consecutive_frames >= 12)
+                    _draw_faces(display_frame, cached_faces, person_type_colors, cv2, show_stranger_alert=show_stranger_badge)
+
+                # 2. Vẽ skeleton khung xương
+                if cached_pose and self._estimator:
+                    self._estimator.draw(display_frame, cached_pose)
+
+                # 3. Vẽ trạng thái Fall Detection HUD
+                _draw_status(display_frame, cached_result, cached_ai, state_colors, cv2, pose_detected=pose_detected)
+
+                # 4. Vẽ khung cảnh báo té ngã nếu có
+                if cached_track and cached_result and cached_result.state.value in {"warning", "possible_fall", "fallen", "alert"}:
+                    bx1, by1, bx2, by2 = cached_track
+                    track_color = state_colors.get(cached_result.state, (40, 40, 230))
+                    cv2.rectangle(display_frame, (bx1, by1), (bx2, by2), track_color, 2)
+                    track_txt = f"CANH BAO: {cached_result.state.value.upper()}"
+                    cv2.putText(display_frame, track_txt, (bx1, max(20, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, track_color, 2)
+
+                # 5. Lưu vào buffer ghi clip té ngã
+                self._buffer_frame(display_frame, cv2)
+
+                # 6. Tính FPS thực tế
+                frames += 1
+                fps_counter += 1
+                now_perf = time.perf_counter()
+                if now_perf - fps_last_time >= 0.8:
+                    current_fps = round(fps_counter / (now_perf - fps_last_time), 1)
+                    fps_counter = 0
+                    fps_last_time = now_perf
+
+                # 7. Encode JPEG siêu tốc và thông báo cho các client
+                ok_enc, jpeg = cv2.imencode(".jpg", display_frame, encode_params)
+                if ok_enc:
+                    jpeg_bytes = jpeg.tobytes()
+                    with self._frame_cond:
+                        self._latest_jpeg = jpeg_bytes
+                        self._frame_id += 1
+                        self._status.fps = current_fps or round(frames / max(now_perf - started, 0.001), 1)
+                        self._status.latency_ms = round((now_perf - frame_start) * 1000, 1)
+                        self._status.running = True
+                        self._status.last_error = ""
+                        self._frame_cond.notify_all()
+                    self._new_jpeg_event.set()
+
+            except Exception as stream_err:
+                with self._lock:
+                    self._status.last_error = f"Lỗi Stream: {str(stream_err)[:40]}"
+                time.sleep(0.01)
+
+    def _ai_worker_loop(self) -> None:
+        runtime = self._runtime
+        if not runtime:
+            return
+        cv2 = runtime["cv2"]
+        ai_frame_count = 0
+
+        while self._running and self._estimator and self._detector:
+            try:
+                if not self._ai_trigger_event.wait(timeout=0.05):
+                    continue
+                self._ai_trigger_event.clear()
+
+                with self._overlay_lock:
+                    if self._latest_ai_frame is None:
+                        continue
+                    clean_frame = self._latest_ai_frame
+                    self._latest_ai_frame = None
+
+                ai_frame_count += 1
+
+                # 1. Pose estimation (MediaPipe Lite - độc lập, không làm nghẽn Face)
+                points = None
+                pose_results = None
+                try:
+                    points, pose_results = self._estimator.estimate(clean_frame)
+                except Exception as pose_err:
+                    print(f"[Pose Estimator Error] {pose_err}")
+
+                # 2. Face recognition (Chạy liên tục mỗi chu kỳ AI để bám sát khuôn mặt theo thời gian thực)
+                current_faces = []
                 if hasattr(self, "_face_recognizer") and self._face_recognizer is not None:
-                    if frames % 2 == 0 or cached_faces is None or len(cached_faces) == 0:
-                        try:
-                            cached_faces = self._face_recognizer.recognize(clean_frame)
-                        except Exception as e:
-                            cached_faces = []
+                    try:
+                        current_faces = self._face_recognizer.recognize(clean_frame)
+                    except Exception as face_err:
+                        print(f"[Face Recognizer Error] {face_err}")
+                        current_faces = []
 
-                current_person_name = cached_faces[0].name if cached_faces else "Unknown"
-                current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
-                
-                # 1. Vẽ nhận diện khuôn mặt & Cảnh báo người lạ
-                _draw_faces(frame, cached_faces, person_type_colors, cv2)
+                current_person_name = current_faces[0].name if current_faces else "Unknown"
+                current_person_type = current_faces[0].person_type.value if current_faces else "N/A"
 
+                # 3. Xử lý cảnh báo người lạ
                 now_ts = time.time()
-                stranger_faces = [
-                    f for f in cached_faces
-                    if (f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)) == "STRANGER"
-                ]
+                stranger_faces = []
+                for f in current_faces:
+                    ptype = f.person_type.value if hasattr(f.person_type, "value") else str(f.person_type)
+                    if ptype == "STRANGER":
+                        # Nếu vị trí khuôn mặt này trùng với vị trí người quen vừa xuất hiện trong vòng 4 giây qua,
+                        # thì đây là người quen quay đầu/uống nước, không xem là người lạ xâm nhập
+                        if (
+                            hasattr(self, "_face_recognizer")
+                            and self._face_recognizer is not None
+                            and hasattr(self._face_recognizer, "is_near_recent_known_face")
+                            and self._face_recognizer.is_near_recent_known_face(f.box, max_seconds=4.0)
+                        ):
+                            continue
+                        stranger_faces.append(f)
+
                 has_stranger = len(stranger_faces) > 0
                 if has_stranger:
                     self._last_stranger_seen_time = now_ts
                     self._stranger_consecutive_frames += 1
                 else:
                     self._stranger_consecutive_frames = max(0, self._stranger_consecutive_frames - 1)
-                    # Nếu người lạ đã rời đi khỏi khung hình hơn 30 giây -> kết thúc phiên theo dõi
-                    if self._stranger_active_session and (now_ts - self._last_stranger_seen_time > 30.0):
+                    if self._stranger_active_session and (now_ts - self._last_stranger_seen_time > 15.0):
                         self._stranger_active_session = False
                         print("[Stranger Session] Người lạ đã rời đi khỏi khu vực giám sát.")
 
-                # Chỉ phát chuông báo động 1 LẦN DUY NHẤT khi người lạ mới bước vào (không kêu lặp lại nếu cùng 1 người)
-                # Cần nhận diện liên tục 15 frame (~1 - 1.5 giây) để tránh người nhà chỉ ngoảnh mặt đi thoáng qua
-                if (has_stranger and (self._stranger_consecutive_frames >= 15) 
-                        and not self._stranger_active_session 
-                        and (now_ts - self._last_stranger_alert_time > 60.0)):
-                    self._last_stranger_alert_time = now_ts
-                    self._stranger_active_session = True  # Khóa phiên: không kêu lại khi cùng người này còn ở đây!
-                    self._stranger_consecutive_frames = 0
-                    stranger_id = f"STRANGER-{int(now_ts)}"
-                    best_face_conf = max((getattr(f, "confidence", 0.90) for f in stranger_faces), default=0.90)
-                    conf_pct = min(99, max(75, int(round(best_face_conf * 100))))
-                    print(f"[Stranger Alert] 🚨 Phát hiện người lạ mới! Độ tin cậy AI: {conf_pct}% - {stranger_id}")
+                # Báo động người lạ chỉ kích hoạt khi duy trì liên tục >= 16 AI frames (~1.2 - 1.5 giây)
+                # và độ tin cậy AI >= 0.60 để loại trừ mọi rung động/nhiễu thoáng qua
+                if (has_stranger and (self._stranger_consecutive_frames >= 16)
+                        and not self._stranger_active_session
+                        and (now_ts - self._last_stranger_alert_time > 20.0)):
+                    best_face_conf = max((getattr(f, "confidence", 0.85) for f in stranger_faces), default=0.85)
+                    if best_face_conf >= 0.60:
+                        self._last_stranger_alert_time = now_ts
+                        self._stranger_active_session = True
+                        self._stranger_consecutive_frames = 0
+                        stranger_id = f"STRANGER-{int(now_ts)}"
+                        conf_pct = min(99, max(60, int(round(best_face_conf * 100))))
+                        print(f"[Stranger Alert] 🚨 Phát hiện người lạ mới! Độ tin cậy AI: {conf_pct}% - {stranger_id}")
 
-                    self._push_stranger_alert(stranger_id, confidence=conf_pct)
-                    threading.Thread(target=_play_alert_sound, daemon=True).start()
+                        self._push_stranger_alert(stranger_id, confidence=conf_pct)
+                        threading.Thread(target=_play_alert_sound, daemon=True).start()
 
-                    snapshot = clean_frame.copy()
-                    threading.Thread(
-                        target=self._save_event_media,
-                        args=(stranger_id, snapshot, []),
-                        daemon=True,
-                    ).start()
+                        snapshot = clean_frame.copy()
+                        threading.Thread(
+                            target=self._save_event_media,
+                            args=(stranger_id, snapshot, []),
+                            daemon=True,
+                        ).start()
 
-                # 2. Vẽ khung xương skeleton trực tiếp thời gian thực nếu phát hiện
-                if pose_results and pose_results.pose_landmarks and self._estimator:
-                    self._estimator.draw(frame, pose_results)
-
-                # 3. Xử lý phân tích tư thế Té ngã
+                # 4. Phân tích tư thế Té ngã
                 ai_prediction = None
                 result = None
+                track_box = None
+                h_f, w_f = clean_frame.shape[:2]
+
                 if points and self._feature_buffer and self._ai_classifier:
                     features = self._feature_buffer.append(points)
                     ai_prediction = self._ai_classifier.predict(features)
                     result = self._detector.update(points)
 
                     event_triggered = result.event_started and self._logger
-                    _draw_status(frame, result, ai_prediction, state_colors, cv2)
-
-                    # Lưu frame live vào lịch sử buffer
-                    self._frame_buffer.append(frame.copy())
-
-                    # Cảnh báo Té ngã -> BẢO TOÀN KHUNG XƯƠNG làm bằng chứng
                     if event_triggered:
                         alert_id = f"AL-{int(time.time())}"
                         print(f"[Fall Alert] 🚨 PHÁT HIỆN TÉ NGÃ: {alert_id} | Người: {current_person_name} | Góc thân: {result.torso_angle_deg:.1f}° | Trạng thái: {result.state.value}")
@@ -323,65 +507,43 @@ class FallDetectionPipeline:
                             daemon=True
                         ).start()
 
-                    status = PipelineStatus(
-                        running=True,
-                        source=self._status.source,
-                        state=result.state.value,
-                        torso_angle_deg=result.torso_angle_deg,
-                        lying_seconds=result.lying_seconds,
-                        hip_velocity=result.hip_velocity,
-                        angle_velocity_deg=result.angle_velocity_deg,
-                        profile=result.profile,
-                        ai_label=ai_prediction.label if ai_prediction else "disabled",
-                        ai_probability=ai_prediction.probability if ai_prediction else 0.0,
-                        ai_enabled=bool(ai_prediction and ai_prediction.enabled),
-                        pose_detected=True,
-                        last_error="",
-                    )
-                else:
-                    if self._feature_buffer:
-                        self._feature_buffer.reset()
-                    _draw_status(frame, None, ai_prediction, state_colors, cv2, pose_detected=False)
-                    self._frame_buffer.append(frame.copy())
-                    status = PipelineStatus(
-                        running=True,
-                        source=self._status.source,
-                        state="normal",
-                        pose_detected=False,
-                        last_error="",
-                    )
-
-                # 4. Chỉ vẽ khung cảnh báo toàn thân khi có dấu hiệu té ngã (không vẽ khung người bình thường để thấy rõ mặt)
-                if result and result.state.value in {"warning", "possible_fall", "fallen", "alert"}:
-                    h_f, w_f = frame.shape[:2]
-                    track_box = None
-                    if points:
+                    if result.state.value in {"warning", "possible_fall", "fallen", "alert"}:
                         xs = [p.x * w_f for p in points.values() if getattr(p, "visibility", 0) > 0.20]
                         ys = [p.y * h_f for p in points.values() if getattr(p, "visibility", 0) > 0.20]
                         if xs and ys:
                             track_box = (max(0, int(min(xs) - 15)), max(0, int(min(ys) - 15)), min(w_f, int(max(xs) + 15)), min(h_f, int(max(ys) + 15)))
-                    if track_box:
-                        bx1, by1, bx2, by2 = track_box
-                        track_color = state_colors.get(result.state, (40, 40, 230))
-                        cv2.rectangle(frame, (bx1, by1), (bx2, by2), track_color, 2)
-                        track_txt = f"CANH BAO: {result.state.value.upper()}"
-                        cv2.putText(frame, track_txt, (bx1, max(20, by1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, track_color, 2)
 
-                frames += 1
-                elapsed = max(time.perf_counter() - started, 0.001)
-                status.fps = round(frames / elapsed, 1)
-                status.latency_ms = round((time.perf_counter() - frame_start) * 1000, 1)
-
-                ok_enc, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-                if ok_enc:
                     with self._lock:
-                        self._latest_jpeg = jpeg.tobytes()
-                        self._status = status
+                        self._status.state = result.state.value
+                        self._status.torso_angle_deg = result.torso_angle_deg
+                        self._status.lying_seconds = result.lying_seconds
+                        self._status.hip_velocity = result.hip_velocity
+                        self._status.angle_velocity_deg = result.angle_velocity_deg
+                        self._status.profile = result.profile
+                        self._status.ai_label = ai_prediction.label if ai_prediction else "disabled"
+                        self._status.ai_probability = ai_prediction.probability if ai_prediction else 0.0
+                        self._status.ai_enabled = bool(ai_prediction and ai_prediction.enabled)
+                        self._status.pose_detected = True
+                else:
+                    if self._feature_buffer:
+                        self._feature_buffer.reset()
+                    with self._lock:
+                        self._status.state = "normal"
+                        self._status.pose_detected = False
 
-                time.sleep(0.001)
-            except Exception as loop_err:
+                # 5. Cập nhật cache overlay để Stream Loop lấy vẽ
+                with self._overlay_lock:
+                    self._cached_pose_results = pose_results
+                    self._cached_points = points
+                    self._cached_faces = current_faces
+                    self._cached_faces_ts = time.time()
+                    self._cached_fall_result = result
+                    self._cached_ai_prediction = ai_prediction
+                    self._cached_track_box = track_box
+
+            except Exception as ai_err:
                 with self._lock:
-                    self._status.last_error = f"Lỗi AI: {str(loop_err)[:40]}"
+                    self._status.last_error = f"Lỗi AI Worker: {str(ai_err)[:40]}"
                 time.sleep(0.02)
 
     def _push_alert(self, result, alert_id: str, person_name: str | None = None) -> None:
@@ -633,11 +795,11 @@ def _draw_text(frame, text: str, origin: tuple[int, int], color: tuple[int, int,
     cv2.putText(frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, 1, cv2.LINE_AA)
 
 
-def _draw_faces(frame, faces, person_type_colors, cv2) -> None:
+def _draw_faces(frame, faces, person_type_colors, cv2, show_stranger_alert: bool = False) -> None:
     has_stranger = False
     
     for face in faces:
-        x, y, w, h = face.box
+        x, y, w, h = int(face.box[0]), int(face.box[1]), int(face.box[2]), int(face.box[3])
         color = person_type_colors.get(face.person_type, (200, 200, 200))
 
         # Khung viền mỏng đẹp
@@ -663,7 +825,7 @@ def _draw_faces(frame, faces, person_type_colors, cv2) -> None:
         text_color = (0, 0, 0) if ptype_str in ("FAMILY", "ATTENTION") else (255, 255, 255)
         cv2.putText(frame, label, (x + 5, label_bg_y2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA)
 
-    if has_stranger:
+    if show_stranger_alert and has_stranger:
         h_img, w_img = frame.shape[:2]
         # Báo động ở góc trên bên phải (tránh đè lên Status Badge ở góc trái)
         badge_w = 230

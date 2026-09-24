@@ -1324,7 +1324,7 @@ function loadStore(key, fallback) {
               <div class="cam-view" style="position:relative; background:#0b0f19;">
                 <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
                 <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-                <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
+                <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:block;" src="${aiStreamUrl()}">
                 <div class="person" style="display:none;"></div>
                 <span class="overlay-note" id="liveOverlayNote" style="display:none; z-index: 10;">Fall Detected</span>
                 <span class="state" id="liveStateBadge" style="z-index: 10;">${statusPill(cam.state.toUpperCase())}</span>
@@ -1489,6 +1489,14 @@ function loadStore(key, fallback) {
       }
       
       const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+      const prevAlerts = [...alerts];
+
+      // Optimistic update: UI phản hồi ngay lập tức 0ms
+      alerts = alerts.filter(a => !ids.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+      toast(`Đã xóa thành công ${ids.length} cảnh báo!`);
+
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1501,19 +1509,18 @@ function loadStore(key, fallback) {
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || "Lỗi khi xóa cảnh báo.");
-            return;
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            render(currentView);
+            alert(err.detail || "Lỗi khi xóa cảnh báo trên máy chủ.");
           }
         } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          render(currentView);
           alert("Lỗi kết nối khi xóa cảnh báo.");
-          return;
         }
       }
-      
-      alerts = alerts.filter(a => !ids.includes(a.id));
-      saveStore("fg_alerts", alerts);
-      render(currentView);
-      toast(`Đã xóa thành công ${ids.length} cảnh báo!`);
     };
 
     window.deleteAllUserAlerts = async function(category = "all") {
@@ -1539,6 +1546,14 @@ function loadStore(key, fallback) {
       }
       
       const targetIds = targetAlerts.map(a => a.id);
+      const prevAlerts = [...alerts];
+
+      // Optimistic update: UI phản hồi ngay lập tức 0ms
+      alerts = alerts.filter(a => !targetIds.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+      toast(`Đã xóa tất cả ${targetIds.length} ${label} thành công!`);
+
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1551,19 +1566,18 @@ function loadStore(key, fallback) {
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || "Lỗi khi xóa cảnh báo.");
-            return;
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            render(currentView);
+            alert(err.detail || "Lỗi khi xóa cảnh báo trên máy chủ.");
           }
         } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          render(currentView);
           alert("Lỗi kết nối khi xóa tất cả cảnh báo.");
-          return;
         }
       }
-      
-      alerts = alerts.filter(a => !targetIds.includes(a.id));
-      saveStore("fg_alerts", alerts);
-      render(currentView);
-      toast(`Đã xóa tất cả ${targetIds.length} ${label} thành công!`);
     };
 
     window.filterUserAlertsTable = function() {
@@ -2712,10 +2726,11 @@ function loadStore(key, fallback) {
       
       const hintEl = $("cameraTestHint");
       const modeSelect = $("cameraModeSelect");
-      const selectedMode = modeSelect ? modeSelect.value : "server";
+      const isIpCam = Boolean(cam && cam.rtsp && String(cam.rtsp).startsWith("rtsp://"));
+      const selectedMode = modeSelect ? modeSelect.value : (isIpCam ? "server" : (isBackendOnline ? "server" : "client"));
       
       if (selectedMode === "server" && isBackendOnline) {
-        if (hintEl) hintEl.textContent = "Đang kết nối tới server AI...";
+        if (hintEl) hintEl.textContent = `Đang kết nối tới Camera IP ${cam ? cam.name : ""}...`;
         try {
           await backendLogin();
           const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
@@ -2747,16 +2762,24 @@ function loadStore(key, fallback) {
           const canvas = document.getElementById("testCameraCanvas");
           if (canvas) canvas.style.display = "none";
           
-          if (hintEl) hintEl.textContent = "AI Backend đang chạy. Đang phát luồng dữ liệu từ server.";
+          if (hintEl) hintEl.textContent = `AI Backend đang giám sát Camera IP ${cam ? cam.name : ""}`;
           startStatusPolling();
         } catch (err) {
           console.error(err);
-          if (hintEl) hintEl.textContent = `Lỗi Backend: ${err.message || err}. Chuyển sang Trình duyệt AI.`;
-          isBackendOnline = false;
-          await startLocalWebcam();
+          if (hintEl) hintEl.textContent = `Lỗi Camera: ${err.message || err}`;
+          if (isIpCam) {
+            alert(`Lỗi kết nối Camera Imou: ${err.message || err}`);
+          } else {
+            isBackendOnline = false;
+            await startLocalWebcam();
+          }
         }
       } else {
-        await startLocalWebcam();
+        if (isIpCam) {
+          alert(`Camera ${cam ? cam.name : ""} là Camera IP RTSP. Vui lòng đảm bảo Server AI đang hoạt động.`);
+        } else {
+          await startLocalWebcam();
+        }
       }
     }
 

@@ -12,6 +12,7 @@ import math
 from typing import Any
 
 import cv2
+import src.core.protobuf_patch  # noqa: F401
 import mediapipe as mp
 
 drawing_utils = mp.solutions.drawing_utils
@@ -89,18 +90,18 @@ class PoseEstimator:
         ]
         avg_key_vis = sum(key_visibilities) / len(key_visibilities)
 
-        # Ngưỡng trung bình 0.22 giúp nhận diện tốt người ngã/nằm sàn mà vẫn lọc được đồ vật vô tri
-        if avg_key_vis < 0.22:
+        # Ngưỡng trung bình 0.16 giúp nhận diện tốt người ngã/nằm sàn mà vẫn lọc được đồ vật vô tri
+        if avg_key_vis < 0.16:
             self._prev_points = None
             return None, results
 
-        # 2. Vai và đầu: Ít nhất 1 bên vai và 1 điểm trên khuôn mặt nhận diện được
+        # 2. Vai và đầu: Ít nhất 1 bên vai có thể nhận diện được
         sh_max_vis = max(points["left_shoulder"].visibility, points["right_shoulder"].visibility)
         sh_avg_vis = (points["left_shoulder"].visibility + points["right_shoulder"].visibility) / 2.0
         face_vis = [left_eye.visibility, right_eye.visibility, left_ear.visibility, right_ear.visibility]
         head_vis = max(points["nose"].visibility, max(face_vis))
 
-        if sh_max_vis < 0.25 or sh_avg_vis < 0.18 or head_vis < 0.18:
+        if sh_max_vis < 0.15 or (head_vis < 0.10 and avg_key_vis < 0.20):
             self._prev_points = None
             return None, results
 

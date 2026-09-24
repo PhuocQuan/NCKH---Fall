@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -93,106 +94,116 @@ def delete_alert(alert_id: str, user: str, media_dir: Path) -> None:
 
     # Admin: hard delete
     alert_info = repo.get_alert_by_id_db(alert_id)
-    cloud_img = None
-    cloud_video = None
-    if alert_info:
-        cloud_img = alert_info.get("cloud_img_url")
-        cloud_video = alert_info.get("cloud_video_url")
-        
+    cloud_img = alert_info.get("cloud_img_url") if alert_info else None
+    cloud_video = alert_info.get("cloud_video_url") if alert_info else None
+
     # Delete from DB
     repo.hard_delete_alert_db(alert_id)
-    
+
     # Delete from pipeline cache
     with pipeline._lock:
         pipeline._recent_alerts = [a for a in pipeline._recent_alerts if a["id"] != alert_id]
-        
-    # Delete local files
+
+    # Delete local files safely
     try:
-        img_path = media_dir / f"{alert_id}.jpg"
-        if img_path.exists():
-            img_path.unlink()
-        video_path = media_dir / f"{alert_id}.mp4"
-        if video_path.exists():
-            video_path.unlink()
+        (media_dir / f"{alert_id}.jpg").unlink(missing_ok=True)
+        (media_dir / f"{alert_id}.mp4").unlink(missing_ok=True)
     except Exception as e:
         print(f"[File Error] Khong the xoa media file: {e}")
-        
-    # Delete Cloudinary resources
-    if cloud_img:
-        delete_from_cloudinary(cloud_img)
-    if cloud_video:
-        delete_from_cloudinary(cloud_video)
-        
+
+    # Delete Cloudinary resources asynchronously in background
+    if cloud_img or cloud_video:
+        def _clean_single_bg():
+            if cloud_img:
+                delete_from_cloudinary(cloud_img)
+            if cloud_video:
+                delete_from_cloudinary(cloud_video)
+        threading.Thread(target=_clean_single_bg, daemon=True).start()
+
     log_action("Xóa cảnh báo", user, f"Đã xóa cảnh báo hoàn toàn: {alert_id}")
 
 
 def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, media_dir: Path) -> int:
-    """API Logic: Xóa nhiều cảnh báo cùng lúc (chọn nhiều dòng hoặc chọn tất cả)."""
+    """API Logic: Xóa nhiều cảnh báo cùng lúc (tối ưu hóa batch SQL siêu tốc, dọn dẹp media ngầm)."""
     role = repo.get_user_role_db(user)
-    
-    # Determine which alerts to process
-    ids_to_process = []
-    if delete_all:
-        if role == "Admin":
-            ids_to_process = repo.get_all_alert_ids_db()
-        else:
-            assigned_cams = repo.get_user_assigned_cameras_db(user)
-            if assigned_cams:
-                ids_to_process = repo.get_alert_ids_by_cameras_db(assigned_cams)
-    else:
-        if ids:
-            ids_to_process = ids
-
-    if not ids_to_process:
-        return 0
 
     if role != "Admin":
-        # Soft delete batch
-        for aid in ids_to_process:
-            alert_info = repo.get_alert_by_id_db(aid)
-            if alert_info:
-                deleted_by = alert_info.get("deleted_by_users")
-                try:
-                    deleted_list = json.loads(deleted_by) if deleted_by else []
-                except Exception:
-                    deleted_list = []
-                if user not in deleted_list:
-                    deleted_list.append(user)
-                repo.soft_delete_alert_db(aid, json.dumps(deleted_list))
-        log_action("Xóa nhiều cảnh báo", user, f"Đã ẩn {len(ids_to_process)} cảnh báo.")
-        return len(ids_to_process)
-        
+        # Soft delete batch (User thường)
+        if delete_all:
+            assigned_cams = repo.get_user_assigned_cameras_db(user)
+            if not assigned_cams:
+                return 0
+            repo.batch_soft_delete_alerts_db(user, cameras=assigned_cams)
+            count = len(repo.get_alert_ids_by_cameras_db(assigned_cams))
+        else:
+            if not ids:
+                return 0
+            repo.batch_soft_delete_alerts_db(user, alert_ids=ids)
+            count = len(ids)
+
+        log_action("Xóa nhiều cảnh báo", user, f"Đã ẩn {count} cảnh báo.")
+        return count
+
     # Admin hard delete batch
-    for aid in ids_to_process:
-        alert_info = repo.get_alert_by_id_db(aid)
-        cloud_img = None
-        cloud_video = None
-        if alert_info:
-            cloud_img = alert_info.get("cloud_img_url")
-            cloud_video = alert_info.get("cloud_video_url")
-            
-        repo.hard_delete_alert_db(aid)
-        
+    if delete_all:
+        # Lấy media URLs trước khi xóa toàn bộ
+        media_urls = repo.batch_get_alert_media_urls_db()
+        all_ids = repo.get_all_alert_ids_db()
+        count = len(all_ids)
+
+        # Xóa sạch bảng alerts trong 1 câu SQL duy nhất
+        repo.hard_delete_all_alerts_db()
+
+        # Dọn sạch RAM cache pipeline
         with pipeline._lock:
-            pipeline._recent_alerts = [a for a in pipeline._recent_alerts if a["id"] != aid]
-            
-        try:
-            img_path = media_dir / f"{aid}.jpg"
-            if img_path.exists():
-                img_path.unlink()
-            video_path = media_dir / f"{aid}.mp4"
-            if video_path.exists():
-                video_path.unlink()
-        except Exception as e:
-            print(f"[File Error] Khong the xoa file cho {aid}: {e}")
-            
-        if cloud_img:
-            delete_from_cloudinary(cloud_img)
-        if cloud_video:
-            delete_from_cloudinary(cloud_video)
-            
-    log_action("Xóa nhiều cảnh báo", user, f"Đã xóa hoàn toàn {len(ids_to_process)} cảnh báo.")
-    return len(ids_to_process)
+            pipeline._recent_alerts.clear()
+
+        # Dọn dẹp media local và Cloudinary ngầm trong background (không chặn người dùng)
+        def _cleanup_all_media_bg(urls: list[str], m_dir: Path):
+            try:
+                for f in m_dir.glob("*.jpg"):
+                    try: f.unlink()
+                    except Exception: pass
+                for f in m_dir.glob("*.mp4"):
+                    try: f.unlink()
+                    except Exception: pass
+            except Exception:
+                pass
+            for u in urls:
+                if u:
+                    try: delete_from_cloudinary(u)
+                    except Exception: pass
+
+        threading.Thread(target=_cleanup_all_media_bg, args=(media_urls, media_dir), daemon=True).start()
+        log_action("Xóa nhiều cảnh báo", user, f"Đã xóa hoàn toàn {count} cảnh báo.")
+        return count
+
+    if not ids:
+        return 0
+
+    # Xóa theo danh sách IDs được chọn
+    media_urls = repo.batch_get_alert_media_urls_db(ids)
+    repo.batch_hard_delete_alerts_db(ids)
+
+    with pipeline._lock:
+        ids_set = set(ids)
+        pipeline._recent_alerts = [a for a in pipeline._recent_alerts if a["id"] not in ids_set]
+
+    def _cleanup_ids_media_bg(target_ids: list[str], urls: list[str], m_dir: Path):
+        for aid in target_ids:
+            try:
+                (m_dir / f"{aid}.jpg").unlink(missing_ok=True)
+                (m_dir / f"{aid}.mp4").unlink(missing_ok=True)
+            except Exception:
+                pass
+        for u in urls:
+            if u:
+                try: delete_from_cloudinary(u)
+                except Exception: pass
+
+    threading.Thread(target=_cleanup_ids_media_bg, args=(ids, media_urls, media_dir), daemon=True).start()
+    log_action("Xóa nhiều cảnh báo", user, f"Đã xóa hoàn toàn {len(ids)} cảnh báo.")
+    return len(ids)
 
 
 def get_app_state(user: str) -> dict[str, str]:

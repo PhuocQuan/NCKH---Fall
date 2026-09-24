@@ -37,6 +37,15 @@
       70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
       100% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
     }
+    @keyframes progressSweep {
+      0% { left: -50%; }
+      50% { left: 25%; }
+      100% { left: 100%; }
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     
     .status-dot-pulse {
       display: inline-block;
@@ -993,7 +1002,10 @@ function loadStore(key, fallback) {
     function apiBaseUrl() {
       const saved = localStorage.getItem("nckh_server_url");
       if (saved) return saved.replace(/\/+$/, "");
-      return location.port === "5500" ? "http://127.0.0.1:8000" : location.origin;
+      if (location.protocol === "file:" || location.origin === "null" || (location.port && location.port !== "8000")) {
+        return "http://127.0.0.1:8000";
+      }
+      return location.origin;
     }
 
     async function checkBackendStatus() {
@@ -1460,6 +1472,14 @@ function loadStore(key, fallback) {
       }
       
       const ids = Array.from(checkboxes).map(cb => cb.dataset.id);
+      const prevAlerts = [...alerts];
+
+      // Optimistic update: UI phản hồi ngay lập tức 0ms
+      alerts = alerts.filter(a => !ids.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+      toast(`Đã xóa thành công ${ids.length} cảnh báo!`);
+
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1472,19 +1492,18 @@ function loadStore(key, fallback) {
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || "Lỗi khi xóa cảnh báo.");
-            return;
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            render(currentView);
+            alert(err.detail || "Lỗi khi xóa cảnh báo trên máy chủ.");
           }
         } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          render(currentView);
           alert("Lỗi kết nối khi xóa cảnh báo.");
-          return;
         }
       }
-      
-      alerts = alerts.filter(a => !ids.includes(a.id));
-      saveStore("fg_alerts", alerts);
-      render(currentView);
-      toast(`Đã xóa thành công ${ids.length} cảnh báo!`);
     };
 
     window.deleteAllAdminAlerts = async function() {
@@ -1520,6 +1539,14 @@ function loadStore(key, fallback) {
       }
       
       const ids = targetAlerts.map(a => a.id);
+      const prevAlerts = [...alerts];
+
+      // Optimistic update: UI phản hồi ngay lập tức 0ms
+      alerts = alerts.filter(a => !ids.includes(a.id));
+      saveStore("fg_alerts", alerts);
+      render(currentView);
+      toast(`Đã xóa thành công ${ids.length} ${viewLabel}!`);
+
       if (isBackendOnline && authToken) {
         try {
           const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
@@ -1532,19 +1559,18 @@ function loadStore(key, fallback) {
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.detail || `Lỗi khi xóa ${viewLabel}.`);
-            return;
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            render(currentView);
+            alert(err.detail || `Lỗi khi xóa ${viewLabel} trên máy chủ.`);
           }
         } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          render(currentView);
           alert(`Lỗi kết nối khi xóa ${viewLabel}.`);
-          return;
         }
       }
-      
-      alerts = alerts.filter(a => !ids.includes(a.id));
-      saveStore("fg_alerts", alerts);
-      render(currentView);
-      toast(`Đã xóa thành công ${ids.length} ${viewLabel}!`);
     };
 
     window.filterUserAlertsTable = function() {
@@ -2344,12 +2370,17 @@ function loadStore(key, fallback) {
         const backText = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? "← Quay lại Trang chủ" : "← Quay lại Danh sách Camera";
         const backAction = (cameraStreamBackView === "dashboard" || cameraStreamBackView === "user_dashboard") ? `stopTestCamera(false); liveViewLevel='cameras'; render('${cameraStreamBackView}', false);` : `stopTestCamera(false); liveViewLevel='cameras'; render('dashboard', false);`;
         
-        return `<div class="live-toolbar">
-          <button class="btn line" onclick="${backAction}">${backText}</button>
+        return `<div class="live-toolbar" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <button class="btn line" onclick="${backAction}">${backText}</button>
+            <select class="control" id="switchCameraSelect" onchange="selectedCameraId=this.value; render('dashboard', false); setTimeout(()=>startTestCamera(), 150);" style="height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background:#f8fafc; color:#0f172a;">
+              ${cameras.map(c => `<option value="${esc(c.id)}" ${c.id === cam.id ? 'selected' : ''}>📹 ${esc(c.name)} (${esc(c.id)}) - IP: ${esc(c.ip)}</option>`).join("")}
+            </select>
+          </div>
           <div class="row" style="gap:8px">
             <select class="control" id="cameraModeSelect" style="width:auto; height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background-color:#fff;">
-              <option value="client" ${!isBackendOnline ? "selected" : ""}>Trình duyệt AI (Webcam của bạn)</option>
-              <option value="server" ${isBackendOnline ? "selected" : ""}>Server AI (Webcam máy chủ)</option>
+              <option value="server" selected>📹 Camera IP RTSP (Imou Ranger 2)</option>
+              <option value="client">💻 Webcam Laptop (Trình duyệt AI)</option>
             </select>
             <button class="btn line" data-snapshot-test-camera>Chụp ảnh test</button>
           </div>
@@ -2360,7 +2391,7 @@ function loadStore(key, fallback) {
             <div class="cam-view ${aiFallTestOn ? "ai-test-on" : ""}" style="position:relative;">
               <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
               <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:none;">
+              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:block;" src="${aiStreamUrl()}">
               ${personSvg()}
               <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
               <span class="state" id="liveStateBadge">${statusPill(cam.state.toUpperCase())}</span>
@@ -2414,7 +2445,12 @@ function loadStore(key, fallback) {
       `;
       
       // Control bar
-      const addBtn = isEditable ? `<button class="btn primary" data-add-camera style="height:38px;">Thêm camera</button>` : "";
+      const addBtn = isEditable ? `
+        <button class="btn" id="btnAutoDiscoverCamera" onclick="window.discoverCamerasModal()" style="height:38px; background:linear-gradient(135deg, #10b981, #059669); color:#fff; display:inline-flex; align-items:center; gap:6px; font-weight:600; border:none; border-radius:6px; cursor:pointer; padding:0 14px; box-shadow:0 2px 4px rgba(16,185,129,0.25);">
+          <span>🔍</span> Quét Wi-Fi tìm Camera
+        </button>
+        <button class="btn primary" data-add-camera style="height:38px;">Thêm camera</button>
+      ` : "";
       const controlsHtml = `
         <div class="tools" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
           <input class="control" id="cameraSearchInput" oninput="window.filterCamerasTable()" placeholder="Tìm theo tên, ID hoặc IP..." style="width: 280px; height: 38px;">
@@ -2682,6 +2718,12 @@ function loadStore(key, fallback) {
       const isEdit = Boolean(id);
       openModal(isEdit ? "Sửa camera" : "Thêm camera", `<form id="cameraFormReal" onsubmit="window.handleCameraFormSubmit(event); return false;">
         <input type="hidden" name="oldId" value="${esc(isEdit ? cam.id : "")}">
+        <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 8px 12px; border-radius: 6px;">
+          <span style="font-size: 12.5px; color: #065f46; font-weight: 500;">Camera chung Wi-Fi bị đổi IP?</span>
+          <button type="button" class="btn small" onclick="window.discoverCamerasModal()" style="background: #10b981; color: #fff; font-size: 12px; height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; border: none; border-radius: 4px; cursor: pointer;">
+            <span>🔍</span> Quét tìm IP mới
+          </button>
+        </div>
         <div class="form-grid">
           ${[
             ["id", "Mã camera", cam.id || `CAM-${String(cameras.length + 1).padStart(3, "0")}`],
@@ -2815,10 +2857,11 @@ function loadStore(key, fallback) {
       
       const hintEl = $("cameraTestHint");
       const modeSelect = $("cameraModeSelect");
-      const selectedMode = modeSelect ? modeSelect.value : (isBackendOnline ? "server" : "client");
+      const isIpCam = Boolean(cam && cam.rtsp && String(cam.rtsp).startsWith("rtsp://"));
+      const selectedMode = modeSelect ? modeSelect.value : (isIpCam ? "server" : (isBackendOnline ? "server" : "client"));
       
       if (selectedMode === "server" && isBackendOnline) {
-        if (hintEl) hintEl.textContent = "Đang kết nối tới server AI...";
+        if (hintEl) hintEl.textContent = `Đang kết nối tới Camera IP ${cam ? cam.name : ""} (${cam ? cam.ip : ""})...`;
         try {
           await backendLogin();
           const res = await fetch(`${apiBaseUrl()}/api/control/start`, {
@@ -2850,16 +2893,24 @@ function loadStore(key, fallback) {
           const canvas = document.getElementById("testCameraCanvas");
           if (canvas) canvas.style.display = "none";
           
-          if (hintEl) hintEl.textContent = "AI Backend đang chạy. Đang phát luồng dữ liệu từ server.";
+          if (hintEl) hintEl.textContent = `AI Backend đang phát luồng từ Camera ${cam ? cam.name : ""}`;
           startStatusPolling();
         } catch (err) {
           console.error(err);
-          if (hintEl) hintEl.textContent = `Lỗi Backend: ${err.message || err}. Chuyển sang Trình duyệt AI.`;
-          isBackendOnline = false;
-          await startLocalWebcam();
+          if (hintEl) hintEl.textContent = `Lỗi Camera: ${err.message || err}`;
+          if (isIpCam) {
+            alert(`Lỗi kết nối Camera Imou (${cam ? cam.ip : ""}):\n${err.message || err}\n\nVui lòng kiểm tra lại: Camera đã cắm nguồn, đèn sáng xanh và cùng Wi-Fi với máy tính.`);
+          } else {
+            isBackendOnline = false;
+            await startLocalWebcam();
+          }
         }
       } else {
-        await startLocalWebcam();
+        if (isIpCam) {
+          alert(`Camera ${cam ? cam.name : ""} là Camera IP Imou (RTSP). Hệ thống không mở Webcam Laptop cho camera này. Vui lòng đảm bảo Server AI đang chạy.`);
+        } else {
+          await startLocalWebcam();
+        }
       }
     }
 
@@ -3379,12 +3430,6 @@ function loadStore(key, fallback) {
           img.removeAttribute("src");
           img.style.display = "none";
         });
-      } else {
-        const detailImg = $("testCameraImg");
-        if (detailImg) {
-          detailImg.removeAttribute("src");
-          detailImg.style.display = "none";
-        }
       }
       
       const canvas = document.getElementById("testCameraCanvas");
@@ -4622,6 +4667,265 @@ function loadStore(key, fallback) {
       saveAll();
       closeModal();
       render(currentView);
+    };
+
+    window.discoverCamerasModal = async function() {
+      openModal("🔍 Dò tìm Camera tự động trong mạng Wi-Fi", `
+        <div id="discoveryLoading" style="text-align: center; padding: 36px 20px;">
+          <div style="font-size: 40px; margin-bottom: 12px; display: inline-block;">📡</div>
+          <div style="font-size: 16px; font-weight: 700; color: var(--gray-800); margin-bottom: 6px;">Đang quét toàn bộ dải mạng Wi-Fi nội bộ...</div>
+          <div class="hint" style="max-width: 440px; margin: 0 auto;">Phát gói tin ONVIF WS-Discovery (UDP 3702) & Quét cổng RTSP 554 trên 254 địa chỉ IP cục bộ...</div>
+          <div style="margin-top: 22px; width: 100%; max-width: 280px; height: 6px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-left: auto; margin-right: auto; position: relative;">
+            <div style="width: 50%; height: 100%; background: #10b981; position: absolute; border-radius: 4px; animation: progressSweep 1.5s ease-in-out infinite;"></div>
+          </div>
+        </div>
+        <div id="discoveryResults" style="display: none;"></div>
+      `, `<button type="button" class="btn line" data-close-modal>Đóng</button>`);
+
+      try {
+        if (!authToken) {
+          try { await backendLogin(); } catch (e) {}
+        }
+        let res = await fetch(`${apiBaseUrl()}/api/cameras/discover`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.status === 401) {
+          try {
+            await backendLogin(true);
+            res = await fetch(`${apiBaseUrl()}/api/cameras/discover`, {
+              headers: { Authorization: `Bearer ${authToken}` }
+            });
+          } catch (e) {}
+        }
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.detail || (
+            res.status === 404 ? "Server chưa được khởi động lại sau khi cập nhật mã nguồn (Lỗi 404). Hãy tắt terminal (CTRL+C) và bật lại: python -m src.web.server" :
+            res.status === 401 ? "Phiên làm việc hết hạn (Lỗi 401). Vui lòng đăng nhập lại tài khoản admin." :
+            `Máy chủ phản hồi mã lỗi HTTP ${res.status}`
+          );
+          throw new Error(errMsg);
+        }
+        const data = await res.json();
+        const loadingEl = document.getElementById("discoveryLoading");
+        const resultsEl = document.getElementById("discoveryResults");
+        if (!resultsEl) return;
+        
+        loadingEl.style.display = "none";
+        resultsEl.style.display = "block";
+        
+        const count = (data.cameras || []).length;
+        let html = `
+          <div style="background: #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <span>Dải mạng Wi-Fi: <strong style="color: #0f172a;">${esc(data.subnet || "192.168.1.0/24")}</strong></span>
+              <span style="margin-left: 12px; color: var(--gray-600);">(IP máy tính: <strong>${esc(data.local_ip || "")}</strong>)</span>
+            </div>
+            <button class="btn small line" onclick="window.discoverCamerasModal()" style="display: inline-flex; align-items: center; gap: 4px;">🔄 Quét lại</button>
+          </div>
+        `;
+        
+        if (count === 0) {
+          html += `
+            <div style="text-align: center; padding: 30px 20px; border: 1px dashed var(--line); border-radius: 8px; background: #fafafa;">
+              <div style="font-size: 36px; margin-bottom: 10px;">⚠️</div>
+              <div style="font-size: 15px; font-weight: 700; color: var(--gray-800); margin-bottom: 6px;">Không tìm thấy camera nào trên mạng Wi-Fi</div>
+              <p class="hint" style="max-width: 440px; margin: 0 auto 16px auto;">
+                Hãy đảm bảo Camera (như Imou Ranger 2) đã cắm nguồn điện, đèn trạng thái sáng xanh và đang kết nối <strong>cùng mạng Wi-Fi</strong> với máy tính này.
+              </p>
+              <button class="btn primary small" onclick="window.discoverCamerasModal()">Thử quét lại ngay</button>
+            </div>
+          `;
+        } else {
+          html += `
+            <div style="font-size: 13.5px; font-weight: 700; color: #16a34a; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <span>✅</span> Tìm thấy ${count} thiết bị Camera trong mạng Wi-Fi:
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto;">
+          `;
+          
+          data.cameras.forEach(c => {
+            const isImou = (c.vendor || "").toLowerCase().includes("imou") || (c.vendor || "").toLowerCase().includes("dahua");
+            const badgeBg = isImou ? "#dcfce7" : "#e0f2fe";
+            const badgeColor = isImou ? "#15803d" : "#0369a1";
+            
+            html += `
+              <div style="border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <strong style="font-size: 15px; color: #0f172a;">${esc(c.ip)}</strong>
+                    <span style="background: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px;">${esc(c.vendor)}</span>
+                    <span style="font-size: 11.5px; color: var(--gray-600);">${esc(c.latency_ms)}ms</span>
+                  </div>
+                  <div style="font-size: 12px; color: var(--gray-600); font-family: monospace; word-break: break-all;">
+                    Cổng: <strong>${c.port}</strong> | ${esc(c.server_desc || "RTSP Stream")}
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn small" onclick="window.applyDiscoveredCamera('${esc(c.ip)}', '${esc(c.suggested_imou_rtsp)}')" style="background: #10b981; color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; border:none; border-radius:4px; padding: 6px 12px; cursor: pointer;">
+                    ⚡ Kết nối camera này
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+        resultsEl.innerHTML = html;
+      } catch (err) {
+        const resultsEl = document.getElementById("discoveryResults");
+        const loadingEl = document.getElementById("discoveryLoading");
+        if (loadingEl) loadingEl.style.display = "none";
+        if (resultsEl) {
+          resultsEl.style.display = "block";
+          const isNetworkError = err.name === 'TypeError' || String(err.message || "").toLowerCase().includes("fetch");
+          resultsEl.innerHTML = `
+            <div style="text-align: center; padding: 24px; color: #ef4444;">
+              <div style="font-size: 32px; margin-bottom: 8px;">❌</div>
+              <div style="font-weight: 700; margin-bottom: 8px; font-size: 15px;">Lỗi khi quét mạng Wi-Fi:</div>
+              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 13px; color: #b91c1c; font-family: monospace;">
+                ${esc(isNetworkError ? "Không thể kết nối đến máy chủ Backend (http://127.0.0.1:8000)" : (err.message || err))}
+              </div>
+              <div class="hint" style="text-align: left; background: #f8fafc; border-radius: 6px; padding: 12px; font-size: 12.5px; line-height: 1.6; color: var(--gray-700);">
+                <strong>Cách khắc phục:</strong><br>
+                1. Hãy chắc chắn Terminal đã chạy lệnh: <code style="background: #e2e8f0; padding: 2px 5px; border-radius: 4px;">python -m src.web.server</code><br>
+                2. Nếu Terminal đang chạy từ trước khi cập nhật code, hãy bấm <strong>CTRL+C</strong> để tắt rồi chạy lại để nạp tính năng mới.<br>
+                3. Đảm bảo bạn đang mở đúng địa chỉ web: <a href="http://localhost:8000/admin" target="_blank" style="color: #2563eb; text-decoration: underline;">http://localhost:8000/admin</a>
+              </div>
+            </div>
+          `;
+        }
+      }
+    };
+
+    window.applyDiscoveredCamera = function(newIp, suggestedRtsp) {
+      const nextIdNum = cameras.length + 1;
+      const nextId = `CAM-${String(nextIdNum).padStart(3, "0")}`;
+      const defaultCam = selectedCameraId || cameras[0]?.id || "CAM-011";
+      
+      openModal(`⚡ Kết nối Camera: ${newIp}`, `
+        <form id="bindCameraForm" onsubmit="window.submitCameraBind(event, '${newIp}'); return false;">
+          <div style="margin-bottom: 16px; background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;">
+            <div style="font-size: 13.5px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Chọn hành động:</div>
+            
+            <label style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; cursor: pointer;">
+              <input type="radio" name="bindMode" value="update" checked onchange="document.getElementById('newCamFields').style.display='none'; document.getElementById('updateCamFields').style.display='block';" style="margin-top: 3px;">
+              <div>
+                <strong style="font-size: 13px; color: #0f172a;">Cập nhật Camera hiện tại (${defaultCam})</strong>
+                <div class="hint" style="font-size: 11.5px;">Dùng khi camera nhà bạn bị đổi IP do tắt/mở Wi-Fi. Giữ nguyên cấu hình cũ.</div>
+              </div>
+            </label>
+            
+            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+              <input type="radio" name="bindMode" value="new" onchange="document.getElementById('newCamFields').style.display='block'; document.getElementById('updateCamFields').style.display='none';" style="margin-top: 3px;">
+              <div>
+                <strong style="font-size: 13px; color: #0f172a;">Thêm mới thành Camera thứ ${nextIdNum} (${nextId})</strong>
+                <div class="hint" style="font-size: 11.5px;">Dùng khi bạn muốn thêm một camera riêng biệt mới vào danh sách.</div>
+              </div>
+            </label>
+          </div>
+
+          <div id="updateCamFields" style="margin-bottom: 14px;">
+            <label class="field">
+              <span>Chọn camera cần cập nhật IP</span>
+              <select class="control" name="targetCamSelect">
+                ${cameras.map(c => `<option value="${esc(c.id)}" ${c.id === defaultCam ? 'selected' : ''}>${esc(c.name)} (${esc(c.id)}) - IP cũ: ${esc(c.ip)}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+
+          <div id="newCamFields" style="display: none; margin-bottom: 14px;">
+            <label class="field">
+              <span>Mã Camera mới</span>
+              <input class="control" name="newCamId" value="${nextId}">
+            </label>
+            <label class="field" style="margin-top: 8px;">
+              <span>Tên Camera mới</span>
+              <input class="control" name="newCamName" value="Camera Imou ${newIp}">
+            </label>
+          </div>
+
+          <label class="field" style="margin-bottom: 14px;">
+            <span>Safety Code (Mật khẩu an toàn in dưới đáy camera Imou)</span>
+            <input class="control" name="safetyCode" value="L223Xr!w" required placeholder="Ví dụ: L223Xr!w">
+          </label>
+
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; font-size: 12.5px; color: #065f46;">
+            💡 Sau khi kết nối, hệ thống sẽ tự động chuyển sang màn hình <strong>Camera Trực Tiếp (Live Stream)</strong> để bạn xem video ngay!
+          </div>
+        </form>
+      `, `<button type="button" class="btn line" data-close-modal>Hủy</button><button type="submit" form="bindCameraForm" class="btn primary" style="background:#10b981; border:none; box-shadow:0 2px 4px rgba(16,185,129,0.3);">🚀 Kết nối & Xem Live Stream</button>`);
+    };
+
+    window.submitCameraBind = async function(event, newIp) {
+      event.preventDefault();
+      const form = event.target;
+      const mode = form.bindMode.value;
+      const safetyCode = form.safetyCode.value.trim() || "L223Xr!w";
+      
+      let targetCamId = form.targetCamSelect?.value || "CAM-011";
+      let camName = `Camera Imou (${newIp})`;
+      
+      if (mode === "new") {
+        targetCamId = form.newCamId.value.trim() || `CAM-${String(cameras.length + 1).padStart(3, "0")}`;
+        camName = form.newCamName.value.trim() || `Camera Imou (${newIp})`;
+      }
+      
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/cameras/auto-bind`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            camera_id: targetCamId,
+            new_ip: newIp,
+            safety_code: safetyCode
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.detail || "Không thể tự động kết nối camera.");
+          return;
+        }
+        
+        const data = await res.json();
+        
+        // Cập nhật danh sách camera trong client state
+        const camItem = cameras.find(c => c.id === targetCamId);
+        if (camItem) {
+          camItem.ip = newIp;
+          camItem.rtsp = data.new_rtsp;
+          camItem.status = "online";
+        } else {
+          cameras.push({
+            id: targetCamId,
+            name: camName,
+            ip: newIp,
+            rtsp: data.new_rtsp,
+            area: "Phòng chính",
+            target: "Nguy cơ cao",
+            state: "normal",
+            status: "online",
+            fps: 25,
+            resolution: "1920x1080",
+            threshold: 80
+          });
+        }
+        selectedCameraId = targetCamId;
+        saveAll();
+        closeModal();
+        
+        // Tự động chuyển sang màn hình Live Stream Dashboard để xem trực tiếp
+        cameraStreamBackView = currentView;
+        liveViewLevel = "stream";
+        render("dashboard");
+        setTimeout(() => startTestCamera(), 200);
+      } catch (err) {
+        alert("Lỗi khi kết nối tới máy chủ: " + err.message);
+      }
     };
 
     window.handleCameraPermissionFormSubmit = async function(event) {

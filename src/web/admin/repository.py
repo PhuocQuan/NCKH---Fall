@@ -112,6 +112,35 @@ def update_camera_db(id: str, name: str, ip: str, rtsp: str, area: str, target: 
         )
 
 
+def update_camera_network_db(camera_id: str, new_ip: str, new_rtsp: str) -> str:
+    """Cập nhật IP và RTSP mới cho camera, hoặc tạo mới nếu chưa tồn tại."""
+    with get_db_client() as client:
+        if camera_id:
+            res = client.execute("SELECT 1 FROM cameras WHERE id = ?", [camera_id])
+            if res.rows:
+                client.execute(
+                    "UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
+                    [new_ip, new_rtsp, camera_id]
+                )
+                return camera_id
+        # Fallback vào camera đầu tiên
+        res2 = client.execute("SELECT id FROM cameras ORDER BY id ASC LIMIT 1")
+        if res2.rows:
+            target_id = str(res2.rows[0][0])
+            client.execute(
+                "UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
+                [new_ip, new_rtsp, target_id]
+            )
+            return target_id
+        
+        target_id = camera_id or "CAM-011"
+        client.execute(
+            "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [target_id, f"Camera Imou ({new_ip})", new_ip, new_rtsp, "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80]
+        )
+        return target_id
+
+
 def delete_camera_db(id: str) -> None:
     """SQL DELETE: Xóa camera."""
     with get_db_client() as client:

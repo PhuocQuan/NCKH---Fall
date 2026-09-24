@@ -52,9 +52,16 @@ python -m src.core.app --source rtsp://user:password@192.168.1.10:554/stream
 
 ## Chạy test
 
+Hệ thống có bộ kiểm thử tự động toàn diện (20 test cases bao quát: phân biệt nằm ngủ vs ngã thật, hiệu năng non-blocking, chống bão thông báo, chịu lỗi camera và mã hóa bảo mật):
+
 ```powershell
-python -m pytest
+python -m pytest tests/ --basetemp=data/pytest_tmp -p no:cacheprovider -v
 ```
+
+## Báo cáo cập nhật & Tiến độ hệ thống
+
+* **Báo cáo mới nhất (24/09/2026):** Xem tại [docs/BAO_CAO_CAP_NHAT_2026_09_24.md](docs/BAO_CAO_CAP_NHAT_2026_09_24.md) (Bảo mật PBKDF2-SHA256, tự phục hồi camera, tối ưu 75% RAM buffer và kết quả 20/20 test cases).
+* Báo cáo ca làm việc (02/08/2026): Xem tại [docs/BAO_CAO_CAP_NHAT_2026_08_02.md](docs/BAO_CAO_CAP_NHAT_2026_08_02.md).
 
 ## Ý tưởng thuật toán
 

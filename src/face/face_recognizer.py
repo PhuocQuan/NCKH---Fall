@@ -54,6 +54,14 @@ def _compute_iou(box1: tuple[int, int, int, int], box2: tuple[int, int, int, int
     return inter_area / union_area if union_area > 0 else 0.0
 
 
+def _compute_box_center_dist(box1: tuple[int, int, int, int], box2: tuple[int, int, int, int]) -> float:
+    cx1 = box1[0] + box1[2] / 2.0
+    cy1 = box1[1] + box1[3] / 2.0
+    cx2 = box2[0] + box2[2] / 2.0
+    cy2 = box2[1] + box2[3] / 2.0
+    return float(((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2) ** 0.5)
+
+
 class FaceRecognizer:
     """Class quản lý việc nhận diện khuôn mặt."""
     def __init__(self, config: FaceConfig, models_dir: str = "models") -> None:
@@ -202,6 +210,18 @@ class FaceRecognizer:
             return feature
         return None
 
+    def is_near_recent_known_face(self, box: tuple[int, int, int, int], max_seconds: float = 4.0) -> bool:
+        """Kiểm tra xem vị trí box này có phải vị trí một người quen/VIP vừa xuất hiện gần đây không."""
+        current_time = time.time()
+        ref_size = max(box[2], box[3], 30)
+        for t_time, t_name, t_type, t_box in reversed(self._recent_known_tracks):
+            if (current_time - t_time) <= max_seconds:
+                iou = _compute_iou(box, t_box)
+                dist = _compute_box_center_dist(box, t_box)
+                if iou >= 0.12 or dist <= (ref_size * 1.4):
+                    return True
+        return False
+
     def recognize(self, frame: np.ndarray) -> list[RecognizedFace]:
         """Nhận diện tất cả khuôn mặt trong frame.
         Trả về danh sách RecognizedFace bao gồm tên, loại (FAMILY, ATTENTION, STRANGER) và box.
@@ -213,10 +233,10 @@ class FaceRecognizer:
         h, w = frame.shape[:2]
 
         current_time = time.time()
-        # Dọn dẹp các track nhận diện người quen cũ hơn 6.0 giây (giữ nhận diện khi quay mặt đi hoặc uống nước)
+        # Dọn dẹp các track nhận diện người quen cũ hơn 5.0 giây
         self._recent_known_tracks = [
-            t for t in self._recent_known_tracks if (current_time - t[0]) <= 6.0
-        ]
+            t for t in self._recent_known_tracks if (current_time - t[0]) <= 5.0
+        ][-30:]
 
         if self._initialized and self.detector is not None and self.recognizer is None:
             # Haar Cascade fallback
@@ -247,8 +267,6 @@ class FaceRecognizer:
 
         self.detector.setInputSize((det_w, det_h))
         _, faces = self.detector.detect(det_frame)
-        
-        num_faces = len(faces) if faces is not None else 0
 
         if faces is None or len(faces) == 0:
             return results
@@ -261,17 +279,20 @@ class FaceRecognizer:
             bbox = face[:4].astype(int)
             fx, fy, fw, fh = bbox[0], bbox[1], bbox[2], bbox[3]
 
-            # Bỏ qua các vật thể nhỏ hơn 35x35 pixel hoặc hình dạng dị dạng
-            if fw < 35 or fh < 35:
+            # Bỏ qua các vật thể quá nhỏ hoặc tỷ lệ khung không giống khuôn mặt người
+            if fw < 20 or fh < 20:
                 continue
             aspect_ratio = fw / float(max(1, fh))
-            # Nới lỏng tỷ lệ khung hình vì góc quay từ dưới lên (laptop) có thể làm bóp méo khung
-            if aspect_ratio < 0.30 or aspect_ratio > 2.50:
+            if aspect_ratio < 0.45 or aspect_ratio > 1.80:
                 continue
 
-            aligned_face = self.recognizer.alignCrop(frame, face)
-
-            query_feature = self.recognizer.feature(aligned_face)
+            try:
+                aligned_face = self.recognizer.alignCrop(frame, face)
+                if aligned_face is None or aligned_face.size == 0:
+                    continue
+                query_feature = self.recognizer.feature(aligned_face)
+            except Exception:
+                continue
 
             best_match_name = "Stranger"
             best_match_type = PersonType.STRANGER
@@ -279,24 +300,28 @@ class FaceRecognizer:
             best_known = None
 
             # So sánh với database người thân đã lưu
-            threshold = float(getattr(self.config, "similarity_threshold", 0.40))
+            threshold = float(getattr(self.config, "similarity_threshold", 0.32))
             for known_name, person_type, known_feature in self.known_embeddings:
                 score = float(self.recognizer.match(query_feature, known_feature, cv2.FaceRecognizerSF_FR_COSINE))
                 if score > best_score:
                     best_score = score
                     best_known = (known_name, person_type)
 
-            current_box = (max(0, fx), max(0, fy), max(0, fw), max(0, fh))
+            current_box = (int(max(0, fx)), int(max(0, fy)), int(max(0, fw)), int(max(0, fh)))
 
             if best_known and best_score >= threshold:
                 best_match_name, best_match_type = best_known
                 face_conf = min(0.99, max(0.50, float(best_score)))
                 self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
             else:
-                # Kiểm tra cơ chế giữ nhận diện: nếu người quen vừa ở vị trí này bị quay nghiêng mặt hoặc uống nước (IoU >= 0.18)
+                # Kiểm tra cơ chế giữ nhận diện: nếu người quen vừa ở vị trí này bị quay nghiêng mặt, cúi đầu hoặc uống nước
                 tracked_match = None
+                ref_size = max(current_box[2], current_box[3], 30)
                 for t_time, t_name, t_type, t_box in reversed(self._recent_known_tracks):
-                    if _compute_iou(current_box, t_box) >= 0.18 and best_score >= (threshold * 0.55):
+                    iou = _compute_iou(current_box, t_box)
+                    dist = _compute_box_center_dist(current_box, t_box)
+                    is_spatial_match = (iou >= 0.12) or (dist <= ref_size * 1.4)
+                    if is_spatial_match and (best_score >= 0.15 or (current_time - t_time) <= 2.5):
                         tracked_match = (t_name, t_type)
                         break
 
@@ -305,18 +330,16 @@ class FaceRecognizer:
                     face_conf = min(0.95, max(0.55, float(best_score + 0.15)))
                     self._recent_known_tracks.append((current_time, best_match_name, best_match_type, current_box))
                 else:
-                    # Bỏ qua khuôn mặt bị cắt cụt ở sát viền mép khung hình (người đang bước vào / đi ra ngoài)
-                    # vì khuôn mặt bị cắt nửa không trích xuất đủ vector đặc trưng, dễ gây báo động giả người lạ
-                    is_touching_edge = (fx <= 8 or fy <= 8 or (fx + fw) >= (w - 8) or (fy + fh) >= (h - 8))
-                    if is_touching_edge:
+                    # Bỏ qua khuôn mặt bị cắt cụt sát rìa màn hình (người chỉ mới lấp ló một góc)
+                    is_touching_edge = (fx <= 2 or fy <= 2 or (fx + fw) >= (w - 2) or (fy + fh) >= (h - 2))
+                    if is_touching_edge and fw < 28:
                         continue
 
                     best_match_name = "Stranger"
                     best_match_type = PersonType.STRANGER
-                    det_score = float(face[14]) if len(face) > 14 else 0.90
+                    det_score = float(face[14]) if len(face) > 14 else 0.85
                     stranger_divergence = max(0.0, 1.0 - best_score)
-                    # Tính độ tin cậy phát hiện người lạ dựa trên 70% YuNet + 30% độ sai biệt
-                    face_conf = min(0.99, max(0.70, det_score * 0.7 + stranger_divergence * 0.3))
+                    face_conf = min(0.99, max(0.40, det_score * 0.7 + stranger_divergence * 0.3))
 
             results.append(
                 RecognizedFace(

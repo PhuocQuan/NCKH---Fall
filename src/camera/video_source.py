@@ -43,8 +43,10 @@ class VideoSource:
         self.reconnect_attempts = reconnect_attempts
         self.reconnect_delay_sec = reconnect_delay_sec
         self._lock = threading.Lock()
+        self._new_frame_event = threading.Event()
         self._latest_frame: np.ndarray | None = None
         self._running = True
+        self._last_reconnect_time = 0.0
         self.capture = self._open()
 
         # Threaded frame grabber to eliminate RTSP network buffer delay (0s latency)
@@ -53,15 +55,16 @@ class VideoSource:
             self._thread = threading.Thread(target=self._reader_loop, daemon=True)
             self._thread.start()
 
-    def _open(self) -> cv2.VideoCapture | MockVideoCapture:
+    def _open_real_only(self) -> cv2.VideoCapture | None:
+        """Thử mở nguồn camera thật (Webcam/RTSP/Video). Trả về None nếu không mở được."""
         import sys
         import os
 
         is_rtsp = isinstance(self.source, str) and self.source.lower().startswith("rtsp://")
         if is_rtsp:
-            # Low-latency settings for FFmpeg RTSP stream decoding using TCP with 5s socket timeout
+            # Low-latency settings for FFmpeg RTSP stream decoding using TCP with 3s socket timeout
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                "rtsp_transport;tcp|stimeout;5000000|max_delay;500000|flags;low_delay|fflags;nobuffer|analyzeduration;1000000|probesize;1000000"
+                "rtsp_transport;tcp|stimeout;3000000|max_delay;300000|flags;low_delay|fflags;nobuffer|analyzeduration;500000|probesize;500000"
             )
 
         capture = None
@@ -79,6 +82,18 @@ class VideoSource:
                 capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             return capture
 
+        if capture is not None:
+            try:
+                capture.release()
+            except Exception:
+                pass
+        return None
+
+    def _open(self) -> cv2.VideoCapture | MockVideoCapture:
+        real = self._open_real_only()
+        if real is not None:
+            return real
+
         # Fallback to mock video capture if physical camera cannot be opened
         print(f"[VideoSource] Warning: Khong mo duoc camera {self.source}. Dang dung simulator.")
         return MockVideoCapture(self.source, self.width or 640, self.height or 480)
@@ -94,7 +109,7 @@ class VideoSource:
                 running = self._running
             if not running:
                 break
-            if cap is not None and cap.isOpened():
+            if cap is not None and cap.isOpened() and not isinstance(cap, MockVideoCapture):
                 try:
                     ok, frame = cap.read()
                 except Exception:
@@ -104,11 +119,13 @@ class VideoSource:
                 consecutive_failures = 0
                 with self._lock:
                     self._latest_frame = frame
-                sleep(0.005)
+                    self._new_frame_event.set()
             else:
                 consecutive_failures += 1
                 sleep(0.02)
-                if consecutive_failures > 30 and self._running:
+                # Cho phép dung sai 150 chu kỳ (~3.5s) khi mạng Wi-Fi bị trễ gói trước khi ngắt mở lại luồng
+                if consecutive_failures > 150 and self._running:
+                    print(f"[VideoSource] ⚠️ Luồng camera bị gián đoạn, đang tự động kết nối lại...")
                     with self._lock:
                         self._reconnect_locked()
                     consecutive_failures = 0
@@ -119,24 +136,58 @@ class VideoSource:
                 self.capture.release()
         except Exception:
             pass
-        self.capture = self._open()
+        
+        # Thử mở lại nguồn camera thật
+        real = self._open_real_only()
+        if real is not None:
+            self.capture = real
+            print(f"[VideoSource] ✅ Đã kết nối lại thành công luồng camera: {self.source}")
+        else:
+            # Nếu là camera RTSP trực tiếp, tiếp tục giữ để thử lại chứ không chuyển sang Mock tĩnh
+            if not _is_live_stream(self.source):
+                self.capture = MockVideoCapture(self.source, self.width or 640, self.height or 480)
 
-    def read(self) -> tuple[bool, np.ndarray | None]:
+    def read(self, timeout: float = 0.5) -> tuple[bool, np.ndarray | None]:
         with self._lock:
-            if isinstance(self.capture, MockVideoCapture):
-                return self.capture.read()
+            # Tự động thử kết nối lại camera vật lý nếu đang ở chế độ Mock hoặc mất kết nối
+            if isinstance(self.capture, MockVideoCapture) or self.capture is None:
+                now = time.time()
+                if _is_live_stream(self.source) and (now - self._last_reconnect_time > 3.0):
+                    self._last_reconnect_time = now
+                    real = self._open_real_only()
+                    if real is not None:
+                        print(f"[VideoSource] ✅ Đã kết nối lại thành công Camera: {self.source}")
+                        self.capture = real
+                        if (self._thread is None or not self._thread.is_alive()) and _is_live_stream(self.source):
+                            self._thread = threading.Thread(target=self._reader_loop, daemon=True)
+                            self._thread.start()
+                if isinstance(self.capture, MockVideoCapture):
+                    return self.capture.read()
 
-            if self._thread and self._thread.is_alive():
-                if self._latest_frame is not None:
-                    return True, self._latest_frame.copy()
+            use_thread = bool(self._thread and self._thread.is_alive())
+            if not use_thread:
+                if self.capture and self.capture.isOpened():
+                    try:
+                        ok, frame = self.capture.read()
+                        if ok:
+                            return True, frame
+                    except Exception:
+                        pass
                 return False, None
 
-            if self.capture and self.capture.isOpened():
-                ok, frame = self.capture.read()
-                if ok:
-                    return True, frame
+        # Chờ frame MỚI nhất từ _reader_loop thay vì đọc lặp lại frame cũ làm CPU chạy 100%
+        if self._new_frame_event.wait(timeout=timeout):
+            with self._lock:
+                self._new_frame_event.clear()
+                if self._latest_frame is not None:
+                    return True, self._latest_frame
 
-            return False, None
+        # Fallback nếu timeout nhưng đã có frame
+        with self._lock:
+            if self._latest_frame is not None:
+                return True, self._latest_frame
+
+        return False, None
 
     def info(self) -> SourceInfo:
         with self._lock:

@@ -49,21 +49,58 @@ def _auto_start_monitoring() -> None:
         camera_id = "CAM-LOCAL"
         try:
             with get_db_client() as client:
-                res = client.execute("SELECT id, rtsp, status FROM cameras WHERE status = 'online' ORDER BY id ASC LIMIT 1")
+                res = client.execute("SELECT id, rtsp, status, ip FROM cameras WHERE status = 'online'")
+                if not res.rows:
+                    res = client.execute("SELECT id, rtsp, status, ip FROM cameras")
                 if res.rows:
-                    camera_id = str(res.rows[0][0])
-                    rtsp = res.rows[0][1]
+                    chosen_row = None
+                    for row in res.rows:
+                        c_id, c_rtsp, c_status, c_ip = row[0], row[1], row[2], str(row[3] or "")
+                        # Bỏ qua Router Gateway (.1 hoặc .2) nếu còn camera khác trong danh sách
+                        if (c_ip.endswith(".1") or c_ip.endswith(".2")) and len(res.rows) > 1:
+                            continue
+                        chosen_row = row
+                        break
+                    if not chosen_row:
+                        chosen_row = res.rows[0]
+                    camera_id = str(chosen_row[0])
+                    rtsp = chosen_row[1]
                     if rtsp and str(rtsp).strip():
                         source = str(rtsp).strip()
-                else:
-                    res2 = client.execute("SELECT id, rtsp FROM cameras ORDER BY id ASC LIMIT 1")
-                    if res2.rows:
-                        camera_id = str(res2.rows[0][0])
-                        rtsp = res2.rows[0][1]
-                        if rtsp and str(rtsp).strip():
-                            source = str(rtsp).strip()
         except Exception as db_err:
             print(f"[Auto-Start AI] Khong the truy van camera tu DB ({db_err}), dung mac dinh.")
+        
+        # Kiểm tra tự động phát hiện IP mới nếu dùng RTSP và IP cũ bị mất tín hiệu (DHCP)
+        if source.startswith("rtsp://"):
+            import re
+            from src.camera.camera_discovery import probe_rtsp_socket, discover_all_cameras, build_imou_rtsp
+            ip_match = re.search(r"@([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", source) or re.search(r"//([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", source)
+            target_ip = ip_match.group(1) if ip_match else None
+            is_alive = False
+            if target_ip:
+                is_alive, _ = probe_rtsp_socket(target_ip, timeout=0.45)
+            
+            if not is_alive and target_ip:
+                print(f"[Auto-Start AI] ⚠️ Camera tai IP {target_ip} khong phan hoi (co the da bi Router doi IP do DHCP).")
+                print(f"[Auto-Start AI] 🔍 Dang tu dong quet mang Wi-Fi tim IP moi cua Camera...")
+                try:
+                    discovered = discover_all_cameras()
+                    if discovered:
+                        new_ip = discovered[0]["ip"]
+                        code_match = re.search(r":([^:@]+)@", source)
+                        safety_code = code_match.group(1) if code_match else "L223Xr!w"
+                        new_source = build_imou_rtsp(new_ip, safety_code)
+                        print(f"[Auto-Start AI] 🎯 Da tim thay Camera tai IP moi: {new_ip}! Cap nhat Database va ket noi...")
+                        source = new_source
+                        try:
+                            with get_db_client() as client:
+                                client.execute("UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?", [new_ip, new_source, camera_id])
+                        except Exception as update_err:
+                            print(f"[Auto-Start AI] Khong the cap nhat IP moi vao DB: {update_err}")
+                    else:
+                        print(f"[Auto-Start AI] ⚠️ Chua tim thay Camera nao tren mang Wi-Fi noi bo.")
+                except Exception as scan_err:
+                    print(f"[Auto-Start AI] Loi khi quet camera: {scan_err}")
         
         print(f"[Auto-Start AI] 🚀 Khoi dong giam sat AI ngam 24/7 cho Camera: {camera_id} (Nguon: {source})...")
         pipeline.start(source=source, camera_id=camera_id)
