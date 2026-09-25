@@ -27,6 +27,7 @@ from src.core.config import load_config
 from src.core.event_logger import EventLogger
 from src.detection.feature_extractor import LandmarkFeatureBuffer
 from src.detection.fall_detector import FallDetector, FallState
+from src.detection.object_detector import DetectedObject, ObjectDetector
 from src.detection.pose_estimator import PoseEstimator
 from src.camera.video_source import VideoSource
 from src.face import FaceRecognizer, PersonType, RecognizedFace
@@ -40,6 +41,7 @@ except Exception:  # pragma: no cover
 
 STATE_COLORS = {
     FallState.NORMAL: (70, 200, 90),
+    FallState.PRE_FALL: (0, 165, 255),
     FallState.LYING: (180, 180, 180),
     FallState.WARNING: (0, 190, 255),
     FallState.POSSIBLE_FALL: (0, 140, 255),
@@ -111,6 +113,7 @@ def main() -> None:
     estimator = PoseEstimator(model_complexity=config.app.model_complexity)
     logger = EventLogger(config.app.event_log_path)
     face_recognizer = FaceRecognizer(config.face)
+    object_detector = ObjectDetector(getattr(config, "object_detection", None))
 
     source = args.video if args.video else args.camera if args.camera is not None else args.source
     video = VideoSource(
@@ -126,6 +129,7 @@ def main() -> None:
 
     frame_count = 0
     cached_faces: list[RecognizedFace] = []
+    cached_objects: list[DetectedObject] = []
 
     try:
         while True:
@@ -138,16 +142,40 @@ def main() -> None:
             if config.face.enabled and (frame_count % config.face.process_every_n_frames == 0 or not cached_faces):
                 cached_faces = face_recognizer.recognize(frame)
 
+            # Quét vật phẩm & đồ dùng nội thất mỗi N frame
+            if getattr(config, "object_detection", None) and config.object_detection.enabled:
+                if frame_count % config.object_detection.process_every_n_frames == 0 or not cached_objects:
+                    cached_objects = object_detector.detect(frame)
+
+            if cached_faces and hasattr(estimator, "estimate_multi"):
+                multi_poses = estimator.estimate_multi(frame, cached_faces)
+                if multi_poses:
+                    pose_results = [res for _, res in multi_poses]
+                    points = multi_poses[0][0]
+                    for p_pts, _ in multi_poses:
+                        sh = p_pts.get("left_shoulder") or p_pts.get("right_shoulder")
+                        if sh and sh.y > 0.50:
+                            points = p_pts
+                            break
+                else:
+                    points, pose_results = None, None
+            else:
+                points, pose_results = estimator.estimate(frame)
+
+            # Lọc khuôn mặt giải phẫu: loại bỏ box ảo trên bàn phím / bàn tay nằm sâu dưới vai
+            if points and cached_faces:
+                from src.web.shared.pipeline import filter_anatomical_faces
+                cached_faces = filter_anatomical_faces(cached_faces, points, frame.shape[0])
+
             # Lấy thông tin người đầu tiên nhận diện được trong frame (nếu có)
             current_person_name = cached_faces[0].name if cached_faces else "Unknown"
             current_person_type = cached_faces[0].person_type.value if cached_faces else "N/A"
 
-            points, pose_results = estimator.estimate(frame)
             result = None
             if points:
                 features = feature_buffer.append(points)
                 ai_prediction = ai_classifier.predict(features)
-                result = detector.update(points)
+                result = detector.update(points, nearby_objects=cached_objects)
                 if result.event_started:
                     logger.write(result, person_name=current_person_name, person_type=current_person_type)
                 frames_since_alert_beep, prev_fall_state = _update_fall_alarm(
@@ -159,13 +187,21 @@ def main() -> None:
                 if config.app.draw_landmarks:
                     estimator.draw(frame, pose_results)
                 _draw_status(frame, result, ai_prediction, current_person_name, current_person_type)
+                if getattr(result, "safe_resting", False):
+                    obj_lbl = getattr(result, "resting_object", "giuong").upper()
+                    _draw_text(frame, f"SAFE RESTING ({obj_lbl})", (20, 80), (220, 150, 40))
+                elif getattr(result, "is_seated", False):
+                    obj_lbl = getattr(result, "resting_object", "ban").upper()
+                    _draw_text(frame, f"SEATED WORK ({obj_lbl})", (20, 80), (50, 180, 80))
             else:
                 feature_buffer.reset()
                 prev_fall_state = FallState.NORMAL
                 frames_since_alert_beep = alert_beep_interval_frames
                 _draw_text(frame, "No pose detected", (20, 40), (180, 180, 180))
 
-            # Vẽ bounding boxes khuôn mặt
+            # Vẽ bounding boxes vật phẩm (trừ person) và khuôn mặt (1 khung vuông tại mặt)
+            if cached_objects and object_detector:
+                object_detector.draw(frame, cached_objects, skip_labels={"person"})
             _draw_faces(frame, cached_faces)
 
             cv2.imshow(window_name, frame)
@@ -244,7 +280,13 @@ def _play_alert_sound() -> None:
     threading.Thread(target=_beep, daemon=True).start()
 
 
-def _draw_status(frame, result, ai_prediction) -> None:
+def _draw_status(
+    frame,
+    result,
+    ai_prediction,
+    person_name: str = "",
+    person_type: str = "",
+) -> None:
     """
     Vẽ trạng thái té ngã và kết quả AI lên góc trái màn hình video.
     
@@ -252,19 +294,44 @@ def _draw_status(frame, result, ai_prediction) -> None:
         frame: Khung hình hiện tại (OpenCV Mat).
         result: Kết quả từ FallDetector (chứa góc, thời gian nằm, trạng thái).
         ai_prediction: Kết quả dự đoán từ mô hình AI.
+        person_name: Tên người nhận diện được (nếu có).
+        person_type: Phân loại đối tượng (FAMILY, ATTENTION, STRANGER...).
     """
-    color = STATE_COLORS[result.state]
-    label = (
-        f"{result.state.value.upper()} | angle={result.torso_angle_deg:.1f} "
-        f"| lie={result.lying_seconds:.1f}s | profile={result.profile}"
-    )
+    color = STATE_COLORS.get(result.state, (70, 200, 90))
+    if result.state == FallState.PRE_FALL:
+        sway_pct = int(getattr(result, "postural_sway", 0.0) * 100)
+        ptype = getattr(result, "pre_fall_type", "swaying").upper()
+        if ptype == "SWAYING":
+            type_str = "LAO DAO"
+        elif ptype == "STUMBLE":
+            type_str = "BUOC HUT / VAP"
+        elif ptype == "DIZZY":
+            type_str = "CHONG MAT"
+        else:
+            type_str = "MAT THANG BANG"
+        label = (
+            f"TIEN TE NGA: {type_str} ({sway_pct}%) | angle={result.torso_angle_deg:.1f} "
+            f"| profile={result.profile}"
+        )
+    else:
+        label = (
+            f"{result.state.value.upper()} | angle={result.torso_angle_deg:.1f} "
+            f"| lie={result.lying_seconds:.1f}s | profile={result.profile}"
+        )
     _draw_text(frame, label, (20, 40), color)
-    if ai_prediction.enabled:
+    if person_name and person_name != "Unknown":
+        person_lbl = f"ID: {person_name} ({person_type})"
+        _draw_text(frame, person_lbl, (20, 75), (255, 230, 100))
+        ai_y = 110
+    else:
+        ai_y = 80
+
+    if ai_prediction and ai_prediction.enabled:
         ai_label = f"AI: {ai_prediction.label} ({ai_prediction.probability:.2f})"
         ai_color = (40, 40, 230) if ai_prediction.label == "fall" else (70, 200, 90)
-        _draw_text(frame, ai_label, (20, 80), ai_color)
+        _draw_text(frame, ai_label, (20, ai_y), ai_color)
     else:
-        _draw_text(frame, "AI: disabled/no model", (20, 80), (180, 180, 180))
+        _draw_text(frame, "AI: disabled/no model", (20, ai_y), (180, 180, 180))
     if result.state in FALL_ALARM_STATES:
         height, width = frame.shape[:2]
         cv2.rectangle(frame, (0, 0), (width - 1, height - 1), color, 6)

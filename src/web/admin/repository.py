@@ -71,31 +71,65 @@ def delete_user_db(email: str) -> None:
 def get_all_cameras_db() -> list[dict[str, Any]]:
     """SQL SELECT: Lấy danh sách cameras."""
     cams = []
-    with get_db_client() as client:
-        res = client.execute("SELECT id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold FROM cameras")
-        for r in res.rows:
-            cams.append({
-                "id": r[0],
-                "name": r[1],
-                "ip": r[2],
-                "rtsp": r[3],
-                "area": r[4],
-                "target": r[5],
-                "state": r[6],
-                "status": r[7],
-                "fps": r[8],
-                "resolution": r[9],
-                "threshold": r[10]
-            })
+    try:
+        with get_db_client() as client:
+            res = client.execute("SELECT id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold FROM cameras")
+            for r in res.rows:
+                cams.append({
+                    "id": r[0],
+                    "name": r[1],
+                    "ip": r[2],
+                    "rtsp": r[3],
+                    "area": r[4],
+                    "target": r[5],
+                    "state": r[6],
+                    "status": r[7],
+                    "fps": r[8],
+                    "resolution": r[9],
+                    "threshold": r[10]
+                })
+    except Exception as e:
+        print(f"[Database Error] Khong the lay danh sach camera tu DB: {e}")
     return cams
 
 
 def create_camera_db(id: str, name: str, ip: str, rtsp: str, area: str, target: str, state: str, status: str, fps: int, resolution: str, threshold: int) -> None:
     with get_db_client() as client:
         client.execute(
-            "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            """INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name,
+                   ip = excluded.ip,
+                   rtsp = excluded.rtsp,
+                   area = excluded.area,
+                   target = excluded.target,
+                   state = excluded.state,
+                   status = excluded.status,
+                   fps = excluded.fps,
+                   resolution = excluded.resolution,
+                   threshold = excluded.threshold
+            """,
             [id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold]
         )
+
+
+def upsert_camera_stream_db(
+    id: str,
+    name: str,
+    ip: str,
+    rtsp: str,
+    area: str = "Phòng chính",
+    target: str = "Nguy cơ cao",
+    state: str = "normal",
+    status: str = "online",
+    fps: int = 25,
+    resolution: str = "1920x1080",
+    threshold: int = 80,
+) -> str:
+    """Upsert camera information (insert or update on conflict) in SQLite/Turso database."""
+    create_camera_db(id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold)
+    return id
 
 
 def check_camera_exists_db(id: str) -> bool:
@@ -112,31 +146,76 @@ def update_camera_db(id: str, name: str, ip: str, rtsp: str, area: str, target: 
         )
 
 
-def update_camera_network_db(camera_id: str, new_ip: str, new_rtsp: str) -> str:
-    """Cập nhật IP và RTSP mới cho camera, hoặc tạo mới nếu chưa tồn tại."""
+def update_camera_network_db(
+    camera_id: str,
+    new_ip: str,
+    new_rtsp: str,
+    name: str | None = None,
+    mode: str = "update",
+) -> str:
+    """Cập nhật IP và RTSP mới cho camera, hoặc tạo mới nếu chưa tồn tại hoặc mode='new'."""
     with get_db_client() as client:
+        cam_name = name or f"Camera Imou ({new_ip})"
+
+        # 1. Trường hợp người dùng chọn 'Thêm mới thành Camera riêng biệt'
+        if mode == "new":
+            target_id = camera_id.strip() if camera_id else ""
+            if not target_id:
+                count_res = client.execute("SELECT count(*) FROM cameras")
+                c_num = (count_res.rows[0][0] if count_res.rows else 0) + 1
+                target_id = f"CAM-{c_num:03d}"
+
+            res = client.execute("SELECT 1 FROM cameras WHERE id = ?", [target_id])
+            if res.rows:
+                client.execute(
+                    "UPDATE cameras SET name = ?, ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
+                    [cam_name, new_ip, new_rtsp, target_id],
+                )
+            else:
+                client.execute(
+                    "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [target_id, cam_name, new_ip, new_rtsp, "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80],
+                )
+            return target_id
+
+        # 2. Trường hợp mode == 'update'
         if camera_id:
             res = client.execute("SELECT 1 FROM cameras WHERE id = ?", [camera_id])
             if res.rows:
+                if name:
+                    client.execute(
+                        "UPDATE cameras SET name = ?, ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
+                        [cam_name, new_ip, new_rtsp, camera_id],
+                    )
+                else:
+                    client.execute(
+                        "UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
+                        [new_ip, new_rtsp, camera_id],
+                    )
+                return camera_id
+            else:
+                # Camera ID được chỉ định nhưng chưa tồn tại trong DB -> INSERT mới ngay để lưu vào cơ sở dữ liệu
                 client.execute(
-                    "UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
-                    [new_ip, new_rtsp, camera_id]
+                    "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [camera_id, cam_name, new_ip, new_rtsp, "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80],
                 )
                 return camera_id
-        # Fallback vào camera đầu tiên
+
+        # 3. Fallback nếu không truyền camera_id: cập nhật camera đầu tiên nếu có
         res2 = client.execute("SELECT id FROM cameras ORDER BY id ASC LIMIT 1")
         if res2.rows:
             target_id = str(res2.rows[0][0])
             client.execute(
                 "UPDATE cameras SET ip = ?, rtsp = ?, status = 'online' WHERE id = ?",
-                [new_ip, new_rtsp, target_id]
+                [new_ip, new_rtsp, target_id],
             )
             return target_id
-        
-        target_id = camera_id or "CAM-011"
+
+        # 4. Bảng cameras hoàn toàn trống
+        target_id = "CAM-001"
         client.execute(
             "INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [target_id, f"Camera Imou ({new_ip})", new_ip, new_rtsp, "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80]
+            [target_id, cam_name, new_ip, new_rtsp, "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80],
         )
         return target_id
 

@@ -634,12 +634,8 @@ function loadStore(key, fallback) {
     }
 
     let cameras = loadStore("fg_cameras", [
-      { id: "CAM-001", name: "Camera phòng 101", ip: "192.168.1.101", rtsp: "rtsp://192.168.1.101/live", area: "Khu A", target: "BN-001", state: "normal", status: "online", fps: 30, resolution: "1920x1080", threshold: 78 },
-      { id: "CAM-002", name: "Camera hành lang A", ip: "192.168.1.102", rtsp: "rtsp://192.168.1.102/live", area: "Khu A", target: "BN-002", state: "walking", status: "online", fps: 25, resolution: "1280x720", threshold: 76 },
-      { id: "CAM-003", name: "Camera phòng 203", ip: "192.168.1.103", rtsp: "rtsp://192.168.1.103/live", area: "Khu B", target: "BN-003", state: "fallen", status: "online", fps: 30, resolution: "1920x1080", threshold: 82 },
-      { id: "CAM-004", name: "Camera phòng phục hồi", ip: "192.168.1.104", rtsp: "rtsp://192.168.1.104/live", area: "Khu C", target: "BN-004", state: "sitting", status: "maintenance", fps: 20, resolution: "1280x720", threshold: 74 },
-      { id: "CAM-005", name: "Camera phòng 305", ip: "192.168.1.105", rtsp: "rtsp://192.168.1.105/live", area: "Khu C", target: "BN-005", state: "normal", status: "offline", fps: 0, resolution: "1920x1080", threshold: 80 },
-      { id: "CAM-006", name: "Camera phòng khách", ip: "192.168.1.106", rtsp: "rtsp://192.168.1.106/live", area: "Nhà riêng", target: "BN-006", state: "lying", status: "online", fps: 30, resolution: "1920x1080", threshold: 75 }
+      { id: "CAM-011", name: "111SS", ip: "192.168.1.18", rtsp: "rtsp://admin:L223Xr!w@192.168.1.18:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 120, resolution: "1920x1080", threshold: 80 },
+      { id: "CAM-002", name: "Camera Imou 192.168.1.18", ip: "192.168.1.18", rtsp: "rtsp://admin:L223Xr!w@192.168.1.18:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 25, resolution: "1920x1080", threshold: 80 }
     ]);
 
     let alerts = loadStore("fg_alerts", [
@@ -657,8 +653,8 @@ function loadStore(key, fallback) {
     }
 
     let users = loadStore("fg_users", [
-      { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
-      { email: "bao@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] },
+      { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-011", "CAM-002"] },
+      { email: "bao@nckh.vn", name: "Bảo", role: "Khachhang", status: "Đang hoạt động", assignedCameras: ["CAM-011", "CAM-002"] },
       { email: "nurse@nckh.vn", name: "Nhân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
       { email: "family@nckh.vn", name: "Ân", role: "Khachhang", status: "Đang hoạt động", assignedCameras: [] },
       { email: "guest@nckh.vn", name: "Quân", role: "Khachhang", status: "Bị khóa", assignedCameras: [] }
@@ -667,7 +663,7 @@ function loadStore(key, fallback) {
     // Safeguard to ensure admin@nckh.vn is always present and active
     let adminUser = users.find(u => u.email.toLowerCase() === "admin@nckh.vn");
     if (!adminUser) {
-      adminUser = { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-001", "CAM-002", "CAM-003", "CAM-004", "CAM-005", "CAM-006"] };
+      adminUser = { email: "admin@nckh.vn", name: "Admin NCKH", role: "Admin", status: "Đang hoạt động", assignedCameras: ["CAM-011", "CAM-002"] };
       users.push(adminUser);
       saveStore("fg_users", users);
     } else if (adminUser.status !== "Đang hoạt động" || adminUser.role !== "Admin") {
@@ -811,7 +807,7 @@ function loadStore(key, fallback) {
     const logsPerPage = 10;
     const adminAlertsPerPage = 10;
     let systemLogs = [];
-    let selectedCameraId = cameras[0]?.id || "";
+    let selectedCameraId = localStorage.getItem("fg_selected_camera_id") || cameras[0]?.id || "";
     let cameraStreamBackView = "";
     let testCameraStream = null;
     let aiFallTestOn = false;
@@ -1092,9 +1088,20 @@ function loadStore(key, fallback) {
           users = resUsers;
           saveStore("fg_users", users);
         }
-        if (resCameras && Array.isArray(resCameras)) {
+        if (resCameras && Array.isArray(resCameras) && resCameras.length > 0) {
           cameras = resCameras;
           saveStore("fg_cameras", cameras);
+
+          const savedCamId = localStorage.getItem("fg_selected_camera_id");
+          if (savedCamId && cameras.some(c => c.id === savedCamId)) {
+            selectedCameraId = savedCamId;
+          } else if (!selectedCameraId || !cameras.some(c => c.id === selectedCameraId)) {
+            const activeOrOnline = cameras.find(c => c.status === "online") || cameras[0];
+            if (activeOrOnline) {
+              selectedCameraId = activeOrOnline.id;
+              localStorage.setItem("fg_selected_camera_id", selectedCameraId);
+            }
+          }
         }
         if (resAlerts && Array.isArray(resAlerts.alerts)) {
           alerts = resAlerts.alerts;
@@ -1114,6 +1121,9 @@ function loadStore(key, fallback) {
       saveStore("fg_users", users);
       saveStore("fg_api_keys", apiKeys);
       saveStore("fg_settings", settings);
+      if (selectedCameraId) {
+        localStorage.setItem("fg_selected_camera_id", selectedCameraId);
+      }
       if (typeof monitoredProfile !== 'undefined') saveStore("fg_monitored_profile", monitoredProfile);
       if (typeof emergencyContacts !== 'undefined') saveStore("fg_emergency_contacts", emergencyContacts);
       if (typeof userNotifications !== 'undefined') saveStore("fg_user_notifications", userNotifications);
@@ -1259,8 +1269,8 @@ function loadStore(key, fallback) {
     const table = (heads, rows) => `<div class="table-wrap"><table><thead><tr>${heads.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     const personSvg = () => `<div class="person"><span class="joint j1"></span><span class="joint j2"></span><span class="joint j3"></span><span class="joint j4"></span><span class="joint j5"></span><span class="joint j6"></span><span class="bone l1"></span><span class="bone l2"></span><span class="bone l3"></span><span class="bone l4"></span><span class="bone l5"></span></div>`;
     const cameraRoomName = (cam, index) => {
-      const rooms = ["Room A203", "Room A204", "Room A205", "Room A206", "Room B101", "Room B102"];
-      return `${rooms[index] || cam.area} - Camera ${String(index + 1).padStart(2, "0")}`;
+      if (cam.name) return `${cam.name} (${cam.id})`;
+      return `${cam.area || 'Phòng chính'} - ${cam.id}`;
     };
     const stateLabel = (cam) => cam.state === "fallen" ? "FALL" : cam.state === "walking" || cam.state === "sitting" || cam.state === "lying" ? "WARNING" : "NORMAL";
     const stateClass = (cam) => cam.state === "fallen" ? "fallen" : cam.state === "walking" || cam.state === "sitting" || cam.state === "lying" ? "warning" : "";
@@ -2373,7 +2383,7 @@ function loadStore(key, fallback) {
         return `<div class="live-toolbar" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px;">
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <button class="btn line" onclick="${backAction}">${backText}</button>
-            <select class="control" id="switchCameraSelect" onchange="selectedCameraId=this.value; render('dashboard', false); setTimeout(()=>startTestCamera(), 150);" style="height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background:#f8fafc; color:#0f172a;">
+            <select class="control" id="switchCameraSelect" onchange="selectedCameraId=this.value; localStorage.setItem('fg_selected_camera_id', this.value); render('dashboard', false); setTimeout(()=>startTestCamera(), 150);" style="height:38px; padding:0 10px; border-radius:6px; border:1px solid var(--line); font-size:13px; font-weight:600; background:#f8fafc; color:#0f172a;">
               ${cameras.map(c => `<option value="${esc(c.id)}" ${c.id === cam.id ? 'selected' : ''}>📹 ${esc(c.name)} (${esc(c.id)}) - IP: ${esc(c.ip)}</option>`).join("")}
             </select>
           </div>
@@ -4083,8 +4093,12 @@ function loadStore(key, fallback) {
 
       const vis = getVisibleCameras();
       if (vis.length > 0) {
-        if (!vis.some(c => c.id === selectedCameraId)) {
+        const savedCam = localStorage.getItem("fg_selected_camera_id");
+        if (savedCam && vis.some(c => c.id === savedCam)) {
+          selectedCameraId = savedCam;
+        } else if (!vis.some(c => c.id === selectedCameraId)) {
           selectedCameraId = vis[0].id;
+          localStorage.setItem("fg_selected_camera_id", selectedCameraId);
         }
       } else {
         selectedCameraId = "";
@@ -4242,6 +4256,7 @@ function loadStore(key, fallback) {
       const cameraCardEl = event.target.closest("[data-open-camera]");
       if (cameraCardEl) {
         selectedCameraId = cameraCardEl.dataset.openCamera;
+        localStorage.setItem("fg_selected_camera_id", selectedCameraId);
         const cam = cameraById(selectedCameraId);
         if (cam) {
           if (cam.status !== "online") {
@@ -4654,6 +4669,7 @@ function loadStore(key, fallback) {
             alert(errData.detail || "Không thể đồng bộ dữ liệu camera lên máy chủ.");
             return;
           }
+          await syncFromBackend();
         } catch (err) {
           console.error("Camera sync failed:", err);
           alert("Lỗi kết nối khi đồng bộ dữ liệu camera.");
@@ -4662,7 +4678,7 @@ function loadStore(key, fallback) {
       }
 
       const idx = cameras.findIndex((item) => item.id === data.oldId);
-      if (idx >= 0) cameras[idx] = cam; else cameras.push(cam);
+      if (idx >= 0) cameras[idx] = cam; else if (!cameras.some(c => c.id === cam.id)) cameras.push(cam);
       selectedCameraId = cam.id;
       saveAll();
       closeModal();
@@ -4881,7 +4897,9 @@ function loadStore(key, fallback) {
           body: JSON.stringify({
             camera_id: targetCamId,
             new_ip: newIp,
-            safety_code: safetyCode
+            safety_code: safetyCode,
+            name: camName,
+            mode: mode
           })
         });
         
@@ -4892,16 +4910,15 @@ function loadStore(key, fallback) {
         }
         
         const data = await res.json();
+        const actualCamId = data.camera_id || targetCamId;
         
-        // Cập nhật danh sách camera trong client state
-        const camItem = cameras.find(c => c.id === targetCamId);
-        if (camItem) {
-          camItem.ip = newIp;
-          camItem.rtsp = data.new_rtsp;
-          camItem.status = "online";
-        } else {
+        // Đồng bộ dữ liệu thực tế từ cơ sở dữ liệu về client
+        await syncFromBackend();
+        
+        // Đảm bảo camera được lưu vào client state ngay cả khi mạng backend có độ trễ
+        if (!cameras.some(c => c.id === actualCamId)) {
           cameras.push({
-            id: targetCamId,
+            id: actualCamId,
             name: camName,
             ip: newIp,
             rtsp: data.new_rtsp,
@@ -4914,7 +4931,7 @@ function loadStore(key, fallback) {
             threshold: 80
           });
         }
-        selectedCameraId = targetCamId;
+        selectedCameraId = actualCamId;
         saveAll();
         closeModal();
         
@@ -5216,17 +5233,26 @@ function loadStore(key, fallback) {
               if (res.ok) {
                 console.log("Auto-login session verified with backend.");
                 await syncFromBackend();
-                // Đảm bảo pipeline AI ngầm đang hoạt động
+                // Đảm bảo pipeline AI ngầm đang hoạt động và đồng bộ camera đang mở
                 try {
                   const healthRes = await fetch(`${apiBaseUrl()}/api/health`).then(r => r.json()).catch(() => ({}));
-                  if (healthRes.ok && !healthRes.pipeline_running) {
-                    const firstOnlineCam = (cameras || []).find(c => c.status === "online") || (cameras || [])[0];
-                    if (firstOnlineCam) {
-                      await fetch(`${apiBaseUrl()}/api/control/start`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-                        body: JSON.stringify({ source: firstOnlineCam.rtsp || "0", camera_id: firstOnlineCam.id })
-                      }).catch(() => {});
+                  if (healthRes.ok) {
+                    if (healthRes.camera_id && healthRes.camera_id !== "CAM-LOCAL" && (cameras || []).some(c => c.id === healthRes.camera_id)) {
+                      const savedCamId = localStorage.getItem("fg_selected_camera_id");
+                      if (!savedCamId || !(cameras || []).some(c => c.id === savedCamId)) {
+                        selectedCameraId = healthRes.camera_id;
+                        localStorage.setItem("fg_selected_camera_id", selectedCameraId);
+                      }
+                    }
+                    if (!healthRes.pipeline_running) {
+                      const activeCam = (cameras || []).find(c => c.id === selectedCameraId) || (cameras || []).find(c => c.status === "online") || (cameras || [])[0];
+                      if (activeCam) {
+                        await fetch(`${apiBaseUrl()}/api/control/start`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+                          body: JSON.stringify({ source: activeCam.rtsp || "0", camera_id: activeCam.id })
+                        }).catch(() => {});
+                      }
                     }
                   }
                 } catch(e) {}

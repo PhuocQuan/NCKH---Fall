@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import sqlite3
+from typing import Any
 import libsql_client
 from libsql_client.client import LibsqlError
 
@@ -28,19 +30,110 @@ DB_CONFIG_PATH = Path("configs/db.json")
 
 _DB_INITIALIZED = False
 
-def get_db_client():
-    if not DB_CONFIG_PATH.exists():
-        raise RuntimeError("db.json not found!")
-    with DB_CONFIG_PATH.open(encoding="utf-8") as f:
-        config = json.load(f).get("turso", {})
-    url = config.get("url")
-    if not url:
-        raise RuntimeError("Turso URL not configured in db.json!")
-    if url.startswith("libsql://"):
-        url = url.replace("libsql://", "https://")
-    auth_token = config.get("auth_token")
-    
-    client = libsql_client.create_client_sync(url=url, auth_token=auth_token)
+
+class SqliteResultSet:
+    """Result set wrapper matching libsql_client ResultSet interface."""
+    def __init__(self, rows: list[tuple[Any, ...]], columns: list[str] | None = None) -> None:
+        self.rows = rows
+        self.columns = columns or []
+
+
+class SqliteLocalClient:
+    """Local SQLite client matching libsql_client synchronous interface."""
+    def __init__(self, db_path: str = "data/local.db") -> None:
+        self.db_path = db_path
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+
+    def __enter__(self) -> "SqliteLocalClient":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if exc_type is None:
+            try:
+                self.conn.commit()
+            except Exception:
+                pass
+        self.close()
+
+    def execute(self, stmt: str, args: Any = None) -> SqliteResultSet:
+        cur = self.conn.cursor()
+        if args:
+            cur.execute(stmt, args)
+        else:
+            cur.execute(stmt)
+        rows = cur.fetchall()
+        self.conn.commit()
+        return SqliteResultSet(rows)
+
+    def close(self) -> None:
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+
+
+class ResilientDbClient:
+    """DB client wrapper ensuring zero downtime and offline persistence by bridging Turso with SQLite."""
+    def __init__(self, turso_client: Any | None = None, local_path: str = "data/local.db") -> None:
+        self._turso_client = turso_client
+        self._local_client = SqliteLocalClient(local_path)
+        self._use_local = (turso_client is None)
+
+    def __enter__(self) -> "ResilientDbClient":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self._turso_client is not None:
+            try:
+                self._turso_client.close()
+            except Exception:
+                pass
+        self._local_client.close()
+
+    def execute(self, stmt: str, args: Any = None) -> Any:
+        if not self._use_local and self._turso_client is not None:
+            try:
+                res = self._turso_client.execute(stmt, args)
+                # Đồng bộ thao tác ghi vào SQLite cục bộ để đảm bảo dữ liệu luôn sẵn sàng khi offline
+                s = stmt.strip().upper()
+                if s.startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER")):
+                    try:
+                        self._local_client.execute(stmt, args)
+                    except Exception:
+                        pass
+                return res
+            except Exception as e:
+                # Turso không thể kết nối -> tự động chuyển sang SQLite cục bộ
+                self._use_local = True
+
+        return self._local_client.execute(stmt, args)
+
+    def close(self) -> None:
+        if self._turso_client is not None:
+            try:
+                self._turso_client.close()
+            except Exception:
+                pass
+        self._local_client.close()
+
+
+def get_db_client(local_path: str = "data/local.db") -> ResilientDbClient:
+    turso_client = None
+    if DB_CONFIG_PATH.exists():
+        try:
+            with DB_CONFIG_PATH.open(encoding="utf-8") as f:
+                config = json.load(f).get("turso", {})
+            url = config.get("url")
+            if url:
+                if url.startswith("libsql://"):
+                    url = url.replace("libsql://", "https://")
+                auth_token = config.get("auth_token")
+                turso_client = libsql_client.create_client_sync(url=url, auth_token=auth_token)
+        except Exception:
+            turso_client = None
+
+    client = ResilientDbClient(turso_client=turso_client, local_path=local_path)
     
     global _DB_INITIALIZED
     if not _DB_INITIALIZED:
@@ -137,6 +230,14 @@ def _init_db_schema(client):
         client.execute(
             "INSERT INTO users (email, password, name, role, status, assigned_cameras, phone) VALUES (?, ?, ?, ?, ?, ?, ?)",
             ["admin@nckh.vn", "nckh2025", "Quản trị viên", "Admin", "Đang hoạt động", "[]", "0901234567"]
+        )
+    # Khởi tạo camera mặc định nếu bảng cameras trống
+    res_cams = client.execute("SELECT 1 FROM cameras LIMIT 1")
+    if not res_cams.rows:
+        client.execute(
+            """INSERT INTO cameras (id, name, ip, rtsp, area, target, state, status, fps, resolution, threshold)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ["CAM-011", "Camera Imou Phòng Chính", "192.168.1.18", "rtsp://admin:L223Xr!w@192.168.1.18:554/cam/realmonitor?channel=1&subtype=1", "Phòng chính", "Nguy cơ cao", "normal", "online", 25, "1920x1080", 80]
         )
 
 

@@ -20,4 +20,8 @@ data/pytest_tmp/
 data/*.sqlite
 data/*.csv
 data/test*
-data/video_stream_frame.jpg
+data/video_stream_frame.jpg
+data/*.db
+data/temp_test/
+data/debug*
+app_fall/android/build/

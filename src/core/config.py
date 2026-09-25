@@ -28,6 +28,14 @@ class DetectorConfig:
     assumed_fps: float = 15.0
     cooldown_frames: int = 30
     profile: str = "default"
+    camera_pitch_angle_deg: float = 0.0
+    enable_scale_normalization: bool = True
+    reference_torso_length: float = 0.25
+    enable_pre_fall: bool = True
+    pre_fall_sway_threshold: float = 0.032
+    pre_fall_window_frames: int = 15
+    pre_fall_min_reversals: int = 3
+    pre_fall_dizzy_duration_frames: int = 25
 
 
 @dataclass(frozen=True)
@@ -54,9 +62,21 @@ class FaceConfig:
     """Cấu hình nhận diện khuôn mặt (Bật/tắt, đường dẫn lưu ảnh người quen, ngưỡng sai số)."""
     enabled: bool = True
     known_faces_dir: str = "data/known_faces"
-    similarity_threshold: float = 0.32
-    score_threshold: float = 0.50
+    similarity_threshold: float = 0.38
+    score_threshold: float = 0.58
     process_every_n_frames: int = 2
+
+
+@dataclass(frozen=True)
+class ObjectDetectionConfig:
+    """Cấu hình nhận diện vật thể/nội thất (Ghế, giường, xe lăn, sofa, bàn, laptop)."""
+    enabled: bool = True
+    model_path: str = "models/yolov8n.onnx"
+    confidence_threshold: float = 0.40
+    nms_threshold: float = 0.45
+    process_every_n_frames: int = 4
+    bed_overlap_threshold: float = 0.35
+    target_classes: tuple[str, ...] = ("chair", "couch", "bed", "wheelchair", "bench", "dining table", "laptop")
 
 
 @dataclass(frozen=True)
@@ -66,6 +86,7 @@ class ProjectConfig:
     app: AppConfig = AppConfig()
     ai: AIConfig = AIConfig()
     face: FaceConfig = FaceConfig()
+    object_detection: ObjectDetectionConfig = ObjectDetectionConfig()
 
 
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
@@ -86,5 +107,12 @@ def load_config(path: str | Path = "configs/default.yaml") -> ProjectConfig:
     app = AppConfig(**_section(data, "app"))
     ai = AIConfig(**_section(data, "ai"))
     face = FaceConfig(**_section(data, "face"))
-    return ProjectConfig(detector=detector, app=app, ai=ai, face=face)
+    object_detection = ObjectDetectionConfig(**_section(data, "object_detection"))
+    return ProjectConfig(
+        detector=detector,
+        app=app,
+        ai=ai,
+        face=face,
+        object_detection=object_detection,
+    )
 

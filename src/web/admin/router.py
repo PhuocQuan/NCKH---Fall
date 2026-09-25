@@ -146,6 +146,8 @@ class CameraAutoBindRequest(BaseModel):
     camera_id: str | None = None
     new_ip: str
     safety_code: str = "L223Xr!w"
+    name: str | None = None
+    mode: str = "update"
 
 
 @router.get("/api/cameras/discover")
@@ -175,4 +177,11 @@ def discover_cameras(user: str = Depends(require_user)) -> dict[str, Any]:
 @router.post("/api/cameras/auto-bind")
 def auto_bind_camera(body: CameraAutoBindRequest, user: str = Depends(require_user)) -> dict[str, Any]:
     """Tự động cập nhật IP mới và tái kết nối camera khi bị đổi IP."""
-    return service.auto_bind_camera(body.camera_id or "", body.new_ip, body.safety_code, user)
+    return service.auto_bind_camera(
+        camera_id=body.camera_id or "",
+        new_ip=body.new_ip,
+        safety_code=body.safety_code,
+        user=user,
+        name=body.name,
+        mode=body.mode,
+    )

@@ -11,6 +11,14 @@ detector:
   assumed_fps: 15
   cooldown_frames: 30
   profile: default
+  camera_pitch_angle_deg: 0.0
+  enable_scale_normalization: true
+  reference_torso_length: 0.25
+  enable_pre_fall: true
+  pre_fall_sway_threshold: 0.032
+  pre_fall_window_frames: 15
+  pre_fall_min_reversals: 3
+  pre_fall_dizzy_duration_frames: 25
 
 app:
   camera_width: 1280
@@ -18,7 +26,6 @@ app:
   model_complexity: 0
   draw_landmarks: false
   event_log_path: data/events.csv
-
 
 ai:
   enabled: false
@@ -29,9 +36,26 @@ ai:
 face:
   enabled: true
   known_faces_dir: data/known_faces
-  similarity_threshold: 0.32
-  score_threshold: 0.50
+  similarity_threshold: 0.38
+  score_threshold: 0.58
   process_every_n_frames: 2
+
+object_detection:
+  enabled: false
+  model_path: models/yolov8n.onnx
+  confidence_threshold: 0.40
+  nms_threshold: 0.45
+  process_every_n_frames: 4
+  bed_overlap_threshold: 0.35
+  target_classes:
+    - chair
+    - couch
+    - bed
+    - wheelchair
+    - bench
+    - dining table
+    - laptop
+
 
 
 

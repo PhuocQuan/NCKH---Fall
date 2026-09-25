@@ -237,7 +237,7 @@ def test_notification(channel: str) -> None:
         raise ValueError(f"Kênh '{channel}' không hỗ trợ gửi thử thực tế.")
 
 
-def auto_bind_camera(camera_id: str, new_ip: str, safety_code: str, user: str) -> dict[str, Any]:
+def auto_bind_camera(camera_id: str, new_ip: str, safety_code: str, user: str, name: str | None = None, mode: str = "update") -> dict[str, Any]:
     """Cập nhật IP mới của Camera khi quét thấy trên mạng Wi-Fi và tái kết nối pipeline AI."""
     import time
     from src.camera.camera_discovery import build_imou_rtsp, probe_dahua_rpc
@@ -250,16 +250,18 @@ def auto_bind_camera(camera_id: str, new_ip: str, safety_code: str, user: str) -
             raise ValueError(f"Địa chỉ {new_ip} là Router Wi-Fi / Thiết bị mạng gia đình, không phải Camera RTSP. Vui lòng chọn đúng IP của Camera (ví dụ: 192.168.1.18)!")
 
     new_rtsp = build_imou_rtsp(new_ip, safety_code)
-    actual_cam_id = repo.update_camera_network_db(camera_id, new_ip, new_rtsp)
-    log_action("Tự động kết nối camera", user, f"Camera {actual_cam_id} tự động liên kết sang IP mới: {new_ip}")
+    actual_cam_id = repo.update_camera_network_db(camera_id, new_ip, new_rtsp, name=name, mode=mode)
+    log_action("Tự động kết nối camera", user, f"Camera {actual_cam_id} liên kết sang IP mới: {new_ip}")
     
-    # Khởi động lại luồng pipeline nếu đang hoạt động
+    # Khởi động lại luồng pipeline nếu chưa chạy đúng nguồn mới
     try:
-        if pipeline.is_running():
-            pipeline.stop()
-            time.sleep(0.6)
-        pipeline.start(source=new_rtsp, camera_id=actual_cam_id)
-        print(f"[Auto-Bind] ✅ Đã chuyển luồng Camera {actual_cam_id} sang IP mới {new_ip}!")
+        current_source = str(getattr(pipeline.status, "source", ""))
+        if not (pipeline.is_running() and current_source == new_rtsp):
+            pipeline.start(source=new_rtsp, camera_id=actual_cam_id)
+            print(f"[Auto-Bind] ✅ Đã chuyển luồng Camera {actual_cam_id} sang IP mới {new_ip}!")
+        else:
+            pipeline.camera_id = actual_cam_id
+            print(f"[Auto-Bind] ✅ Camera {actual_cam_id} đang hoạt động ổn định trên IP {new_ip}.")
     except Exception as e:
         print(f"[Auto-Bind Warning] Không thể khởi động lại pipeline ngay: {e}")
 
