@@ -1,34 +1,34 @@
-# Logic phat hien te nga
+# Logic phát hiện té ngã
 
-## Muc tieu
+## Mục tiêu
 
-He thong khong canh bao chi vi thay nguoi dang nam. Canh bao chi duoc tao khi co chuoi dau hieu:
+Hệ thống không cảnh báo chỉ vì thấy người đang nằm. Cảnh báo chỉ được tạo khi có chuỗi dấu hiệu:
 
-1. Co chuyen dong giong te nga: than nguoi doi tu the nhanh, hong roi nhanh, hoac truoc do dang dung/ngoi thang.
-2. Sau chuyen dong do, nguoi nam ngang va dau thap gan muc hong.
-3. Trang thai nam keo dai qua `alert_after_seconds`, mac dinh 10 giay.
+1. Có chuyển động giống té ngã: thân người đổi tư thế nhanh, hông rơi nhanh, hoặc trước đó đang đứng/ngồi thẳng.
+2. Sau chuyển động đó, người nằm ngang và đầu thấp gần mức hông.
+3. Trạng thái nằm kéo dài quá `alert_after_seconds`, mặc định 10 giây.
 
-Voi logic nay, nguoi nam ngu san tren giuong/san se duoc gan `lying`, khong tao canh bao neu khong co chuyen dong giong te nga truoc do.
+Với logic này, người nằm ngủ sẵn trên giường/sàn sẽ được gán `lying`, không tạo cảnh báo nếu không có chuyển động giống té ngã trước đó.
 
-Neu can demo nhanh tinh nang canh bao trong phong lab, co the dung:
+Nếu cần demo nhanh tính năng cảnh báo trong phòng lab, có thể dùng:
 
 ```powershell
-python -m src.app --source 0 --alert-on-long-lying
+python -m src.core.app --source 0 --alert-on-long-lying
 ```
 
-Che do nay se canh bao khi nguoi nam lau hon `alert_after_seconds` du khong co chuyen dong giong te nga. No huu ich de test pipeline canh bao, nhung khong nen dung lam ket qua chinh khi danh gia kha nang phan biet nam ngu voi te nga.
+Chế độ này sẽ cảnh báo khi người nằm lâu hơn `alert_after_seconds` dù không có chuyển động giống té ngã. Nó hữu ích để test pipeline cảnh báo, nhưng không nên dùng làm kết quả chính khi đánh giá khả năng phân biệt nằm ngủ với té ngã.
 
-## Cac trang thai
+## Các trạng thái
 
-- `normal`: binh thuong.
-- `lying`: dang nam nhung chua co dau hieu te nga.
-- `possible_fall`: co dau hieu bat thuong ngan han.
-- `fallen`: da xac nhan co chuoi te nga, dang dem thoi gian nam.
-- `alert`: da te va nam lau hon nguong canh bao.
+- `normal`: bình thường.
+- `lying`: đang nằm nhưng chưa có dấu hiệu té ngã.
+- `possible_fall`: có dấu hiệu bất thường ngắn hạn.
+- `fallen`: đã xác nhận có chuỗi té ngã, đang đếm thời gian nằm.
+- `alert`: đã té và nằm lâu hơn ngưỡng cảnh báo.
 
-## Ho tro nhieu nhom nguoi
+## Hỗ trợ nhiều nhóm người
 
-Project khong tu dong doan mot nguoi la nguoi gia, tre nho, phu nu co thai hay nguoi khuyet tat tu camera. Viec do khong on dinh va de sai. Thay vao do, he thong co `profile` do nguoi van hanh chon trong `configs/default.yaml`:
+Project không tự động đoán một người là người già, trẻ nhỏ, phụ nữ có thai hay người khuyết tật từ camera. Việc đó không ổn định và dễ sai. Thay vào đó, hệ thống có `profile` do người vận hành chọn trong `configs/default.yaml`:
 
 - `default`
 - `elderly`
@@ -36,11 +36,11 @@ Project khong tu dong doan mot nguoi la nguoi gia, tre nho, phu nu co thai hay n
 - `pregnant`
 - `disabled`
 
-Profile nhay hon se giam mot so nguong ve toc do roi, toc do doi goc va so frame toi thieu. Cach nay phu hop giai doan dau cua de tai vi co the demo va giai thich duoc.
+Profile nhạy hơn sẽ giảm một số ngưỡng về tốc độ rơi, tốc độ đổi góc và số frame tối thiểu. Cách này phù hợp giai đoạn đầu của đề tài vì có thể demo và giải thích được.
 
-## Buoc tiep theo de lam NCKH tot hon
+## Bước tiếp theo để làm NCKH tốt hơn
 
-- Thu thap video rieng cho tung nhom doi tuong.
-- Gan nhan cac doan: `normal`, `sleeping`, `sitting`, `lying`, `fall`.
-- So sanh logic nguong voi model chuoi thoi gian nhu LSTM/GRU/Transformer tren landmark.
-- Bao cao Precision, Recall, F1-score rieng cho tung nhom.
+- Thu thập video riêng cho từng nhóm đối tượng.
+- Gán nhãn các đoạn: `normal`, `sleeping`, `sitting`, `lying`, `fall`.
+- So sánh logic ngưỡng với model chuỗi thời gian như LSTM/GRU/Transformer trên landmark.
+- Báo cáo Precision, Recall, F1-score riêng cho từng nhóm.
