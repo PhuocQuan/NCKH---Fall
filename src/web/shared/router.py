@@ -224,27 +224,30 @@ def control_stop(user: str = Depends(require_user), force: bool = False) -> dict
     return {"ok": True, "stopped": True}
 
 
-def _mjpeg_generator():
-    placeholder = _placeholder_frame()
+def _mjpeg_generator(camera_id: str | None = None):
+    from src.camera.multi_camera_manager import multi_camera_manager
+    target_id = camera_id or getattr(pipeline, "camera_id", "CAM-LOCAL")
+    multi_camera_manager.subscribe(target_id)
     last_frame_id = -1
-    while True:
-        try:
-            if hasattr(pipeline, "get_next_jpeg_frame"):
-                frame_id, frame = pipeline.get_next_jpeg_frame(last_frame_id=last_frame_id, timeout=0.04)
+    placeholder = _placeholder_frame()
+    try:
+        while True:
+            try:
+                frame_id, frame = multi_camera_manager.get_next_camera_frame(target_id, last_frame_id=last_frame_id, timeout=0.04)
                 if frame is not None:
                     last_frame_id = frame_id
                 else:
                     frame = placeholder
-            else:
-                frame = pipeline.get_jpeg_frame(wait_new=True, timeout=0.035) or placeholder
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-            )
-        except GeneratorExit:
-            break
-        except Exception:
-            break
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+                )
+            except GeneratorExit:
+                break
+            except Exception:
+                break
+    finally:
+        multi_camera_manager.unsubscribe(target_id)
 
 
 def _placeholder_frame() -> bytes:
@@ -271,11 +274,29 @@ def camera_status(request: Request):
 
 
 @router.get("/api/camera/stream.mjpg")
-def camera_stream(request: Request):
+def camera_stream(request: Request, camera_id: str | None = None):
+    if not verify_token(_extract_token(request)):
+        raise HTTPException(status_code=401, detail="Token khong hop le.")
+    target_cam = camera_id or request.query_params.get("camera_id")
+    return StreamingResponse(
+        _mjpeg_generator(target_cam),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, pre-check=0, post-check=0, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/api/cameras/{camera_id}/stream.mjpg")
+def camera_stream_by_id(camera_id: str, request: Request):
     if not verify_token(_extract_token(request)):
         raise HTTPException(status_code=401, detail="Token khong hop le.")
     return StreamingResponse(
-        _mjpeg_generator(),
+        _mjpeg_generator(camera_id),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate, pre-check=0, post-check=0, max-age=0",
@@ -288,12 +309,23 @@ def camera_stream(request: Request):
 
 
 @router.get("/api/camera/snapshot")
-def camera_snapshot(request: Request):
+def camera_snapshot(request: Request, camera_id: str | None = None):
     t = _extract_token(request)
     if not verify_token(t):
         raise HTTPException(status_code=401, detail="Token khong hop le.")
-    placeholder = _placeholder_frame()
-    frame = pipeline.get_jpeg_frame() or placeholder
+    from src.camera.multi_camera_manager import multi_camera_manager
+    target_cam = camera_id or request.query_params.get("camera_id") or getattr(pipeline, "camera_id", "CAM-LOCAL")
+    frame = multi_camera_manager.get_camera_jpeg(target_cam)
+    return Response(content=frame, media_type="image/jpeg")
+
+
+@router.get("/api/cameras/{camera_id}/snapshot")
+def camera_snapshot_by_id(camera_id: str, request: Request):
+    t = _extract_token(request)
+    if not verify_token(t):
+        raise HTTPException(status_code=401, detail="Token khong hop le.")
+    from src.camera.multi_camera_manager import multi_camera_manager
+    frame = multi_camera_manager.get_camera_jpeg(camera_id)
     return Response(content=frame, media_type="image/jpeg")
 
 

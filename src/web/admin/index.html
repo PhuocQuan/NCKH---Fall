@@ -633,9 +633,28 @@ function loadStore(key, fallback) {
       localStorage.setItem(key, JSON.stringify(value));
     }
 
+    // Auto-migrate camera IP if changed by Wi-Fi DHCP
+    if (localStorage.getItem("fg_cameras")) {
+      try {
+        let storedCams = JSON.parse(localStorage.getItem("fg_cameras"));
+        let modified = false;
+        storedCams.forEach(c => {
+          if (c.ip === "192.168.1.18") {
+            c.ip = "192.168.1.32";
+            c.rtsp = (c.rtsp || "").replace("192.168.1.18", "192.168.1.32");
+            if ((c.name || "").includes("192.168.1.18")) c.name = c.name.replace("192.168.1.18", "192.168.1.32");
+            modified = true;
+          }
+        });
+        if (modified) {
+          localStorage.setItem("fg_cameras", JSON.stringify(storedCams));
+        }
+      } catch(e) {}
+    }
+
     let cameras = loadStore("fg_cameras", [
-      { id: "CAM-011", name: "111SS", ip: "192.168.1.18", rtsp: "rtsp://admin:L223Xr!w@192.168.1.18:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 120, resolution: "1920x1080", threshold: 80 },
-      { id: "CAM-002", name: "Camera Imou 192.168.1.18", ip: "192.168.1.18", rtsp: "rtsp://admin:L223Xr!w@192.168.1.18:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 25, resolution: "1920x1080", threshold: 80 }
+      { id: "CAM-011", name: "111SS", ip: "192.168.1.32", rtsp: "rtsp://admin:L223Xr!w@192.168.1.32:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 120, resolution: "1920x1080", threshold: 80 },
+      { id: "CAM-002", name: "Camera Imou 192.168.1.32", ip: "192.168.1.32", rtsp: "rtsp://admin:L223Xr!w@192.168.1.32:554/cam/realmonitor?channel=1&subtype=1", area: "Phòng chính", target: "Nguy cơ cao", state: "normal", status: "online", fps: 25, resolution: "1920x1080", threshold: 80 }
     ]);
 
     let alerts = loadStore("fg_alerts", [
@@ -876,12 +895,14 @@ function loadStore(key, fallback) {
           }));
           
         const assignedCamIds = new Set(users.filter(u => u.role !== "Admin").flatMap(u => u.assignedCameras || []));
-        const unassignedCams = cameras.filter(c => !assignedCamIds.has(c.id));
-        if (unassignedCams.length > 0) {
+        const alertCamIds = alerts.map(a => a.camera).filter(Boolean);
+        const allKnownCamIds = new Set([...cameras.map(c => c.id), ...alertCamIds]);
+        const unassignedCamIds = Array.from(allKnownCamIds).filter(id => !assignedCamIds.has(id));
+        if (unassignedCamIds.length > 0) {
           customerHouses.push({
             name: "Thiết bị chưa gán",
             ownerEmail: "",
-            cameras: Array.from(new Set(unassignedCams.map(c => c.id)))
+            cameras: unassignedCamIds
           });
         }
         return customerHouses;
@@ -1070,6 +1091,123 @@ function loadStore(key, fallback) {
     function aiStreamUrl() {
       return `${apiBaseUrl()}/api/camera/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
     }
+
+    function cameraStreamUrl(camId) {
+      if (!camId) return aiStreamUrl();
+      return `${apiBaseUrl()}/api/cameras/${encodeURIComponent(camId)}/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
+    }
+
+    let multiCamLayout = localStorage.getItem("fg_multi_cam_layout") || "grid-2x2";
+
+    window.setPrimaryAiCamera = async function(camId) {
+      if (!camId) return;
+      if (!confirm(`Bạn có chắc muốn đặt camera ${camId} làm Camera Giám sát AI Chính? Toàn bộ thuật toán AI té ngã & người lạ sẽ được điều phối sang camera này.`)) return;
+      
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/cameras/${encodeURIComponent(camId)}/set-primary`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          alert(data.message || `Đã chuyển camera AI chính sang: ${camId}`);
+          selectedCameraId = camId;
+          localStorage.setItem("fg_selected_camera_id", camId);
+          await syncFromBackend();
+          render(currentView, false);
+        } else {
+          alert(`Lỗi: ${data.detail || 'Không thể chuyển camera chính'}`);
+        }
+      } catch (err) {
+        alert(`Lỗi kết nối: ${err.message || err}`);
+      }
+    };
+
+    window.testCameraRtsp = async function(camId) {
+      if (!camId) return;
+      openModal("Đang kiểm tra kết nối RTSP...", `
+        <div style="text-align: center; padding: 30px;">
+          <div style="font-size: 36px; animation: spin 1s infinite linear;">🔄</div>
+          <p style="margin-top: 15px; font-weight: 600; color: #1e293b;">Đang đo độ trễ (ping) và đọc luồng video từ Camera ${camId}...</p>
+        </div>
+      `, `<button type="button" class="btn line" data-close-modal>Đóng</button>`);
+      
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/cameras/${encodeURIComponent(camId)}/test`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          const thumbHtml = data.thumbnail ? `
+            <div style="margin-top: 15px; text-align: center;">
+              <img src="${data.thumbnail}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">Ảnh chụp snapshot tức thời từ camera</div>
+            </div>
+          ` : "";
+          openModal(`Kết quả kiểm tra: ${camId}`, `
+            <div style="padding: 10px 0;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                <span style="font-size: 28px;">✅</span>
+                <div>
+                  <h4 style="margin: 0; color: var(--green); font-size: 16px;">Kết nối RTSP thành công!</h4>
+                  <p style="margin: 2px 0 0; font-size: 12px; color: var(--gray-600);">${esc(data.message)}</p>
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--line); font-size: 13px;">
+                <div><strong>Độ trễ (Ping):</strong> <span style="color: var(--blue); font-weight: 700;">${data.latency_ms} ms</span></div>
+                <div><strong>Độ phân giải:</strong> <span>${data.resolution || 'N/A'}</span></div>
+                <div><strong>Tốc độ khung hình:</strong> <span>${data.fps || 'N/A'} FPS</span></div>
+                <div><strong>Thiết bị:</strong> <span>${data.vendor || 'Camera IP'}</span></div>
+              </div>
+              ${thumbHtml}
+            </div>
+          `, `<button type="button" class="btn line" data-close-modal>Đóng</button>`);
+          await syncFromBackend();
+        } else {
+          openModal(`Lỗi kết nối: ${camId}`, `
+            <div style="padding: 10px 0;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                <span style="font-size: 28px;">❌</span>
+                <div>
+                  <h4 style="margin: 0; color: var(--red); font-size: 16px;">Không thể kết nối RTSP</h4>
+                  <p style="margin: 4px 0 0; font-size: 13px; color: var(--gray-700); line-height: 1.5;">${esc(data.error || data.detail || 'Lỗi không xác định')}</p>
+                </div>
+              </div>
+              ${data.latency_ms ? `<div style="font-size: 12px; color: var(--gray-500);">Thời gian thử nghiệm: ${data.latency_ms} ms</div>` : ''}
+            </div>
+          `, `<button type="button" class="btn line" data-close-modal>Đóng</button>`);
+        }
+      } catch (err) {
+        openModal(`Lỗi: ${camId}`, `<div style="padding: 15px; color: var(--red);">Lỗi gửi yêu cầu kiểm tra: ${err.message || err}</div>`, `<button type="button" class="btn line" data-close-modal>Đóng</button>`);
+      }
+    };
+
+    window.fetchCamerasLiveStatus = async function() {
+      if (!isBackendOnline || !authToken) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/cameras/status`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            data.forEach(item => {
+              const c = cameras.find(cam => cam.id === item.id);
+              if (c) {
+                c.status = item.status;
+                c.is_primary = item.is_primary;
+                c.online = item.online;
+                if (item.latency_ms) c.latency_ms = item.latency_ms;
+              }
+            });
+            saveStore("fg_cameras", cameras);
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi cập nhật trạng thái cameras:", e);
+      }
+    };
 
     function esc(value) {
       return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -1487,7 +1625,8 @@ function loadStore(key, fallback) {
       // Optimistic update: UI phản hồi ngay lập tức 0ms
       alerts = alerts.filter(a => !ids.includes(a.id));
       saveStore("fg_alerts", alerts);
-      render(currentView);
+      updatePendingAlertsCount();
+      render(currentView, false);
       toast(`Đã xóa thành công ${ids.length} cảnh báo!`);
 
       if (isBackendOnline && authToken) {
@@ -1504,57 +1643,79 @@ function loadStore(key, fallback) {
             const err = await res.json().catch(() => ({}));
             alerts = prevAlerts;
             saveStore("fg_alerts", alerts);
-            render(currentView);
+            updatePendingAlertsCount();
+            render(currentView, false);
             alert(err.detail || "Lỗi khi xóa cảnh báo trên máy chủ.");
           }
         } catch (e) {
           alerts = prevAlerts;
           saveStore("fg_alerts", alerts);
-          render(currentView);
+          updatePendingAlertsCount();
+          render(currentView, false);
           alert("Lỗi kết nối khi xóa cảnh báo.");
         }
       }
     };
 
-    window.deleteAllAdminAlerts = async function() {
+    window.deleteAllAdminAlerts = async function(forceAllSystem = false) {
       const isStranger = currentView === "stranger_alerts";
       const viewLabel = isStranger ? "cảnh báo người lạ" : "cảnh báo té ngã";
+      const totalSystemAlerts = alerts.filter(a => isStranger ? isStrangerAlert(a) : isFallAlert(a));
       
       let targetAlerts = [];
-      if (isStranger) {
-        if (strangerAlertsViewLevel === "alerts" && selectedStrangerAlertsLocation) {
-          const house = getVisibleHouses().find(h => h.name === selectedStrangerAlertsLocation);
-          const camIds = house ? house.cameras.map(id => cameraById(id)).filter(Boolean).map(c => c.id) : [];
-          targetAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
-        } else {
-          targetAlerts = alerts.filter(a => isStrangerAlert(a));
-        }
+      let isScopeLocation = false;
+      let locName = isStranger ? selectedStrangerAlertsLocation : selectedAlertsLocation;
+      const isViewingSpecificLocation = (isStranger ? strangerAlertsViewLevel : alertsViewLevel) === "alerts" && locName && locName !== "all";
+
+      if (forceAllSystem || !isViewingSpecificLocation) {
+        targetAlerts = totalSystemAlerts;
       } else {
-        if (alertsViewLevel === "alerts" && selectedAlertsLocation) {
-          const house = getVisibleHouses().find(h => h.name === selectedAlertsLocation);
-          const camIds = house ? house.cameras.map(id => cameraById(id)).filter(Boolean).map(c => c.id) : [];
-          targetAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
-        } else {
-          targetAlerts = alerts.filter(a => isFallAlert(a));
-        }
+        const house = getVisibleHouses().find(h => h.name === locName);
+        const camsInHouse = house ? house.cameras.map(id => cameraById(id) || { id }).filter(Boolean) : [];
+        const camIds = camsInHouse.map(c => c.id);
+        targetAlerts = alerts.filter(a => camIds.includes(a.camera) && (isStranger ? isStrangerAlert(a) : isFallAlert(a)));
+        isScopeLocation = true;
       }
 
       if (targetAlerts.length === 0) {
-        alert(`Không có ${viewLabel} nào để xóa.`);
-        return;
+        if (totalSystemAlerts.length > 0) {
+          const confirmAll = confirm(`Khu vực "${locName}" hiện không có ${viewLabel} nào.\n\nToàn hệ thống đang có ${totalSystemAlerts.length} ${viewLabel}.\nBạn có muốn XÓA TẤT CẢ ${totalSystemAlerts.length} ${viewLabel} trên TOÀN HỆ THỐNG không?`);
+          if (confirmAll) {
+            targetAlerts = totalSystemAlerts;
+            isScopeLocation = false;
+          } else {
+            return;
+          }
+        } else {
+          alert(`Không có ${viewLabel} nào trên hệ thống để xóa.`);
+          return;
+        }
+      } else if (isScopeLocation && totalSystemAlerts.length > targetAlerts.length) {
+        const confirmChoice = confirm(`Bạn muốn xóa ${targetAlerts.length} ${viewLabel} tại "${locName}"?\n\n- Bấm OK để xóa tại khu vực "${locName}".\n- Bấm Cancel nếu bạn muốn xóa TOÀN BỘ hệ thống (${totalSystemAlerts.length} ${viewLabel}).`);
+        if (!confirmChoice) {
+          const askGlobal = confirm(`Xác nhận xóa TẤT CẢ ${totalSystemAlerts.length} ${viewLabel} trên TOÀN BỘ HỆ THỐNG? Hành động này không thể hoàn tác.`);
+          if (askGlobal) {
+            targetAlerts = totalSystemAlerts;
+            isScopeLocation = false;
+          } else {
+            return;
+          }
+        }
+      } else {
+        const confirmMsg = isScopeLocation
+          ? `Bạn có chắc chắn muốn xóa ${targetAlerts.length} ${viewLabel} tại "${locName}"?`
+          : `Bạn có chắc chắn muốn xóa TẤT CẢ ${targetAlerts.length} ${viewLabel} trên TOÀN HỆ THỐNG? Hành động này sẽ xóa vĩnh viễn trên cơ sở dữ liệu.`;
+        if (!confirm(confirmMsg)) return;
       }
 
-      if (!confirm(`Bạn có chắc chắn muốn xóa TẤT CẢ ${targetAlerts.length} ${viewLabel}? Hành động này sẽ xóa vĩnh viễn trên hệ thống.`)) {
-        return;
-      }
-      
       const ids = targetAlerts.map(a => a.id);
       const prevAlerts = [...alerts];
 
       // Optimistic update: UI phản hồi ngay lập tức 0ms
       alerts = alerts.filter(a => !ids.includes(a.id));
       saveStore("fg_alerts", alerts);
-      render(currentView);
+      updatePendingAlertsCount();
+      render(currentView, false);
       toast(`Đã xóa thành công ${ids.length} ${viewLabel}!`);
 
       if (isBackendOnline && authToken) {
@@ -1571,14 +1732,55 @@ function loadStore(key, fallback) {
             const err = await res.json().catch(() => ({}));
             alerts = prevAlerts;
             saveStore("fg_alerts", alerts);
-            render(currentView);
+            updatePendingAlertsCount();
+            render(currentView, false);
             alert(err.detail || `Lỗi khi xóa ${viewLabel} trên máy chủ.`);
           }
         } catch (e) {
           alerts = prevAlerts;
           saveStore("fg_alerts", alerts);
-          render(currentView);
+          updatePendingAlertsCount();
+          render(currentView, false);
           alert(`Lỗi kết nối khi xóa ${viewLabel}.`);
+        }
+      }
+    };
+
+    window.purgeAllSystemAlerts = async function() {
+      if (!confirm("⚠️ Bạn có chắc chắn muốn DỌN DẸP TOÀN BỘ cảnh báo (cả té ngã và người lạ)?\n\nThao tác này sẽ xóa sạch dữ liệu cảnh báo trên máy chủ và bộ nhớ đệm trình duyệt, đưa số lượng cảnh báo về 0.")) {
+        return;
+      }
+      const prevAlerts = [...alerts];
+      alerts = [];
+      saveStore("fg_alerts", alerts);
+      updatePendingAlertsCount();
+      render(currentView, false);
+      toast("Đã dọn dẹp sạch toàn bộ cảnh báo trên hệ thống!");
+
+      if (isBackendOnline && authToken) {
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/alerts/delete-multiple`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ delete_all: true })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alerts = prevAlerts;
+            saveStore("fg_alerts", alerts);
+            updatePendingAlertsCount();
+            render(currentView, false);
+            alert(err.detail || "Lỗi khi dọn dẹp cảnh báo trên máy chủ.");
+          }
+        } catch (e) {
+          alerts = prevAlerts;
+          saveStore("fg_alerts", alerts);
+          updatePendingAlertsCount();
+          render(currentView, false);
+          alert("Lỗi kết nối khi dọn dẹp cảnh báo.");
         }
       }
     };
@@ -1800,8 +2002,24 @@ function loadStore(key, fallback) {
         const tabsHtml = renderAlertTabs('alerts');
         
         if (alertsViewLevel === "locations") {
+          const totalFallInSystem = alerts.filter(a => isFallAlert(a)).length;
+          const pendingFallInSystem = alerts.filter(a => a.status === "Chưa xử lý" && isFallAlert(a)).length;
+          const allCardHtml = `
+            <div class="location-card animate-hover" onclick="selectedAlertsLocation='all'; alertsViewLevel='alerts'; render('alerts', false);" style="cursor: pointer; background: linear-gradient(135deg, rgba(239, 246, 255, 0.95), rgba(219, 234, 254, 0.85)); border: 2px solid #3b82f6; border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.15); margin-top: 15px;">
+              <div style="font-size: 32px; margin-bottom: 12px;">🌐</div>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #1d4ed8;">Tất cả nơi lắp đặt (Toàn hệ thống)</h3>
+              <div style="font-size: 13px; color: var(--gray-600);">
+                <div>Xem tập trung toàn bộ sự kiện trên mọi camera</div>
+                <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                  <span class="pill blue small" style="padding: 2px 6px; font-size: 11px; font-weight: 700;">${totalFallInSystem} cảnh báo té ngã</span>
+                  ${pendingFallInSystem > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${pendingFallInSystem} chờ xử lý</span>` : '<span class="pill green small" style="padding: 2px 6px; font-size: 11px;">Đã xử lý xong</span>'}
+                </div>
+              </div>
+            </div>
+          `;
+
           const locationCardsHtml = houses.map(house => {
-            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const camsInHouse = house.cameras.map(id => cameraById(id) || { id }).filter(Boolean);
             const camIds = camsInHouse.map(c => c.id);
             const houseAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
             const totalAlerts = houseAlerts.length;
@@ -1826,19 +2044,25 @@ function loadStore(key, fallback) {
             ${tabsHtml}
             <div style="margin-bottom: 20px;">
               <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo té ngã)</h3>
-              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo té ngã tại đó.</p>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt hoặc chọn xem toàn bộ để quản lý cảnh báo té ngã.</p>
             </div>
             <div class="grid three" style="gap: 20px;">
-              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+              ${allCardHtml}
+              ${locationCardsHtml}
             </div>
           `;
         }
 
         if (alertsViewLevel === "alerts") {
-          const house = houses.find(h => h.name === selectedAlertsLocation);
-          const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
-          const camIds = camsInHouse.map(c => c.id);
-          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
+          let filteredAlerts = [];
+          if (selectedAlertsLocation === "all") {
+            filteredAlerts = alerts.filter(a => isFallAlert(a));
+          } else {
+            const house = houses.find(h => h.name === selectedAlertsLocation);
+            const camsInHouse = house ? house.cameras.map(id => cameraById(id) || { id }).filter(Boolean) : [];
+            const camIds = camsInHouse.map(c => c.id);
+            filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isFallAlert(a));
+          }
 
           const totalAlerts = filteredAlerts.length;
           const totalPages = Math.max(1, Math.ceil(totalAlerts / adminAlertsPerPage));
@@ -1871,15 +2095,16 @@ function loadStore(key, fallback) {
 
           return `
             ${tabsHtml}
-            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
               <button class="btn line" onclick="alertsViewLevel='locations'; render('alerts', false);">← Quay lại Nơi lắp đặt</button>
-              <div style="display: flex; gap: 8px;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button class="btn danger small" onclick="deleteSelectedAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa mục đã chọn</button>
                 <button class="btn danger small" onclick="deleteAllAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa tất cả</button>
+                <button class="btn line small" onclick="purgeAllSystemAlerts()" style="color: #ef4444; border-color: #fca5a5; padding: 6px 12px; font-weight: 600;" title="Dọn sạch toàn bộ cảnh báo trên hệ thống">🧹 Dọn sạch cảnh báo</button>
               </div>
             </div>
             <div style="margin-bottom: 20px;">
-              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedAlertsLocation)}</h3>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedAlertsLocation === 'all' ? 'Tất cả nơi lắp đặt (Toàn hệ thống)' : selectedAlertsLocation)}</h3>
               <p class="hint" style="margin: 0;">Danh sách các sự kiện cảnh báo ngã tại khu vực này.</p>
             </div>
             ${table([
@@ -1903,8 +2128,24 @@ function loadStore(key, fallback) {
         const tabsHtml = renderAlertTabs('stranger_alerts');
         
         if (strangerAlertsViewLevel === "locations") {
+          const totalStrangerInSystem = alerts.filter(a => isStrangerAlert(a)).length;
+          const pendingStrangerInSystem = alerts.filter(a => a.status === "Chưa xử lý" && isStrangerAlert(a)).length;
+          const allCardHtml = `
+            <div class="location-card animate-hover" onclick="selectedStrangerAlertsLocation='all'; strangerAlertsViewLevel='alerts'; render('stranger_alerts', false);" style="cursor: pointer; background: linear-gradient(135deg, rgba(254, 243, 199, 0.95), rgba(253, 230, 138, 0.85)); border: 2px solid #f59e0b; border-radius: 12px; padding: 24px; transition: all 0.2s; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15); margin-top: 15px;">
+              <div style="font-size: 32px; margin-bottom: 12px;">🌐</div>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #b45309;">Tất cả nơi lắp đặt (Toàn hệ thống)</h3>
+              <div style="font-size: 13px; color: var(--gray-600);">
+                <div>Xem tập trung toàn bộ sự kiện người lạ trên mọi camera</div>
+                <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+                  <span class="pill amber small" style="padding: 2px 6px; font-size: 11px; background:#fef3c7; color:#b45309; font-weight: 700;">${totalStrangerInSystem} cảnh báo người lạ</span>
+                  ${pendingStrangerInSystem > 0 ? `<span class="pill red small" style="padding: 2px 6px; font-size: 11px;">${pendingStrangerInSystem} chờ xử lý</span>` : '<span class="pill green small" style="padding: 2px 6px; font-size: 11px;">Đã xử lý xong</span>'}
+                </div>
+              </div>
+            </div>
+          `;
+
           const locationCardsHtml = houses.map(house => {
-            const camsInHouse = house.cameras.map(id => cameraById(id)).filter(Boolean);
+            const camsInHouse = house.cameras.map(id => cameraById(id) || { id }).filter(Boolean);
             const camIds = camsInHouse.map(c => c.id);
             const houseStrangerAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
             const totalAlerts = houseStrangerAlerts.length;
@@ -1929,19 +2170,25 @@ function loadStore(key, fallback) {
             ${tabsHtml}
             <div style="margin-bottom: 20px;">
               <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Danh sách nơi lắp đặt (Cảnh báo người lạ)</h3>
-              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt để xem danh sách cảnh báo phát hiện người lạ tại đó.</p>
+              <p class="hint" style="margin: 0;">Chọn một nơi lắp đặt hoặc chọn xem toàn bộ để quản lý cảnh báo phát hiện người lạ.</p>
             </div>
             <div class="grid three" style="gap: 20px;">
-              ${locationCardsHtml || '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted);">Không tìm thấy nơi lắp đặt nào.</div>'}
+              ${allCardHtml}
+              ${locationCardsHtml}
             </div>
           `;
         }
 
         if (strangerAlertsViewLevel === "alerts") {
-          const house = houses.find(h => h.name === selectedStrangerAlertsLocation);
-          const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
-          const camIds = camsInHouse.map(c => c.id);
-          const filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
+          let filteredAlerts = [];
+          if (selectedStrangerAlertsLocation === "all") {
+            filteredAlerts = alerts.filter(a => isStrangerAlert(a));
+          } else {
+            const house = houses.find(h => h.name === selectedStrangerAlertsLocation);
+            const camsInHouse = house ? house.cameras.map(id => cameraById(id) || { id }).filter(Boolean) : [];
+            const camIds = camsInHouse.map(c => c.id);
+            filteredAlerts = alerts.filter(a => camIds.includes(a.camera) && isStrangerAlert(a));
+          }
 
           const totalAlerts = filteredAlerts.length;
           const totalPages = Math.max(1, Math.ceil(totalAlerts / adminAlertsPerPage));
@@ -1974,15 +2221,16 @@ function loadStore(key, fallback) {
 
           return `
             ${tabsHtml}
-            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
               <button class="btn line" onclick="strangerAlertsViewLevel='locations'; render('stranger_alerts', false);">← Quay lại Nơi lắp đặt</button>
-              <div style="display: flex; gap: 8px;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button class="btn danger small" onclick="deleteSelectedAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa mục đã chọn</button>
                 <button class="btn danger small" onclick="deleteAllAdminAlerts()" style="background: var(--red); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer;">Xóa tất cả</button>
+                <button class="btn line small" onclick="purgeAllSystemAlerts()" style="color: #ef4444; border-color: #fca5a5; padding: 6px 12px; font-weight: 600;" title="Dọn sạch toàn bộ cảnh báo trên hệ thống">🧹 Dọn sạch cảnh báo</button>
               </div>
             </div>
             <div style="margin-bottom: 20px;">
-              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedStrangerAlertsLocation)}</h3>
+              <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedStrangerAlertsLocation === 'all' ? 'Tất cả nơi lắp đặt (Toàn hệ thống)' : selectedStrangerAlertsLocation)}</h3>
               <p class="hint" style="margin: 0;">Danh sách các sự kiện phát hiện người lạ tại khu vực này.</p>
             </div>
             ${table([
@@ -2000,26 +2248,103 @@ function loadStore(key, fallback) {
           `;
         }
       },
-            notifications: () => `<div class="grid three">
-        ${[
-          ["telegram", "Telegram bot", "Gửi tin nhắn, hình ảnh và clip té ngã."]
-        ].map(([key, title, desc]) => {
-          const connectBtn = key === "telegram" ? `<button class="btn small primary" data-action="connect-telegram" style="margin-right:8px;">Kết nối Bot</button>` : "";
-          return card(title, `
-            <div class="setting-row">
-              <div>
-                <strong>${title}</strong>
-                <p class="hint">${desc}</p>
+      notifications: () => `
+        <div style="display: flex; flex-direction: column; gap: 24px; max-width: 960px; margin: 0 auto;">
+          <!-- Telegram Bot Settings Card -->
+          <div class="card" style="background: #ffffff; border-radius: 16px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="width: 50px; height: 50px; border-radius: 12px; background: #229ED9; display: flex; align-items: center; justify-content: center; color: white; font-size: 26px;">
+                  ✈️
+                </div>
+                <div>
+                  <h3 style="margin: 0; font-size: 19px; font-weight: 700; color: #0f172a;">Quản lý & Cấu hình Telegram Bot</h3>
+                  <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Nhận ngay tin nhắn cảnh báo té ngã khẩn cấp và ảnh snapshot trực tiếp trên Telegram</p>
+                </div>
               </div>
-              <input type="checkbox" class="switch" data-setting-key="${key}" ${settings[key] ? "checked" : ""}>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span id="tgStatusBadge" class="pill gray">Đang tải...</span>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="tgEnabled" class="switch">
+                  <span style="font-size: 14px; font-weight: 700; color: #334155;">Kích hoạt</span>
+                </label>
+              </div>
             </div>
-            <div style="display:flex; gap:6px; margin-top:10px;">
-              ${connectBtn}
-              <button class="btn small line" data-action="test-notif-channel" data-channel="${title}">Gửi thử</button>
+
+            <div style="display: flex; flex-direction: column; gap: 22px;">
+              <!-- Bot Token Input -->
+              <div class="premium-field">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 14px; font-weight: 700; color: #1e293b;">🤖 Telegram Bot Token:</span>
+                  <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #2563eb; text-decoration: none; font-weight: 600;">
+                    Tạo bot qua @BotFather ↗
+                  </a>
+                </div>
+                <div style="position: relative; display: flex; align-items: center;">
+                  <input type="password" id="tgBotToken" class="premium-control" placeholder="Ví dụ: 8169554639:AAGY0eo5ZC6Nd6-b0p7PPHxyZxOOLdQdqjk" style="padding-right: 48px; font-family: monospace; font-size: 13px;">
+                  <button type="button" data-action="toggle-tg-token" style="position: absolute; right: 12px; background: none; border: none; cursor: pointer; font-size: 16px; color: #64748b; padding: 4px;" title="Ẩn/Hiện Bot Token">
+                    👁️
+                  </button>
+                </div>
+                <p class="hint" style="margin: 2px 0 0; font-size: 12px; color: #64748b;">
+                  Chuỗi Token do <b>@BotFather</b> cấp khi tạo Bot bằng lệnh <code>/newbot</code>.
+                </p>
+              </div>
+
+              <!-- Chat ID Input -->
+              <div class="premium-field">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 14px; font-weight: 700; color: #1e293b;">💬 Chat ID nhận thông báo:</span>
+                  <span style="font-size: 12px; color: #64748b;">Hỗ trợ Chat ID cá nhân & Group gia đình</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                  <input type="text" id="tgChatId" class="premium-control" placeholder="Ví dụ: 123456789 hoặc -5177087463 (nhóm)" style="font-family: monospace; font-size: 13px;">
+                  <button class="btn line" data-action="connect-telegram" id="btnAutoChatId" style="white-space: nowrap; padding: 0 16px; display: flex; align-items: center; gap: 6px; font-weight: 600;" title="Tự động tìm Chat ID từ tin nhắn gửi cho Bot">
+                    🔍 Tự động lấy Chat ID
+                  </button>
+                </div>
+                <p class="hint" style="margin: 2px 0 0; font-size: 12px; color: #64748b;">
+                  Nhập trực tiếp Chat ID hoặc nhắn bất kỳ tin nhắn nào cho Bot rồi bấm <b>"Tự động lấy Chat ID"</b>.
+                </p>
+              </div>
+
+              <!-- Action Buttons -->
+              <div style="display: flex; gap: 12px; margin-top: 8px; padding-top: 20px; border-top: 1px solid #f1f5f9; flex-wrap: wrap;">
+                <button class="btn primary" data-action="save-telegram-config" id="btnSaveTelegram" style="display: flex; align-items: center; gap: 8px; padding: 10px 22px; font-weight: 700;">
+                  💾 Lưu cấu hình
+                </button>
+                <button class="btn line" data-action="test-telegram-config" id="btnTestTelegram" style="display: flex; align-items: center; gap: 8px; padding: 10px 20px; font-weight: 600;">
+                  🚀 Gửi tin nhắn thử
+                </button>
+              </div>
             </div>
-          `);
-        }).join("")}
-      </div>`,
+          </div>
+
+          <!-- Guide Card -->
+          <div class="card" style="background: #f8fafc; border-radius: 16px; padding: 24px; border: 1px solid #e2e8f0;">
+            <h4 style="margin: 0 0 14px; font-size: 15px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+              💡 4 bước kết nối Telegram nhận thông báo nhanh chóng:
+            </h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+              <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 13px; line-height: 1.5;">
+                <div style="font-weight: 700; color: #2563eb; margin-bottom: 6px;">Bước 1: Tạo Bot</div>
+                Mở ứng dụng Telegram, tìm tài khoản <b>@BotFather</b> và gõ lệnh <code>/newbot</code>. Đặt tên và copy chuỗi <b>HTTP API Token</b>.
+              </div>
+              <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 13px; line-height: 1.5;">
+                <div style="font-weight: 700; color: #2563eb; margin-bottom: 6px;">Bước 2: Dán Token</div>
+                Dán token vào ô <b>Bot Token</b> ở trên. Bật gạt <b>Kích hoạt</b> rồi bấm <b>💾 Lưu cấu hình</b>.
+              </div>
+              <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 13px; line-height: 1.5;">
+                <div style="font-weight: 700; color: #2563eb; margin-bottom: 6px;">Bước 3: Gửi tin nhắn</div>
+                Mở Bot bạn vừa tạo trên Telegram, bấm <b>Start</b> (Bắt đầu) hoặc gửi 1 tin nhắn bất kỳ (Ví dụ: "Xin chào").
+              </div>
+              <div style="background: white; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 13px; line-height: 1.5;">
+                <div style="font-weight: 700; color: #2563eb; margin-bottom: 6px;">Bước 4: Nhận Chat ID</div>
+                Bấm nút <b>🔍 Tự động lấy Chat ID</b>, sau đó bấm <b>🚀 Gửi tin nhắn thử</b> để kiểm tra thông báo trên điện thoại!
+              </div>
+            </div>
+          </div>
+        </div>`,
             cameras: () => camerasView(),
             users: () => usersView(),
             media: () => {
@@ -2314,46 +2639,90 @@ function loadStore(key, fallback) {
         `;
       }
 
-      // LEVEL 2: Cameras list in selected location
+      // LEVEL 2: Cameras list in selected location (Multi-Camera Grid View)
       if (liveViewLevel === "cameras") {
         const houses = getVisibleHouses();
         const house = houses.find(h => h.name === selectedLocation);
         const camsInHouse = house ? house.cameras.map(id => cameraById(id)).filter(Boolean) : [];
+        const isEditable = currentUser.role === "Admin";
+        const curPrimaryId = (typeof selectedCameraId !== 'undefined' && selectedCameraId) ? selectedCameraId : (cameras[0]?.id || "");
+
         const cameraCardsHtml = camsInHouse.map((c, index) => {
           const isOnline = c.status === "online";
+          const isPrimary = (c.id === curPrimaryId || Boolean(c.is_primary));
+          const pingDisplay = c.latency_ms ? ` (${c.latency_ms}ms)` : '';
+
           return `
-          <article class="cam ${stateClass(c)}" data-open-camera="${esc(c.id)}" style="cursor: pointer;">
-            <div class="cam-head"><span>${esc(c.name)} (${c.id})</span><span class="live" style="${isOnline ? '' : 'background: #94a3b8;'}">${isOnline ? 'Live' : 'Offline'}</span></div>
-            <div class="cam-view" style="position:relative; background:#0f172a; min-height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+          <article class="cam ${stateClass(c)}" style="position: relative; border-radius: 12px; overflow: hidden; background: #0f172a; border: 2px solid ${isPrimary ? '#3b82f6' : '#334155'}; box-shadow: 0 4px 12px rgba(0,0,0,0.18); display: flex; flex-direction: column;">
+            <div class="cam-head" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(15, 23, 42, 0.95); color: #fff; border-bottom: 1px solid rgba(255,255,255,0.08);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 700; font-size: 14px;">${esc(c.name)} (${c.id})</span>
+                ${isPrimary ? '<span class="pill blue small" style="font-size: 10.5px; font-weight: 800; padding: 2px 7px; background: #2563eb; color: #fff;">⭐ AI CHÍNH</span>' : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="live" style="${isOnline ? 'background: #10b981; color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;' : 'background: #94a3b8; color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;'}">${isOnline ? 'LIVE' + pingDisplay : 'OFFLINE'}</span>
+              </div>
+            </div>
+            
+            <div class="cam-view" style="position:relative; background:#0f172a; min-height:240px; flex: 1; display:flex; align-items:center; justify-content:center; overflow:hidden;">
               ${isOnline ? `
-                <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:220px;object-fit:cover;display:block;" src="${aiStreamUrl()}" onerror="setTimeout(() => { if (this.isConnected) this.src = aiStreamUrl(); }, 2000);">
+                <div class="stream-loader" style="position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#94a3b8; pointer-events:none;">
+                  <div style="font-size:24px;">📹</div>
+                  <div style="font-size:12px; font-weight:600; color:#cbd5e1;">Đang kết nối camera...</div>
+                </div>
+                <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%;height:100%;min-height:240px;object-fit:cover;display:block;" src="${cameraStreamUrl(c.id)}" onload="const l=this.previousElementSibling; if(l&&l.classList.contains('stream-loader')) l.style.display='none';" onerror="setTimeout(() => { if (this.isConnected) this.src = cameraStreamUrl('${c.id}'); }, 2500);">
               ` : `
-                <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:8px; padding:40px 0;">
-                  <div style="font-size:40px;">📹</div>
-                  <div style="font-size:12px; font-weight:600;">Camera đang Offline</div>
+                <div style="display:flex; flex-direction:column; align-items:center; color:#94a3b8; gap:10px; padding:45px 0;">
+                  <div style="font-size:42px;">📹</div>
+                  <div style="font-size:13px; font-weight:600; color:#cbd5e1;">Camera đang Offline</div>
+                  <button class="btn small line" onclick="testCameraRtsp('${c.id}')" style="margin-top: 4px; font-size: 11.5px; padding: 3px 10px; border-color: #64748b; color: #e2e8f0;">🔄 Thử kết nối lại</button>
                 </div>
               `}
-              <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? "ĐANG CHẠY" : "KO HOẠT ĐỘNG")}</span>
+              <span class="state" style="position: absolute; bottom: 8px; right: 8px; z-index: 10;">${statusPill(isOnline ? (isPrimary ? "AI GIÁM SÁT 24/7" : "ĐANG CHẠY") : "KO HOẠT ĐỘNG")}</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #1e293b; border-top: 1px solid #334155; gap: 8px;">
+              <div style="font-size: 12px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span>Vị trí: <b style="color: #f1f5f9;">${esc(c.area || 'Phòng chính')}</b></span>
+              </div>
+              <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                ${(!isPrimary && isEditable) ? `<button class="btn small line" onclick="setPrimaryAiCamera('${c.id}')" style="font-size: 11px; padding: 3px 8px; color: #38bdf8; border-color: #0284c7;" title="Đặt làm camera trọng tâm nhận diện té ngã">⚡ Đặt làm AI chính</button>` : ''}
+                <button class="btn small line" onclick="testCameraRtsp('${c.id}')" style="font-size: 11px; padding: 3px 8px; color: #cbd5e1; border-color: #475569;" title="Đo độ trễ ping và chụp thumbnail">🔄 Test RTSP</button>
+                <button class="btn small primary" onclick="selectedCameraId='${c.id}'; liveViewLevel='stream'; cameraStreamBackView='dashboard'; render('dashboard', false); setTimeout(()=>startTestCamera(), 100);" style="font-size: 11px; padding: 3px 9px;">🔍 Chi tiết</button>
+              </div>
             </div>
           </article>
         `;
         }).join("");
 
-        const isEditable = currentUser.role === "Admin";
         const permissionBtn = (isEditable && house && house.ownerEmail)
           ? `<button class="btn primary" onclick="cameraPermissionModal('${esc(house.ownerEmail)}')" style="margin-left:auto;">Phân quyền camera</button>`
           : "";
 
+        let gridColumnsStyle = "repeat(auto-fit, minmax(420px, 1fr))";
+        if (multiCamLayout === "single") gridColumnsStyle = "1fr";
+        if (multiCamLayout === "grid-all") gridColumnsStyle = "repeat(auto-fill, minmax(320px, 1fr))";
+
         return `
-          <div class="live-toolbar" style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <button class="btn line" onclick="liveViewLevel='locations'; render('dashboard', false);">← Quay lại Nơi lắp đặt</button>
+          <div class="live-toolbar" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button class="btn line" onclick="liveViewLevel='locations'; render('dashboard', false);">← Quay lại Nơi lắp đặt</button>
+              <div style="display: flex; gap: 4px; background: #f1f5f9; padding: 3px; border-radius: 8px; border: 1px solid var(--line);">
+                <button class="btn small ${multiCamLayout === 'grid-2x2' ? 'primary' : 'line'}" onclick="multiCamLayout='grid-2x2'; localStorage.setItem('fg_multi_cam_layout', 'grid-2x2'); render('dashboard', false);" style="height: 32px; padding: 0 10px; font-size: 12px;">🔲 Lưới 2x2</button>
+                <button class="btn small ${multiCamLayout === 'grid-all' ? 'primary' : 'line'}" onclick="multiCamLayout='grid-all'; localStorage.setItem('fg_multi_cam_layout', 'grid-all'); render('dashboard', false);" style="height: 32px; padding: 0 10px; font-size: 12px;">📑 Tất cả</button>
+                <button class="btn small ${multiCamLayout === 'single' ? 'primary' : 'line'}" onclick="multiCamLayout='single'; localStorage.setItem('fg_multi_cam_layout', 'single'); render('dashboard', false);" style="height: 32px; padding: 0 10px; font-size: 12px;">⬛ Đơn màn hình</button>
+              </div>
+              <button class="btn small line" onclick="fetchCamerasLiveStatus().then(() => render('dashboard', false));" style="height: 32px; padding: 0 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;" title="Cập nhật trạng thái kết nối và ping">
+                <span>🔄</span> Cập nhật Ping
+              </button>
+            </div>
             ${permissionBtn}
           </div>
           <div style="margin-bottom: 20px;">
-            <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedLocation)}</h3>
-            <p class="hint" style="margin: 0;">Danh sách camera giám sát tại khu vực này.</p>
+            <h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Nơi lắp đặt: ${esc(selectedLocation)} (${camsInHouse.length} camera)</h3>
+            <p class="hint" style="margin: 0;">Giám sát đa luồng thời gian thực. Camera đánh dấu ⭐ là camera chạy phân tích AI té ngã chính.</p>
           </div>
-          <div class="grid camera-grid">
+          <div class="grid camera-grid" style="display: grid; grid-template-columns: ${gridColumnsStyle}; gap: 18px; width: 100%;">
             ${cameraCardsHtml.length > 0 ? cameraCardsHtml : `
               <div style="grid-column: 1 / -1; padding: 40px; text-align: center; background: #fafafa; border: 1px dashed var(--line); border-radius: 8px; width: 100%;">
                 <div style="font-size: 32px; margin-bottom: 10px;">🔒</div>
@@ -2399,9 +2768,7 @@ function loadStore(key, fallback) {
           <article class="cam live-detail ${aiFallTestOn ? "fallen" : ""}" style="flex:1;">
             <div class="cam-head"><span>${cameraRoomName(cam, idx)}</span><span class="live">LIVE</span></div>
             <div class="cam-view ${aiFallTestOn ? "ai-test-on" : ""}" style="position:relative;">
-              <video id="testCameraVideo" class="real-camera-video webcam-stream" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain;display:none;"></video>
-              <canvas id="testCameraCanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:5;display:none;"></canvas>
-              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:block;" src="${aiStreamUrl()}">
+              <img id="testCameraImg" class="real-camera-video backend-stream" alt="AI camera stream" style="width:100%;height:100%;object-fit:contain;display:block;" src="${cameraStreamUrl(cam.id)}" onerror="setTimeout(() => { if (this.isConnected) this.src = cameraStreamUrl('${cam.id}'); }, 2000);">
               ${personSvg()}
               <span class="overlay-note" id="liveOverlayNote">Fall Detected</span>
               <span class="state" id="liveStateBadge">${statusPill(cam.state.toUpperCase())}</span>
@@ -2473,6 +2840,9 @@ function loadStore(key, fallback) {
           </div>
           
           <div style="flex-grow: 1;"></div>
+          <button class="btn small line" onclick="window.fetchCamerasLiveStatus().then(() => render('cameras', false));" style="height:38px; padding: 0 14px; display:inline-flex; align-items:center; gap:6px;" title="Thăm dò kết nối và đo ping toàn bộ camera">
+            <span>🔄</span> Kiểm tra kết nối tất cả
+          </button>
           ${addBtn}
         </div>
       `;
@@ -2482,20 +2852,28 @@ function loadStore(key, fallback) {
         const statusLabel = c.status === "online" ? "Đang chạy" : c.status === "offline" ? "Ko hoạt động" : "Bảo trì";
         const statusClass = c.status; // online, offline, maintenance
         const statusPillClass = c.status === "online" ? "green" : c.status === "offline" ? "red" : "amber";
+        const isPrimary = (c.id === selectedCameraId || Boolean(c.is_primary));
+        const pingBadge = c.latency_ms ? ` (${c.latency_ms}ms)` : '';
+
         const viewBtn = `<button class="btn small line" data-open-camera="${esc(c.id)}">Xem</button>`;
+        const testBtn = `<button class="btn small line" onclick="window.testCameraRtsp('${esc(c.id)}')" style="display:inline-flex; align-items:center; gap:4px;" title="Kiểm tra độ trễ & đo ping"><span>⚡</span> Test RTSP</button>`;
+        const primaryBtn = (!isPrimary && isEditable) ? `<button class="btn small line" onclick="window.setPrimaryAiCamera('${esc(c.id)}')" style="color:#2563eb; border-color:#93c5fd;" title="Đặt làm Camera Giám sát AI Chính">⭐ AI Chính</button>` : '';
         const editBtn = isEditable ? `<button class="btn small line" data-edit-camera="${esc(c.id)}">Sửa</button>` : "";
         const deleteBtn = isEditable ? `<button class="btn small danger" data-delete-camera="${esc(c.id)}">Xóa</button>` : "";
         
         return `
-          <div class="premium-camera-card" data-camera-id="${esc(c.id)}" data-camera-name="${esc(c.name.toLowerCase())}" data-camera-ip="${esc(c.ip.toLowerCase())}" data-camera-status="${esc(c.status)}">
+          <div class="premium-camera-card" data-camera-id="${esc(c.id)}" data-camera-name="${esc(c.name.toLowerCase())}" data-camera-ip="${esc(c.ip.toLowerCase())}" data-camera-status="${esc(c.status)}" style="${isPrimary ? 'border: 2px solid #3b82f6;' : ''}">
             <div class="card-header">
               <div>
-                <h4 class="card-title">${esc(c.name)}</h4>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <h4 class="card-title" style="margin: 0;">${esc(c.name)}</h4>
+                  ${isPrimary ? '<span class="pill blue small" style="font-size: 10px; font-weight: 800; padding: 1px 5px;">⭐ AI CHÍNH</span>' : ''}
+                </div>
                 <span class="card-subtitle">ID: ${esc(c.id)}</span>
               </div>
               <span class="pill ${statusPillClass}" style="display: inline-flex; align-items: center; font-weight:700;">
                 <span class="status-dot-pulse ${statusClass}"></span>
-                ${statusLabel}
+                ${statusLabel}${pingBadge}
               </span>
             </div>
             
@@ -2525,8 +2903,10 @@ function loadStore(key, fallback) {
               </div>
             </div>
             
-            <div class="card-actions">
+            <div class="card-actions" style="flex-wrap: wrap;">
               ${viewBtn}
+              ${testBtn}
+              ${primaryBtn}
               ${editBtn}
               ${deleteBtn}
             </div>
@@ -2642,9 +3022,9 @@ function loadStore(key, fallback) {
 
         const actions = `
           <div style="display: flex; gap: 6px; white-space: nowrap; align-items: center;">
-            <button class="btn small line" data-edit-user="${esc(u.email)}">Sửa</button>
-            <button class="btn small line warning-btn" data-toggle-user="${esc(u.email)}">${isLocked ? "Mở khóa" : "Khóa"}</button>
-            <button class="btn small danger" data-delete-user="${esc(u.email)}">Xóa</button>
+            <button class="btn small line" data-edit-user="${esc(u.email)}" style="min-width: 52px; width: 52px; justify-content: center; text-align: center; padding: 5px 0; font-weight: 600;">Sửa</button>
+            <button class="btn small line warning-btn" data-toggle-user="${esc(u.email)}" style="min-width: 82px; width: 82px; justify-content: center; text-align: center; padding: 5px 0; font-weight: 600;">${isLocked ? "Mở khóa" : "Khóa"}</button>
+            <button class="btn small danger" data-delete-user="${esc(u.email)}" style="min-width: 52px; width: 52px; justify-content: center; text-align: center; padding: 5px 0; font-weight: 600;">Xóa</button>
           </div>
         `;
 
@@ -2652,8 +3032,8 @@ function loadStore(key, fallback) {
           esc(u.name),
           esc(u.email),
           esc(u.phone || "Chưa cập nhật"),
-          `<span class="pill ${u.role === 'Admin' ? 'purple' : 'gray'}">${role}</span>`,
-          `<span class="pill ${statusClass}">${u.status}</span>`,
+          `<span class="pill ${u.role === 'Admin' ? 'purple' : 'gray'}" style="min-width: 90px; width: 90px; justify-content: center; text-align: center; display: inline-flex; box-sizing: border-box;">${role}</span>`,
+          `<span class="pill ${statusClass}" style="min-width: 120px; width: 120px; justify-content: center; text-align: center; display: inline-flex; box-sizing: border-box; font-size: 11.5px; font-weight: 700; padding: 5px 0;">${u.status}</span>`,
           camsStr,
           pwdDisplay,
           actions
@@ -2723,6 +3103,36 @@ function loadStore(key, fallback) {
     }
 
 
+    window.testModalRtsp = async function() {
+      const input = document.querySelector('#cameraFormReal input[name="rtsp"]');
+      const val = input ? input.value.trim() : '';
+      if (!val) { alert('Vui lòng nhập đường dẫn RTSP hoặc Webcam ID trước!'); return; }
+      
+      const btn = document.getElementById('btnTestModalRtsp');
+      if (btn) btn.textContent = '⏳ Đang thử...';
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/cameras/test-connection`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ rtsp: val })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          alert(`✅ Kết nối thành công!\n- Độ trễ ping: ${data.latency_ms} ms\n- Độ phân giải: ${data.resolution}\n- FPS: ${data.fps}`);
+          const resInput = document.querySelector('#cameraFormReal input[name="resolution"]');
+          const fpsInput = document.querySelector('#cameraFormReal input[name="fps"]');
+          if (resInput && data.resolution) resInput.value = data.resolution;
+          if (fpsInput && data.fps) fpsInput.value = Math.round(data.fps);
+        } else {
+          alert(`❌ Kết nối thất bại:\n${data.error || data.detail || 'Không kết nối được'}`);
+        }
+      } catch (e) {
+        alert(`Lỗi: ${e.message || e}`);
+      } finally {
+        if (btn) btn.textContent = '🔍 Thử kết nối RTSP';
+      }
+    };
+
     function cameraModal(id = "") {
       const cam = id ? (cameraById(id) || {}) : {};
       const isEdit = Boolean(id);
@@ -2735,15 +3145,19 @@ function loadStore(key, fallback) {
           </button>
         </div>
         <div class="form-grid">
-          ${[
-            ["id", "Mã camera", cam.id || `CAM-${String(cameras.length + 1).padStart(3, "0")}`],
-            ["name", "Tên camera", cam.name || ""],
-            ["ip", "IP Camera", cam.ip || "192.168.1.120"],
-            ["rtsp", "RTSP URL", cam.rtsp || "rtsp://192.168.1.120/live"],
-            ["fps", "FPS", cam.fps || 30],
-            ["resolution", "Độ phân giải", cam.resolution || "1920x1080"],
-            ["threshold", "Ngưỡng phát hiện", cam.threshold || 80],
-          ].map(([name, label, value]) => `<label class="field"><span>${label}</span><input class="control" name="${name}" value="${esc(value)}" required ${name === 'id' && isEdit ? 'readonly style="background: rgba(241, 245, 249, 0.7); cursor: not-allowed;"' : ''}></label>`).join("")}
+          <label class="field"><span>Mã camera</span><input class="control" name="id" value="${esc(cam.id || `CAM-${String(cameras.length + 1).padStart(3, "0")}`)}" required ${isEdit ? 'readonly style="background: rgba(241, 245, 249, 0.7); cursor: not-allowed;"' : ''}></label>
+          <label class="field"><span>Tên camera</span><input class="control" name="name" value="${esc(cam.name || "")}" required></label>
+          <label class="field"><span>IP Camera</span><input class="control" name="ip" value="${esc(cam.ip || "192.168.1.120")}" required></label>
+          <label class="field" style="grid-column: 1 / -1;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <span>RTSP URL</span>
+              <button type="button" id="btnTestModalRtsp" onclick="window.testModalRtsp()" class="btn small line" style="height:26px; padding:0 8px; font-size:11.5px; color:#2563eb; border-color:#93c5fd; cursor:pointer;">🔍 Thử kết nối RTSP</button>
+            </div>
+            <input class="control" name="rtsp" value="${esc(cam.rtsp || "rtsp://192.168.1.120/live")}" required>
+          </label>
+          <label class="field"><span>FPS</span><input class="control" name="fps" type="number" value="${esc(cam.fps || 30)}" required></label>
+          <label class="field"><span>Độ phân giải</span><input class="control" name="resolution" value="${esc(cam.resolution || "1920x1080")}" required></label>
+          <label class="field"><span>Ngưỡng phát hiện (%)</span><input class="control" name="threshold" type="number" value="${esc(cam.threshold || 80)}" required></label>
           <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${cam.status === "online" ? "selected" : ""}>online</option><option ${cam.status === "offline" ? "selected" : ""}>offline</option><option ${cam.status === "maintenance" ? "selected" : ""}>maintenance</option></select></label>
           <label class="field"><span>Nhãn AI</span><select class="control" name="state"><option value="normal" ${cam.state === "normal" ? "selected" : ""}>normal</option><option value="walking" ${cam.state === "walking" ? "selected" : ""}>walking</option><option value="sitting" ${cam.state === "sitting" ? "selected" : ""}>sitting</option><option value="lying" ${cam.state === "lying" ? "selected" : ""}>lying</option><option value="fallen" ${cam.state === "fallen" ? "selected" : ""}>fallen</option></select></label>
         </div>
@@ -2886,7 +3300,7 @@ function loadStore(key, fallback) {
           
           // Apply stream source globally to all matching cards
           document.querySelectorAll(".backend-stream").forEach((img) => {
-            img.src = aiStreamUrl();
+            img.src = cameraStreamUrl(selectedCameraId);
             img.style.display = "block";
             img.closest(".cam-view")?.classList.add("real-camera-on");
           });
@@ -3958,27 +4372,21 @@ function loadStore(key, fallback) {
         });
         if (alertsRes.ok) {
           const data = await alertsRes.json();
-          if (data.alerts && data.alerts.length > 0) {
-            let changed = false;
+          if (data && Array.isArray(data.alerts)) {
+            const currentIds = new Set(alerts.map(a => a.id));
             data.alerts.forEach(backendAlert => {
-              const localIndex = alerts.findIndex(a => a.id === backendAlert.id);
-              if (localIndex < 0) {
-                alerts.unshift(backendAlert);
-                changed = true;
-                
-                if (backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
-                  triggerRealtimeFallAlert(backendAlert);
-                }
-              } else {
-                const local = alerts[localIndex];
-                if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status || local.confidence !== backendAlert.confidence) {
-                  alerts[localIndex] = { ...local, ...backendAlert };
-                  changed = true;
-                }
+              if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
+                triggerRealtimeFallAlert(backendAlert);
               }
             });
-            if (changed) {
-              saveAll();
+
+            const backendAlerts = data.alerts;
+            const hasChanged = alerts.length !== backendAlerts.length ||
+              backendAlerts.some((b, i) => !alerts[i] || alerts[i].id !== b.id || alerts[i].status !== b.status || alerts[i].cloud_img_url !== b.cloud_img_url || alerts[i].confidence !== b.confidence);
+
+            if (hasChanged) {
+              alerts = backendAlerts;
+              saveStore("fg_alerts", alerts);
               updatePendingAlertsCount();
               if (currentView === "alerts" || currentView === "stranger_alerts" || currentView === "media" || currentView === "user_alerts" || currentView === "user_history") {
                 render(currentView, false);
@@ -4084,6 +4492,48 @@ function loadStore(key, fallback) {
     }
 
 
+    async function loadTelegramConfigUI() {
+      const tokenInput = $("tgBotToken");
+      const chatIdInput = $("tgChatId");
+      const enabledSwitch = $("tgEnabled");
+      const statusBadge = $("tgStatusBadge");
+      if (!tokenInput || !chatIdInput) return;
+
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/telegram/config`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          tokenInput.value = data.bot_token || "";
+          chatIdInput.value = data.chat_id || "";
+          if (enabledSwitch) enabledSwitch.checked = Boolean(data.enabled);
+
+          if (statusBadge) {
+            const hasToken = data.bot_token && data.bot_token !== "YOUR_TELEGRAM_BOT_TOKEN";
+            const hasChat = data.chat_id && data.chat_id !== "YOUR_TELEGRAM_CHAT_ID";
+            if (data.enabled && hasToken && hasChat) {
+              statusBadge.className = "pill green";
+              statusBadge.textContent = "● Đang hoạt động";
+            } else if (!data.enabled) {
+              statusBadge.className = "pill gray";
+              statusBadge.textContent = "● Đã tắt";
+            } else {
+              statusBadge.className = "pill orange";
+              statusBadge.textContent = "● Chưa xong cấu hình";
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải cấu hình Telegram:", err);
+        if (statusBadge) {
+          statusBadge.className = "pill gray";
+          statusBadge.textContent = "● Lỗi tải dữ liệu";
+        }
+      }
+    }
+
+
     function render(id = "dashboard", fetchSync = true) {
       // Khi rời màn hình chi tiết, chỉ reset UI/webcam local, KHÔNG tắt pipeline AI ngầm trên server
       const isLiveView = (id === "user_dashboard" || id === "dashboard");
@@ -4127,6 +4577,12 @@ function loadStore(key, fallback) {
       if (fetchSync && (id === "alerts" || id === "stranger_alerts" || id === "media" || id === "user_alerts" || id === "user_history")) {
         syncAlertsAndEvents();
       }
+
+      // Load telegram config when rendering notifications view
+      if (id === "notifications") {
+        loadTelegramConfigUI();
+      }
+
       
       // Auto-start status polling on detection tab or user dashboard if stream is active
       const shouldPoll = id === "detection" || (id === "user_live" && liveViewLevel === "stream");
@@ -4375,26 +4831,83 @@ function loadStore(key, fallback) {
           render("users");
         }
       }
+      if (event.target.closest("[data-action='toggle-tg-token']")) {
+        const input = $("tgBotToken");
+        const btn = event.target.closest("[data-action='toggle-tg-token']");
+        if (input) {
+          if (input.type === "password") {
+            input.type = "text";
+            btn.textContent = "🙈";
+          } else {
+            input.type = "password";
+            btn.textContent = "👁️";
+          }
+        }
+      }
+
+      if (event.target.closest("[data-action='save-telegram-config']")) {
+        const btn = event.target.closest("[data-action='save-telegram-config']");
+        const token = ($("tgBotToken")?.value || "").trim();
+        const chatId = ($("tgChatId")?.value || "").trim();
+        const enabled = Boolean($("tgEnabled")?.checked);
+
+        btn.disabled = true;
+        const origText = btn.innerHTML;
+        btn.textContent = "Đang lưu...";
+
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/telegram/config`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ bot_token: token, chat_id: chatId, enabled })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok) {
+            toast("💾 Đã lưu cấu hình Telegram thành công!");
+            settings.telegram = enabled;
+            saveAll();
+            loadTelegramConfigUI();
+          } else {
+            alert(data.detail || "Không thể lưu cấu hình Telegram.");
+          }
+        } catch (err) {
+          console.error("Save telegram config failed:", err);
+          alert("Lỗi mạng khi lưu cấu hình Telegram.");
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      }
+
       if (event.target.closest("[data-action='connect-telegram']")) {
         const btn = event.target.closest("[data-action='connect-telegram']");
+        const currentToken = ($("tgBotToken")?.value || "").trim();
+
         btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = "Đang kết nối...";
+        const originalText = btn.innerHTML;
+        btn.textContent = "Đang dò tìm...";
         
         try {
+          const payload = currentToken ? { bot_token: currentToken } : {};
           const res = await fetch(`${apiBaseUrl()}/api/telegram/connect`, {
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
               "Authorization": `Bearer ${authToken}` 
-            }
+            },
+            body: JSON.stringify(payload)
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
-            toast(`🎉 Kết nối thành công với Telegram của ${data.username}!`);
+            toast(`🎉 Kết nối thành công với ${data.username}! Chat ID: ${data.chat_id}`);
+            if ($("tgChatId")) $("tgChatId").value = data.chat_id;
+            if ($("tgEnabled")) $("tgEnabled").checked = true;
             settings.telegram = true;
             saveAll();
-            render("notifications");
+            loadTelegramConfigUI();
           } else {
             alert(data.detail || "Không thể kết nối Telegram Bot. Hãy nhắn tin bất kỳ cho Bot trước!");
           }
@@ -4403,7 +4916,36 @@ function loadStore(key, fallback) {
           alert("Lỗi mạng khi kết nối Telegram Bot.");
         } finally {
           btn.disabled = false;
-          btn.textContent = originalText;
+          btn.innerHTML = originalText;
+        }
+      }
+
+      if (event.target.closest("[data-action='test-telegram-config']")) {
+        const btn = event.target.closest("[data-action='test-telegram-config']");
+        btn.disabled = true;
+        const origText = btn.innerHTML;
+        btn.textContent = "Đang gửi...";
+
+        try {
+          const res = await fetch(`${apiBaseUrl()}/api/telegram/test`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${authToken}`
+            }
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok) {
+            toast(`🎉 ${data.detail || 'Đã gửi tin nhắn cảnh báo thử nghiệm tới Telegram!'}`);
+          } else {
+            alert(data.detail || "Không thể gửi tin nhắn thử nghiệm Telegram.");
+          }
+        } catch (err) {
+          console.error("Test telegram failed:", err);
+          alert("Lỗi mạng khi gửi tin nhắn kiểm tra Telegram.");
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = origText;
         }
       }
       if (event.target.closest("[data-add-api]")) {

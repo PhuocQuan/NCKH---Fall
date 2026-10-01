@@ -57,6 +57,24 @@ class TestNotifRequest(BaseModel):
     channel: str
 
 
+class TelegramConfigModel(BaseModel):
+    bot_token: str
+    chat_id: str
+    enabled: bool = False
+
+
+class TelegramConnectRequest(BaseModel):
+    bot_token: str | None = None
+
+
+class CameraTestConnectionRequest(BaseModel):
+    rtsp: str | None = None
+    ip: str | None = None
+    port: int = 554
+    source: str | None = None
+
+
+
 @router.get("/api/users")
 def get_users(user: str = Depends(require_user)) -> list[dict[str, Any]]:
     return service.get_users()
@@ -109,6 +127,36 @@ def delete_camera(id: str, user: str = Depends(require_user)) -> dict[str, Any]:
     return {"ok": True}
 
 
+@router.get("/api/cameras/status")
+def get_cameras_status(user: str = Depends(require_user)) -> list[dict[str, Any]]:
+    """API: Lấy danh sách camera kèm trạng thái kết nối & latency thời gian thực."""
+    return service.get_cameras_status()
+
+
+@router.post("/api/cameras/{id}/test")
+def test_camera(id: str, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Chẩn đoán kiểm tra luồng RTSP của 1 camera trong hệ thống."""
+    try:
+        return service.test_camera(id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi kiểm tra camera: {e}") from e
+
+
+@router.post("/api/cameras/test-connection")
+def test_camera_connection(body: CameraTestConnectionRequest, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Kiểm tra một đường dẫn RTSP hoặc Webcam bất kỳ trước khi lưu."""
+    src = body.rtsp or body.source or body.ip or "0"
+    return service.test_camera_connection_arbitrary(src)
+
+
+@router.post("/api/cameras/{id}/set-primary")
+def set_primary_camera(id: str, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Đặt camera làm Camera AI Giám sát Chính."""
+    return service.set_primary_camera(id, user)
+
+
 @router.get("/api/logs")
 def list_logs(user: str = Depends(require_user)) -> dict[str, Any]:
     """API: Lấy lịch sử cảnh báo té ngã từ file sự kiện và SQLite."""
@@ -126,20 +174,47 @@ def list_events(user: str = Depends(require_user)) -> dict[str, Any]:
     return {"events": events}
 
 
+@router.get("/api/telegram/config")
+def get_telegram_config(user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Lấy cấu hình Telegram hiện tại."""
+    return service.get_telegram_config()
+
+
+@router.put("/api/telegram/config")
+def update_telegram_config(body: TelegramConfigModel, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Cập nhật cấu hình Telegram và lưu vào notifications.json."""
+    return service.update_telegram_config(body.bot_token, body.chat_id, body.enabled)
+
+
 @router.post("/api/telegram/connect")
-def telegram_connect(user: str = Depends(require_user)) -> dict[str, Any]:
-    return service.connect_telegram()
+def telegram_connect(body: TelegramConnectRequest | None = None, user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Tự động phát hiện Chat ID từ tương tác gần nhất với Bot qua getUpdates."""
+    token = body.bot_token if body else None
+    return service.connect_telegram(token)
+
+
+@router.post("/api/telegram/test")
+def telegram_test(user: str = Depends(require_user)) -> dict[str, Any]:
+    """API: Gửi thông báo thử nghiệm trực tiếp tới Telegram."""
+    try:
+        return service.test_telegram()
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err)) from val_err
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi gửi tin nhắn test Telegram: {e}") from e
 
 
 @router.post("/api/notifications/test")
 def test_notification(body: TestNotifRequest, user: str = Depends(require_user)) -> dict[str, Any]:
     try:
-        service.test_notification(body.channel)
-        return {"ok": True, "detail": f"Đã gửi tin nhắn cảnh báo thử nghiệm tới {body.channel}!"}
+        res = service.test_notification(body.channel)
+        detail_msg = res.get("detail", f"Đã gửi tin nhắn cảnh báo thử nghiệm tới {body.channel}!") if isinstance(res, dict) else f"Đã gửi tin nhắn cảnh báo thử nghiệm tới {body.channel}!"
+        return {"ok": True, "detail": detail_msg}
     except ValueError as val_err:
         raise HTTPException(status_code=400, detail=str(val_err)) from val_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi gửi tin nhắn test: {e}") from e
+
 
 
 class CameraAutoBindRequest(BaseModel):

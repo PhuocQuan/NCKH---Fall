@@ -9,14 +9,18 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from datetime import datetime
+
 from src.web.shared.db import log_action
 import src.web.admin.repository as repo
 from src.web.shared.notifications import (
     load_notif_config,
+    save_telegram_config,
     CONFIG_PATH,
     send_telegram_alert,
     send_sms_alert,
 )
+
 
 
 def get_users() -> list[dict[str, Any]]:
@@ -138,6 +142,51 @@ def delete_camera(id: str, user: str) -> None:
     log_action("Quản lý camera", user, f"Xóa camera: {id}")
 
 
+def get_cameras_status() -> list[dict[str, Any]]:
+    """Lấy danh sách camera kèm trạng thái kết nối và latency thời gian thực."""
+    from src.camera.multi_camera_manager import multi_camera_manager
+    return multi_camera_manager.get_all_cameras_status()
+
+
+def test_camera(camera_id: str) -> dict[str, Any]:
+    """Kiểm tra kết nối và đo ping latency cho một camera cụ thể."""
+    from src.camera.multi_camera_manager import multi_camera_manager
+    cams = repo.get_all_cameras_db()
+    target = next((c for c in cams if c.get("id") == camera_id), None)
+    if not target:
+        raise ValueError(f"Không tìm thấy camera có mã {camera_id}")
+
+    rtsp = str(target.get("rtsp") or target.get("ip") or "0").strip()
+    res = multi_camera_manager.test_connection(rtsp)
+
+    # Cập nhật trạng thái online/offline vào database
+    new_status = "online" if res.get("connected") else "offline"
+    try:
+        from src.web.shared.db import get_db_client
+        with get_db_client() as client:
+            client.execute("UPDATE cameras SET status = ? WHERE id = ?", [new_status, camera_id])
+    except Exception:
+        pass
+
+    res["camera_id"] = camera_id
+    res["name"] = target.get("name", camera_id)
+    return res
+
+
+def test_camera_connection_arbitrary(rtsp_or_source: str) -> dict[str, Any]:
+    """Kiểm tra đường dẫn RTSP hoặc Webcam bất kỳ trước khi lưu vào CSDL."""
+    from src.camera.multi_camera_manager import multi_camera_manager
+    return multi_camera_manager.test_connection(rtsp_or_source)
+
+
+def set_primary_camera(camera_id: str, user: str) -> dict[str, Any]:
+    """Chuyển đổi Camera AI Giám sát Chính."""
+    from src.camera.multi_camera_manager import multi_camera_manager
+    result = multi_camera_manager.set_primary_camera(camera_id)
+    log_action("Quản lý camera", user, f"Chuyển Camera AI chính sang: {camera_id} ({result.get('name')})")
+    return result
+
+
 def get_system_logs() -> list[list[str]]:
     return repo.get_logs_db()
 
@@ -155,86 +204,150 @@ def get_events() -> list[dict[str, Any]]:
     return events[:100]
 
 
-def connect_telegram() -> dict[str, Any]:
+def get_telegram_config() -> dict[str, Any]:
+    """Lấy thông tin cấu hình Telegram hiện tại."""
+    cfg = load_notif_config().get("telegram", {})
+    return {
+        "ok": True,
+        "bot_token": str(cfg.get("bot_token", "")),
+        "chat_id": str(cfg.get("chat_id", "")),
+        "enabled": bool(cfg.get("enabled", False)),
+    }
+
+
+def update_telegram_config(bot_token: str, chat_id: str, enabled: bool) -> dict[str, Any]:
+    """Cập nhật cấu hình Telegram và lưu vào file cấu hình."""
+    saved = save_telegram_config(bot_token=bot_token, chat_id=chat_id, enabled=enabled)
+    return {
+        "ok": True,
+        "bot_token": saved.get("bot_token", ""),
+        "chat_id": str(saved.get("chat_id", "")),
+        "enabled": bool(saved.get("enabled", False)),
+        "detail": "Đã lưu cấu hình Telegram thành công!"
+    }
+
+
+def connect_telegram(bot_token: str | None = None) -> dict[str, Any]:
+    """
+    Tự động dò tìm Chat ID từ các tin nhắn tương tác gần nhất với Bot qua Telegram getUpdates.
+    Sử dụng bot_token được cung cấp hoặc lấy từ file cấu hình (không hardcode).
+    """
     config = load_notif_config()
-    telegram_cfg = config.setdefault("telegram", {})
-    bot_token = telegram_cfg.get("bot_token")
+    telegram_cfg = config.get("telegram", {})
     
-    if not bot_token or bot_token == "YOUR_TELEGRAM_BOT_TOKEN":
-        bot_token = "8820249951:AAEndwjP7Bhnj1yUMomuZOXo3f_Ba5lA-6Q"
-        telegram_cfg["bot_token"] = bot_token
+    token = (bot_token or telegram_cfg.get("bot_token", "")).strip()
+    if not token or token == "YOUR_TELEGRAM_BOT_TOKEN":
+        return {
+            "ok": False,
+            "detail": "Vui lòng nhập Bot Token từ @BotFather trước khi tự động lấy Chat ID!"
+        }
         
     try:
-        url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode("utf-8"))
             
         results = res_data.get("result", [])
         if not results:
             return {
                 "ok": False,
-                "detail": "Không tìm thấy tương tác với Bot. Vui lòng bấm 'Start' (Bắt đầu) trên t.me/NCKHFall_bot trước rồi nhấn nút kết nối lại!"
+                "detail": "Chưa tìm thấy tin nhắn nào. Bạn hãy mở Bot trên Telegram và bấm 'Start' hoặc gửi 1 tin nhắn bất kỳ cho Bot, sau đó bấm nút này lại nhé!"
             }
             
-        latest_message = None
+        latest_chat = None
         for update in reversed(results):
-            if "message" in update:
-                latest_message = update["message"]
+            chat_obj = None
+            if "message" in update and "chat" in update["message"]:
+                chat_obj = update["message"]["chat"]
+            elif "channel_post" in update and "chat" in update["channel_post"]:
+                chat_obj = update["channel_post"]["chat"]
+            elif "my_chat_member" in update and "chat" in update["my_chat_member"]:
+                chat_obj = update["my_chat_member"]["chat"]
+            elif "callback_query" in update and "message" in update["callback_query"]:
+                chat_obj = update["callback_query"]["message"].get("chat")
+
+            if chat_obj and chat_obj.get("id"):
+                latest_chat = chat_obj
                 break
                 
-        if not latest_message:
+        if not latest_chat:
             return {
                 "ok": False,
-                "detail": "Không thấy tin nhắn mới với Bot. Vui lòng gửi tin nhắn bất kỳ cho Bot!"
+                "detail": "Chưa tìm thấy tin nhắn nào. Bạn hãy mở Bot trên Telegram và bấm 'Start' hoặc gửi 1 tin nhắn bất kỳ cho Bot, sau đó bấm nút này lại nhé!"
             }
             
-        chat = latest_message.get("chat", {})
-        chat_id = chat.get("id")
-        username = chat.get("username", chat.get("first_name", "User"))
+        chat_id = str(latest_chat.get("id"))
+        username = latest_chat.get("title") or latest_chat.get("username") or latest_chat.get("first_name", "User")
         
-        if chat_id:
-            telegram_cfg["chat_id"] = str(chat_id)
-            telegram_cfg["enabled"] = True
+        save_telegram_config(bot_token=token, chat_id=chat_id, enabled=True)
             
-            with CONFIG_PATH.open("w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-                
-            send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            send_msg = f"🎉 Kết nối thành công!\nHệ thống FallGuard AI đã được liên kết với tài khoản Telegram của bạn ({username}). Bạn sẽ nhận được các thông báo cảnh báo té ngã tại đây."
-            data = urllib.parse.urlencode({"chat_id": chat_id, "text": send_msg}).encode("utf-8")
-            send_req = urllib.request.Request(send_url, data=data)
-            urllib.request.urlopen(send_req)
+        welcome_msg = (
+            "🎉 <b>KẾT NỐI THÀNH CÔNG!</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"Hệ thống FallGuard AI đã được liên kết với tài khoản Telegram của bạn (<b>{username}</b>).\n"
+            "Bạn sẽ nhận được các thông báo cảnh báo té ngã tại đây."
+        )
+        send_telegram_alert(welcome_msg)
+        
+        return {
+            "ok": True,
+            "chat_id": chat_id,
+            "username": username,
+            "detail": f"Đã kết nối thành công với Telegram của {username}!"
+        }
             
-            return {
-                "ok": True,
-                "chat_id": chat_id,
-                "username": username
-            }
-            
+    except urllib.error.HTTPError as http_err:
+        if http_err.code == 401:
+            return {"ok": False, "detail": "Bot Token không hợp lệ. Vui lòng kiểm tra lại token từ @BotFather!"}
+        return {"ok": False, "detail": f"Lỗi Telegram API ({http_err.code}): {http_err.reason}"}
     except Exception as e:
         return {"ok": False, "detail": f"Lỗi kết nối API Telegram: {e}"}
+
+
+def test_telegram() -> dict[str, Any]:
+    """Gửi một cảnh báo kiểm tra tức thì tới Telegram với định dạng HTML chuyên nghiệp."""
+    config = load_notif_config().get("telegram", {})
+    if not config.get("enabled"):
+        raise ValueError("Vui lòng bật nút kích hoạt Telegram Bot trên giao diện trước khi gửi thử.")
         
-    return {"ok": False, "detail": "Không tìm thấy thông tin trò chuyện."}
+    bot_token = config.get("bot_token", "").strip()
+    chat_id = str(config.get("chat_id", "")).strip()
+    if not bot_token or bot_token == "YOUR_TELEGRAM_BOT_TOKEN":
+        raise ValueError("Bot Token chưa được thiết lập. Vui lòng cấu hình Bot Token từ @BotFather!")
+    if not chat_id or chat_id == "YOUR_TELEGRAM_CHAT_ID":
+        raise ValueError("Chat ID chưa được thiết lập. Vui lòng nhập Chat ID hoặc bấm 'Tự động lấy Chat ID'!")
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    msg = (
+        "🧪 <b>KIỂM TRA HỆ THỐNG THÔNG BÁO FALLGUARD AI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✅ <b>Trạng thái:</b> Kết nối Telegram hoạt động bình thường!\n"
+        f"⏰ <b>Thời gian:</b> {now_str}\n"
+        "🔔 <b>Kênh nhận:</b> Telegram Bot Alert\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 <i>Đây là tin nhắn kiểm tra. Hệ thống đã sẵn sàng gửi cảnh báo khẩn cấp khi phát hiện té ngã!</i>"
+    )
+    result = send_telegram_alert(msg)
+    if not result.get("ok"):
+        raise RuntimeError(result.get("detail", "Không thể gửi tin nhắn thử nghiệm tới Telegram."))
+    return {"ok": True, "detail": "Đã gửi tin nhắn cảnh báo thử nghiệm tới Telegram!"}
 
 
-def test_notification(channel: str) -> None:
+def test_notification(channel: str) -> dict[str, Any]:
     channel = channel.lower()
-    msg = "🚨 CẢNH BÁO TÉ NGÃ: Đây là tin nhắn kiểm tra hệ thống từ FallGuard AI!"
-    
     if "telegram" in channel:
-        config = load_notif_config().get("telegram", {})
-        if not config.get("enabled"):
-            raise ValueError("Vui lòng bật nút kích hoạt Telegram Bot trên giao diện trước.")
-        send_telegram_alert(msg)
-            
+        return test_telegram()
     elif "sms" in channel:
         config = load_notif_config().get("sms", {})
         if not config.get("enabled"):
             raise ValueError("Vui lòng bật nút kích hoạt SMS trên giao diện trước.")
+        msg = "🚨 CẢNH BÁO TÉ NGÃ: Đây là tin nhắn kiểm tra hệ thống từ FallGuard AI!"
         send_sms_alert(msg)
+        return {"ok": True, "detail": "Đã gửi tin nhắn cảnh báo thử nghiệm tới SMS!"}
     else:
         raise ValueError(f"Kênh '{channel}' không hỗ trợ gửi thử thực tế.")
+
 
 
 def auto_bind_camera(camera_id: str, new_ip: str, safety_code: str, user: str, name: str | None = None, mode: str = "update") -> dict[str, Any]:

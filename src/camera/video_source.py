@@ -94,6 +94,29 @@ class VideoSource:
         if real is not None:
             return real
 
+        # Nếu là RTSP qua Wi-Fi và chưa mở được, thử quét tìm IP mới nếu router DHCP đổi IP
+        if isinstance(self.source, str) and self.source.startswith("rtsp://"):
+            try:
+                from src.camera.camera_discovery import discover_all_cameras
+                discovered = discover_all_cameras()
+                if discovered:
+                    new_rtsp = discovered[0].get("suggested_imou_rtsp") or discovered[0].get("suggested_generic_rtsp")
+                    new_ip = discovered[0].get("ip")
+                    if new_rtsp and (new_rtsp != self.source or (new_ip and new_ip not in self.source)):
+                        print(f"[VideoSource] 🔄 Phát hiện Camera đổi IP sang ({new_ip}). Tự động cập nhật RTSP: {new_rtsp}")
+                        self.source = new_rtsp
+                        real = self._open_real_only()
+                        if real is not None:
+                            try:
+                                from src.web.shared.db import get_db_client
+                                with get_db_client() as client:
+                                    client.execute("UPDATE cameras SET ip = ?, rtsp = ? WHERE rtsp LIKE 'rtsp://%'", [new_ip, new_rtsp])
+                            except Exception:
+                                pass
+                            return real
+            except Exception as disc_err:
+                print(f"[VideoSource] Lỗi khi tự động dò tìm camera: {disc_err}")
+
         # Fallback to mock video capture if physical camera cannot be opened
         print(f"[VideoSource] Warning: Khong mo duoc camera {self.source}. Dang dung simulator.")
         return MockVideoCapture(self.source, self.width or 640, self.height or 480)
@@ -123,10 +146,11 @@ class VideoSource:
             else:
                 consecutive_failures += 1
                 sleep(0.02)
-                # Cho phép dung sai 150 chu kỳ (~3.5s) khi mạng Wi-Fi bị trễ gói trước khi ngắt mở lại luồng
-                if consecutive_failures > 150 and self._running:
+                # Khi mất tín hiệu quá 50 chu kỳ (~1s), xóa frame cũ và kích hoạt kết nối lại
+                if consecutive_failures > 50 and self._running:
                     print(f"[VideoSource] ⚠️ Luồng camera bị gián đoạn, đang tự động kết nối lại...")
                     with self._lock:
+                        self._latest_frame = None
                         self._reconnect_locked()
                     consecutive_failures = 0
 
@@ -136,16 +160,43 @@ class VideoSource:
                 self.capture.release()
         except Exception:
             pass
+        self.capture = None
         
-        # Thử mở lại nguồn camera thật
+        # 1. Thử mở lại nguồn camera thật hiện tại
         real = self._open_real_only()
         if real is not None:
             self.capture = real
             print(f"[VideoSource] ✅ Đã kết nối lại thành công luồng camera: {self.source}")
-        else:
-            # Nếu là camera RTSP trực tiếp, tiếp tục giữ để thử lại chứ không chuyển sang Mock tĩnh
-            if not _is_live_stream(self.source):
-                self.capture = MockVideoCapture(self.source, self.width or 640, self.height or 480)
+            return
+
+        # 2. Nếu là camera RTSP qua mạng Wi-Fi, tự động dò tìm IP mới nếu router DHCP đổi IP
+        if isinstance(self.source, str) and self.source.startswith("rtsp://"):
+            try:
+                from src.camera.camera_discovery import discover_all_cameras
+                discovered = discover_all_cameras()
+                if discovered:
+                    new_rtsp = discovered[0].get("suggested_imou_rtsp") or discovered[0].get("suggested_generic_rtsp")
+                    new_ip = discovered[0].get("ip")
+                    if new_rtsp and (new_rtsp != self.source or (new_ip and new_ip not in self.source)):
+                        print(f"[VideoSource] 🔄 Phát hiện Camera đổi IP sang ({new_ip}). Tự động cập nhật RTSP: {new_rtsp}")
+                        self.source = new_rtsp
+                        real = self._open_real_only()
+                        if real is not None:
+                            self.capture = real
+                            print(f"[VideoSource] ✅ Đã kết nối lại thành công sau khi cập nhật IP mới ({new_ip})!")
+                            try:
+                                from src.web.shared.db import get_db_client
+                                with get_db_client() as client:
+                                    client.execute("UPDATE cameras SET ip = ?, rtsp = ? WHERE rtsp LIKE 'rtsp://%'", [new_ip, new_rtsp])
+                            except Exception:
+                                pass
+                            return
+            except Exception as disc_err:
+                print(f"[VideoSource] Lỗi khi tự động dò tìm camera: {disc_err}")
+
+        # 3. Nếu không phải live stream thì fallback mock
+        if not _is_live_stream(self.source):
+            self.capture = MockVideoCapture(self.source, self.width or 640, self.height or 480)
 
     def read(self, timeout: float = 0.5) -> tuple[bool, np.ndarray | None]:
         with self._lock:
@@ -181,11 +232,6 @@ class VideoSource:
                 self._new_frame_event.clear()
                 if self._latest_frame is not None:
                     return True, self._latest_frame
-
-        # Fallback nếu timeout nhưng đã có frame
-        with self._lock:
-            if self._latest_frame is not None:
-                return True, self._latest_frame
 
         return False, None
 

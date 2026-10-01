@@ -385,7 +385,7 @@ class FallDetectionPipeline:
         while self._running and self._video:
             try:
                 frame_start = time.perf_counter()
-                ok, frame = self._video.read(timeout=0.04)
+                ok, frame = self._video.read(timeout=0.08)
                 if not ok or frame is None:
                     with self._lock:
                         self._status.last_error = "Dang ket noi camera..."

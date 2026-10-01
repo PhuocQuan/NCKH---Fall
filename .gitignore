@@ -25,3 +25,4 @@ data/*.db
 data/temp_test/
 data/debug*
 app_fall/android/build/
+data/fontlist*
