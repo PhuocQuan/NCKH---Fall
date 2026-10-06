@@ -194,7 +194,8 @@ app.include_router(user_router)
 
 # Phục vụ (Mount) các file tĩnh (Frontend Web)
 # Trỏ đường dẫn "/" tới thư mục src/web/ để hiển thị index.html khi vào web.
-# Trỏ "/media" tới thư mục data/media để lưu/phát lại các video ghi hình người ngã.
+# Trỏ "/media" và "/api/media" tới thư mục data/media để lưu/phát lại các video ghi hình người ngã và ảnh người lạ.
+app.mount("/api/media", StaticFiles(directory=str(MEDIA_DIR)), name="api_media")
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 app.mount("/", StaticFiles(directory=str(WEB_ROOT), html=True), name="static")
 

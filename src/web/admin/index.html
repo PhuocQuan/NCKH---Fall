@@ -1578,7 +1578,7 @@ function loadStore(key, fallback) {
           </div>
           
           <div style="border-radius: 8px; overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px; aspect-ratio: 16/10; background: #000;">
-            <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';">
+            <img src="${imgSrc}" style="width: 100%; height: 100%; object-fit: contain;" onerror="if(this.src!=='${apiBaseUrl()}/media/${alertItem.id}.jpg'){this.src='${apiBaseUrl()}/media/${alertItem.id}.jpg';}else{this.style.opacity='0.4';}">
           </div>
           
           <div style="font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 16px;">
@@ -1867,7 +1867,7 @@ function loadStore(key, fallback) {
       const content = `
         <div style="display:flex; flex-direction:column; gap:16px; font-family: inherit;">
           <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
-            <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';}">
+            <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.style.opacity='0.4';}">
           </div>
           
           <div class="card" style="padding:16px; margin-top: 0; background:rgba(244,63,94,0.02); border-color:#fee2e2;">
@@ -2111,10 +2111,11 @@ function loadStore(key, fallback) {
               `<input type="checkbox" id="selectAllAdminAlerts" onclick="toggleSelectAllAdminAlerts(this)" style="cursor: pointer; width: 16px; height: 16px;">`,
               "Mã cảnh báo", "Thời gian", "Camera", "Cảnh báo", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
             ], pageAlerts.map(a => {
-              const imgUrl = a.id.startsWith("AL-20260615-") ? a.media : (a.cloud_img_url || `/api/media/${esc(a.id)}.jpg`);
+              const localUrl = `${apiBaseUrl()}/media/${esc(a.id)}.jpg`;
+              const imgUrl = a.id.startsWith("AL-20260615-") ? a.media : (a.cloud_img_url || localUrl);
               return [
                 `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
-                a.id, a.time, a.camera, a.person, `<img src="${imgUrl}" onclick="openModal('Ảnh sự kiện ${esc(a.id)}', \`<img src='${imgUrl}' style='width:100%; border-radius:8px;' onerror='this.src=\\\\\\'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60\\\\\\'' >\`, \`<button class='btn block line' onclick='closeModal()'>Đóng</button>\`)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(!this.src.includes('unsplash')){this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=100&auto=format&fit=crop&q=60';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+                a.id, a.time, a.camera, a.person, `<img src="${imgUrl}" onclick="zoomAlertImage('${esc(a.id)}', this.src)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(this.src!=='${localUrl}'){this.src='${localUrl}';}else{this.style.opacity='0.4';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
                 isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
               ];
             }))}
@@ -2237,10 +2238,11 @@ function loadStore(key, fallback) {
               `<input type="checkbox" id="selectAllAdminAlerts" onclick="toggleSelectAllAdminAlerts(this)" style="cursor: pointer; width: 16px; height: 16px;">`,
               "Mã cảnh báo", "Thời gian", "Camera", "Cảnh báo", "Hình ảnh", "Độ tin cậy", "Trạng thái", "Mức độ", "Thao tác"
             ], pageAlerts.map(a => {
-              const imgUrl = a.cloud_img_url || `/api/media/${esc(a.id)}.jpg`;
+              const localUrl = `${apiBaseUrl()}/media/${esc(a.id)}.jpg`;
+              const imgUrl = a.cloud_img_url || localUrl;
               return [
                 `<input type="checkbox" class="admin-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 16px; height: 16px;">`,
-                a.id, a.time, a.camera, `<span style="font-weight:600; color:#b45309;">${esc(a.person || "Người lạ")}</span>`, `<img src="${imgUrl}" onclick="openModal('Ảnh sự kiện ${esc(a.id)}', \`<img src='${imgUrl}' style='width:100%; border-radius:8px;' onerror='this.src=\\\\\\'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60\\\\\\'' >\`, \`<button class='btn block line' onclick='closeModal()'>Đóng</button>\`)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(!this.src.includes('unsplash')){this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=100&auto=format&fit=crop&q=60';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
+                a.id, a.time, a.camera, `<span style="font-weight:600; color:#b45309;">${esc(a.person || "Người lạ")}</span>`, `<img src="${imgUrl}" onclick="zoomAlertImage('${esc(a.id)}', this.src)" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); cursor: zoom-in;" onerror="if(this.src!=='${localUrl}'){this.src='${localUrl}';}else{this.style.opacity='0.4';}">`, `${a.confidence}%`, statusPill(a.status), statusPill(a.level), 
                 isEditable ? `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button> <button class="btn small line" data-solve-alert="${esc(a.id)}">Đã xử lý</button>` : `<button class="btn small primary" data-detail-alert="${esc(a.id)}">Chi tiết</button>`
               ];
             }))}
@@ -3101,6 +3103,10 @@ function loadStore(key, fallback) {
       $("modalBackdrop").classList.remove("open");
       $("modalBackdrop").innerHTML = "";
     }
+
+    window.zoomAlertImage = function(id, src) {
+      openModal("Ảnh sự kiện " + (id || ""), `<img src="${src}" style="width:100%; border-radius:8px;">`, `<button class="btn block line" onclick="closeModal()">Đóng</button>`);
+    };
 
 
     window.testModalRtsp = async function() {
@@ -4988,16 +4994,17 @@ function loadStore(key, fallback) {
           const cam = cameraById(alertItem.camera);
           const owner = users.find(u => (u.assignedCameras || []).includes(alertItem.camera)) || users.find(u => u.name === alertItem.person);
           const isMock = id.startsWith("AL-20260615-");
-          let localImgSrc = `/api/media/${alertItem.id}.jpg`;
+          let localImgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
           let imgSrc = isMock ? alertItem.media : (alertItem.cloud_img_url || localImgSrc);
           
           let videoHtml = "";
           if (hasVideo(alertItem)) {
-            let videoSrc = alertItem.cloud_video_url || `/api/media/${alertItem.id}.mp4`;
+            let videoSrc = alertItem.cloud_video_url || `${apiBaseUrl()}/media/${alertItem.id}.mp4`;
+            let localVideoSrc = `${apiBaseUrl()}/media/${alertItem.id}.mp4`;
             videoHtml = `
               <div style="margin-top: 12px;">
                 <strong style="display:block; margin-bottom: 6px; font-size:13px; color:var(--ink);">Video clip sự kiện:</strong>
-                <video src="${videoSrc}" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('vid-err-${alertItem.id}').style.display='block';"></video>
+                <video src="${videoSrc}" controls autoplay style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/10; object-fit:cover;" onerror="if(this.src!=='${localVideoSrc}'){this.src='${localVideoSrc}';}else{this.style.display='none'; document.getElementById('vid-err-${alertItem.id}').style.display='block';}"></video>
                 <div id="vid-err-${alertItem.id}" style="display:none; padding:16px; text-align:center; background:#f8fafc; border-radius:8px; border:1px dashed var(--line); font-size:13px; color:var(--muted);">🎥 Video sự kiện hiện không khả dụng.</div>
               </div>
             `;
@@ -5017,7 +5024,7 @@ function loadStore(key, fallback) {
           const content = `
             <div style="display:flex; flex-direction:column; gap:16px;">
               <div style="border-radius: 8px; overflow: hidden; border:1px solid var(--line); background:#000; aspect-ratio:16/10;">
-                <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.src='https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=500&auto=format&fit=crop&q=60';}">
+                <img src="${imgSrc}" style="width:100%; height:100%; object-fit:contain;" onerror="if(this.src!=='${localImgSrc}'){this.src='${localImgSrc}';}else{this.style.opacity='0.4';}">
               </div>
               ${videoHtml}
               <div class="card" style="background:${alertCardBg}; border:1px solid ${alertCardBorder};">

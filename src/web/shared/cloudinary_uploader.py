@@ -68,7 +68,10 @@ def upload_to_cloudinary(file_path: str) -> str | None:
         print(f"[Cloudinary] Upload success: {secure_url}")
         return secure_url
     except Exception as e:
-        print(f"[Cloudinary] Lỗi upload: {e}")
+        try:
+            print(f"[Cloudinary] Lỗi upload: {e}")
+        except Exception:
+            print(f"[Cloudinary] Loi upload: {repr(e)}")
         return None
 
 
@@ -109,6 +112,9 @@ def delete_from_cloudinary(url: str) -> bool:
             print(f"[Cloudinary] Delete result: {res}")
             return res.get("result") == "ok"
     except Exception as e:
-        print(f"[Cloudinary] Lỗi xóa: {e}")
+        try:
+            print(f"[Cloudinary] Lỗi xóa: {e}")
+        except Exception:
+            print(f"[Cloudinary] Loi xoa: {repr(e)}")
     return False
 
