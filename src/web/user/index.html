@@ -833,54 +833,121 @@ function loadStore(key, fallback) {
     let audioCtx = null;
     let alarmInterval = null;
 
-    function playAlarmSound() {
-      if (!window.AudioContext && !window.webkitAudioContext) return;
-      stopAlarmSound();
-      
+    function getAudioContext() {
+      if (!window.AudioContext && !window.webkitAudioContext) return null;
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      
       if (audioCtx.state === "suspended") {
         audioCtx.resume();
       }
+      return audioCtx;
+    }
+
+    document.addEventListener("click", () => {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") ctx.resume();
+    }, { once: false });
+
+    function playAlarmSound() {
+      const ctx = getAudioContext();
+      stopAlarmSound();
+      if (!ctx) return;
       
       let beepCount = 0;
       alarmInterval = setInterval(() => {
-        if (beepCount >= 10) { // beep 10 times (about 10 seconds) then stop
+        if (beepCount >= 10) {
           stopAlarmSound();
           return;
         }
         
         try {
-          const osc = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          
+          const osc = ctx.createOscillator();
+          const gainNode = ctx.createGain();
           osc.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          
-          osc.type = "sine";
-          // Siren sound sweep from 600Hz to 1200Hz
-          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-          osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
-          
-          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-          
+          gainNode.connect(ctx.destination);
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(500, ctx.currentTime);
+          osc.frequency.linearRampToValueAtTime(1350, ctx.currentTime + 0.28);
+          gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.38);
           osc.start();
-          osc.stop(audioCtx.currentTime + 0.5);
+          osc.stop(ctx.currentTime + 0.40);
         } catch (e) {
           console.error("Lỗi phát âm thanh alarm:", e);
         }
-        
         beepCount++;
-      }, 600);
+      }, 500);
+
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Khẩn cấp! Cảnh báo phát hiện người bị té ngã!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (_) {}
+      }
+    }
+
+    function playStrangerAlertSound() {
+      const ctx = getAudioContext();
+      stopAlarmSound();
+      if (!ctx) return;
+
+      let beepCount = 0;
+      alarmInterval = setInterval(() => {
+        if (beepCount >= 6) {
+          stopAlarmSound();
+          return;
+        }
+
+        try {
+          const now = ctx.currentTime;
+          const osc1 = ctx.createOscillator();
+          const g1 = ctx.createGain();
+          osc1.connect(g1);
+          g1.connect(ctx.destination);
+          osc1.type = "sine";
+          osc1.frequency.setValueAtTime(880, now);
+          g1.gain.setValueAtTime(0.30, now);
+          g1.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+          osc1.start(now);
+          osc1.stop(now + 0.13);
+
+          const osc2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          osc2.connect(g2);
+          g2.connect(ctx.destination);
+          osc2.type = "sine";
+          osc2.frequency.setValueAtTime(1320, now + 0.15);
+          g2.gain.setValueAtTime(0.35, now + 0.15);
+          g2.gain.exponentialRampToValueAtTime(0.01, now + 0.30);
+          osc2.start(now + 0.15);
+          osc2.stop(now + 0.31);
+        } catch (e) {
+          console.error("Lỗi âm thanh người lạ:", e);
+        }
+
+        beepCount++;
+      }, 650);
+
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Cảnh báo! Phát hiện người lạ xuất hiện trong khu vực giám sát!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (_) {}
+      }
     }
 
     function stopAlarmSound() {
       if (alarmInterval) {
         clearInterval(alarmInterval);
         alarmInterval = null;
+      }
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (_) {}
       }
     }
 
@@ -3846,6 +3913,7 @@ function loadStore(key, fallback) {
                   if (isFallAlert(backendAlert)) {
                     triggerRealtimeFallAlert(backendAlert);
                   } else if (isStrangerAlert(backendAlert)) {
+                    playStrangerAlertSound();
                     toast(`👤 CẢNH BÁO: Phát hiện người lạ (${backendAlert.confidence || 90}%) tại camera ${backendAlert.camera || ''}!`);
                   }
                 }

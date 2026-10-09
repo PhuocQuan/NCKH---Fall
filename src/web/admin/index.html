@@ -611,6 +611,8 @@
         <div class="top-actions">
           <span class="pill" id="backendStatusPill" style="background:#64748b;color:#fff">Checking...</span>
           <span class="pill red" id="pendingAlertsBadge">0 cảnh báo chờ</span>
+          <button class="btn line small" style="border-color:#fca5a5;color:#ef4444;font-weight:600;" onclick="playAlarmSound(); toast('🚨 Đang phát còi báo động té ngã...');" title="Kiểm tra âm thanh còi báo động té ngã">🚨 Thử còi Té ngã</button>
+          <button class="btn line small" style="border-color:#fde68a;color:#d97706;font-weight:600;" onclick="playStrangerAlertSound(); toast('🔔 Đang phát âm thanh cảnh báo người lạ...');" title="Kiểm tra âm thanh cảnh báo người lạ">🔔 Thử chuông Người lạ</button>
           <button class="btn line small" data-action="notify">Gửi thông báo thử</button>
         </div>
       </header>
@@ -918,58 +920,156 @@ function loadStore(key, fallback) {
     }
 
     
-    // Audio Context Alarm Sound Synthesis
+    // Audio Context Alarm Sound Synthesis & Auto-Unlock
     let audioCtx = null;
     let alarmInterval = null;
 
-    function playAlarmSound() {
-      if (!window.AudioContext && !window.webkitAudioContext) return;
-      stopAlarmSound();
-      
+    function getAudioContext() {
+      if (!window.AudioContext && !window.webkitAudioContext) return null;
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      
       if (audioCtx.state === "suspended") {
         audioCtx.resume();
       }
+      return audioCtx;
+    }
+
+    // Tự động mở khóa AudioContext khi người dùng chạm hoặc click bất kỳ đâu trên trang
+    document.addEventListener("click", () => {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") ctx.resume();
+    }, { once: false });
+
+    // Khi người dùng chuyển tab và quay lại, tự động đồng bộ luồng video để xóa bỏ hoàn toàn độ trễ tích lũy
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        document.querySelectorAll(".backend-stream").forEach(img => {
+          if (img && img.src && img.src.includes("stream.mjpg")) {
+            const base = img.src.split("&ts=")[0].split("?ts=")[0];
+            img.src = base + (base.includes("?") ? "&" : "?") + "ts=" + Date.now();
+          }
+        });
+      }
+    });
+
+    window.resyncCameraStream = function(el) {
+      const img = el.querySelector ? el.querySelector(".backend-stream") : el;
+      if (img && img.src) {
+        const base = img.src.split("&ts=")[0].split("?ts=")[0];
+        img.src = base + (base.includes("?") ? "&" : "?") + "ts=" + Date.now();
+        toast("⚡ Đã đồng bộ luồng video về thời gian thực (0ms delay)!");
+      }
+    };
+
+    function playAlarmSound() {
+      const ctx = getAudioContext();
+      stopAlarmSound();
+      if (!ctx) return;
       
       let beepCount = 0;
       alarmInterval = setInterval(() => {
-        if (beepCount >= 10) { // beep 10 times (about 10 seconds) then stop
+        if (beepCount >= 10) { // beep 10 lần (khoảng 6 giây)
           stopAlarmSound();
           return;
         }
         
         try {
-          const osc = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
+          const osc = ctx.createOscillator();
+          const gainNode = ctx.createGain();
           
           osc.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
+          gainNode.connect(ctx.destination);
           
-          osc.type = "sine";
-          // Siren sound sweep from 600Hz to 1200Hz
-          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-          osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+          osc.type = "sawtooth";
+          // Còi hú quét tần số dồn dập từ 500Hz đến 1350Hz
+          osc.frequency.setValueAtTime(500, ctx.currentTime);
+          osc.frequency.linearRampToValueAtTime(1350, ctx.currentTime + 0.28);
           
-          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+          gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.38);
           
           osc.start();
-          osc.stop(audioCtx.currentTime + 0.5);
+          osc.stop(ctx.currentTime + 0.40);
         } catch (e) {
-          console.error("Lỗi phát âm thanh alarm:", e);
+          console.error("Lỗi phát còi báo té ngã:", e);
         }
         
         beepCount++;
-      }, 600);
+      }, 500);
+
+      // Phát giọng nói cảnh báo té ngã qua loa trình duyệt
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Khẩn cấp! Cảnh báo phát hiện người bị té ngã!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (_) {}
+      }
+    }
+
+    function playStrangerAlertSound() {
+      const ctx = getAudioContext();
+      stopAlarmSound();
+      if (!ctx) return;
+
+      let beepCount = 0;
+      alarmInterval = setInterval(() => {
+        if (beepCount >= 6) { // 6 chu kỳ (khoảng 4 giây)
+          stopAlarmSound();
+          return;
+        }
+
+        try {
+          const now = ctx.currentTime;
+          // Âm báo 2 nốt an ninh đanh và rõ (880Hz -> 1320Hz)
+          const osc1 = ctx.createOscillator();
+          const g1 = ctx.createGain();
+          osc1.connect(g1);
+          g1.connect(ctx.destination);
+          osc1.type = "sine";
+          osc1.frequency.setValueAtTime(880, now);
+          g1.gain.setValueAtTime(0.30, now);
+          g1.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+          osc1.start(now);
+          osc1.stop(now + 0.13);
+
+          const osc2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          osc2.connect(g2);
+          g2.connect(ctx.destination);
+          osc2.type = "sine";
+          osc2.frequency.setValueAtTime(1320, now + 0.15);
+          g2.gain.setValueAtTime(0.35, now + 0.15);
+          g2.gain.exponentialRampToValueAtTime(0.01, now + 0.30);
+          osc2.start(now + 0.15);
+          osc2.stop(now + 0.31);
+        } catch (e) {
+          console.error("Lỗi phát chuông báo người lạ:", e);
+        }
+
+        beepCount++;
+      }, 650);
+
+      // Phát giọng nói cảnh báo người lạ qua loa trình duyệt
+      if (window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance("Cảnh báo! Phát hiện người lạ xuất hiện trong khu vực giám sát!");
+          utterance.lang = "vi-VN";
+          window.speechSynthesis.speak(utterance);
+        } catch (_) {}
+      }
     }
 
     function stopAlarmSound() {
       if (alarmInterval) {
         clearInterval(alarmInterval);
         alarmInterval = null;
+      }
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (_) {}
       }
     }
 
@@ -1544,9 +1644,8 @@ function loadStore(key, fallback) {
 
 
     function triggerRealtimeFallAlert(alertItem) {
-      if (currentUser.role === "Admin") return;
-      
       playAlarmSound();
+      toast(`🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Tại camera ${esc(alertItem.camera || "CAM-011")}!`);
       
       let imgSrc = "";
       if (alertItem.media && alertItem.media.startsWith("data:image")) {
@@ -1602,6 +1701,11 @@ function loadStore(key, fallback) {
         `;
         document.head.appendChild(style);
       }
+    }
+
+    function triggerStrangerAlert(alertItem) {
+      playStrangerAlertSound();
+      toast(`🔔 PHÁT HIỆN NGƯỜI LẠ: Cảnh báo người lạ xuất hiện tại camera ${esc(alertItem.camera || "CAM-011")}!`);
     }
 
     window.toggleSelectAllAdminAlerts = function(master) {
@@ -4381,8 +4485,12 @@ function loadStore(key, fallback) {
           if (data && Array.isArray(data.alerts)) {
             const currentIds = new Set(alerts.map(a => a.id));
             data.alerts.forEach(backendAlert => {
-              if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
-                triggerRealtimeFallAlert(backendAlert);
+              if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý") {
+                if (backendAlert.id.startsWith("STRANGER-")) {
+                  triggerStrangerAlert(backendAlert);
+                } else {
+                  triggerRealtimeFallAlert(backendAlert);
+                }
               }
             });
 
