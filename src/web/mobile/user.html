@@ -270,6 +270,62 @@
       }
     }
 
+    function playStrangerAlertSound() {
+      if (!window.AudioContext && !window.webkitAudioContext) return;
+      stopAlarmSound();
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+
+      let beepCount = 0;
+      alarmInterval = setInterval(() => {
+        if (beepCount >= 6) { // kêu 6 tiếng tút tút tút rồi dừng
+          stopAlarmSound();
+          return;
+        }
+
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(950, audioCtx.currentTime); // 950Hz âm tút chuẩn
+          gain.gain.setValueAtTime(0.30, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.18);
+        } catch (e) {
+          console.error("Lỗi âm thanh tút tút:", e);
+        }
+
+        beepCount++;
+      }, 260);
+    }
+
+    let userAlertTab = "all"; // "all" | "fall" | "stranger"
+    window.switchUserAlertTab = function(tab) {
+      userAlertTab = tab;
+      render("alerts", false);
+    };
+
+    function isStrangerAlert(a) {
+      if (!a) return false;
+      if (a.state === "STRANGER_DETECTED" || a.state === "STRANGER") return true;
+      if (typeof a.id === "string" && a.id.startsWith("STRANGER-")) return true;
+      if (typeof a.person === "string" && (a.person.includes("Người lạ") || a.person.toLowerCase().includes("stranger"))) return true;
+      if (a.type === "stranger") return true;
+      return false;
+    }
+
+    function isFallAlert(a) {
+      return !isStrangerAlert(a);
+    }
+
     // JS Implementation of FallDetector rules
     function updateDetector(landmarks) {
       const nose = landmarks[0];
@@ -529,21 +585,10 @@
     }
 
     function selectCameraMobile(cameraId) {
-      const cam = cameras.find(c => c.id === cameraId);
-      if (cam) {
-        if (cam.status === "offline") {
-          alert(`Camera "${cam.name}" đang không hoạt động.`);
-          return;
-        }
-        if (cam.status === "maintenance" || cam.status === "Bảo trì") {
-          alert(`Camera "${cam.name}" đang trong thời gian bảo trì.`);
-          return;
-        }
-      }
       selectedCameraId = cameraId;
       liveViewLevel = "stream";
       switchTab("live");
-      // Auto-start camera khi click vào camera card
+      // Tự động kết nối và mở luồng camera ngay lập tức
       setTimeout(() => startTestCamera(), 150);
     }
 
@@ -833,9 +878,32 @@
       alerts: () => {
         const visCams = getVisibleCameras();
         const visCamIds = visCams.map(c => c.id);
-        const clientAlerts = alerts.filter(a => visCamIds.includes(a.camera));
+        const myAlerts = alerts.filter(a => visCamIds.length === 0 || visCamIds.includes(a.camera));
+        const totalCount = myAlerts.length;
+        const fallCount = myAlerts.filter(a => isFallAlert(a)).length;
+        const strangerCount = myAlerts.filter(a => isStrangerAlert(a)).length;
+
+        let filteredAlerts = myAlerts;
+        if (userAlertTab === "fall") {
+          filteredAlerts = myAlerts.filter(a => isFallAlert(a));
+        } else if (userAlertTab === "stranger") {
+          filteredAlerts = myAlerts.filter(a => isStrangerAlert(a));
+        }
 
         return `
+          <!-- Alert Type Filter Tabs -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;">
+            <button class="btn small ${userAlertTab === 'all' ? 'primary' : 'line'}" onclick="switchUserAlertTab('all')" style="border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap;">
+              Tất cả (${totalCount})
+            </button>
+            <button class="btn small ${userAlertTab === 'fall' ? 'primary' : 'line'}" onclick="switchUserAlertTab('fall')" style="border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; ${userAlertTab === 'fall' ? 'background: var(--red); border-color: var(--red);' : ''}">
+              🚨 Té ngã (${fallCount})
+            </button>
+            <button class="btn small ${userAlertTab === 'stranger' ? 'primary' : 'line'}" onclick="switchUserAlertTab('stranger')" style="border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; ${userAlertTab === 'stranger' ? 'background: #4f46e5; border-color: #4f46e5;' : ''}">
+              👤 Người lạ (${strangerCount})
+            </button>
+          </div>
+
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); background: white; margin-bottom: 10px; border-radius: 8px;">
             <div style="display: flex; gap: 6px; align-items: center;">
               <input type="checkbox" id="selectAllUserAlerts" onclick="toggleSelectAllUserAlerts(this)" style="cursor: pointer; width: 18px; height: 18px;">
@@ -847,23 +915,29 @@
             </div>
           </div>
           <div class="mobile-list">
-            ${clientAlerts.map(a => `
-              <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')">
-                <div class="mobile-list-card-row">
-                  <div style="display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
-                    <input type="checkbox" class="user-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 18px; height: 18px;">
-                    <span class="mobile-list-card-title" style="color:var(--red); font-size:14px; font-weight:700; margin:0;">⚠️ Cảnh báo ngã</span>
+            ${filteredAlerts.map(a => {
+              const stranger = isStrangerAlert(a);
+              const cardTitle = stranger ? "👤 Người lạ xuất hiện" : "⚠️ Cảnh báo té ngã";
+              const titleColor = stranger ? "#4f46e5" : "var(--red)";
+              return `
+                <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')" style="${stranger ? 'border-left: 4px solid #4f46e5;' : 'border-left: 4px solid var(--red);'}">
+                  <div class="mobile-list-card-row">
+                    <div style="display: flex; gap: 8px; align-items: center;" onclick="event.stopPropagation();">
+                      <input type="checkbox" class="user-alert-checkbox" data-id="${esc(a.id)}" style="cursor: pointer; width: 18px; height: 18px;">
+                      <span class="mobile-list-card-title" style="color:${titleColor}; font-size:14px; font-weight:700; margin:0;">${cardTitle}</span>
+                    </div>
+                    <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
                   </div>
-                  <span style="font-size:11px; color:var(--muted);">${esc(a.time)}</span>
+                  <div class="mobile-list-card-detail">
+                    <div>Vị trí: <strong>${esc(a.camera)}</strong></div>
+                    <div>Đối tượng: <strong>${esc(a.person || (stranger ? 'Người lạ' : 'Người thân'))}</strong></div>
+                    <div>Độ tin cậy: <strong style="color:${stranger ? '#4f46e5' : 'var(--blue)'};">${esc(a.confidence)}%</strong></div>
+                    <div style="margin-top: 4px;">Trạng thái: <strong>${statusPill(a.status)}</strong></div>
+                  </div>
                 </div>
-                <div class="mobile-list-card-detail">
-                  <div>Vị trí phòng: <strong>${esc(a.camera)}</strong></div>
-                  <div>Người thân: <strong>${esc(a.person)}</strong></div>
-                  <div>Trạng thái xử lý: <strong>${statusPill(a.status)}</strong></div>
-                </div>
-              </div>
-            `).join("")}
-            ${clientAlerts.length === 0 ? `<div style="text-align:center; padding:40px; color:var(--muted);">Chưa có cảnh báo nào được ghi nhận.</div>` : ""}
+              `;
+            }).join("")}
+            ${filteredAlerts.length === 0 ? `<div style="text-align:center; padding:40px; color:var(--muted);">Chưa có cảnh báo nào trong mục này.</div>` : ""}
           </div>
         `;
       },
@@ -1449,17 +1523,67 @@
         <button class="btn danger" onclick="stopAlarmSound(); closeModal();" style="width: 100%;">Tắt báo động & Đóng</button>
       `);
       
-      // Web speech synthesis alert
-      if (window.speechSynthesis) {
-        try {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
-          utterance.lang = "vi-VN";
-          window.speechSynthesis.speak(utterance);
-        } catch (e) {
-          console.error("Speech Synthesis error:", e);
-        }
+    }
+
+    function triggerRealtimeFallAlert(alertItem) {
+      playAlarmSound();
+      const cam = cameras.find(c => c.id === alertItem.camera);
+      const camName = cam ? cam.name : (alertItem.camera || "CAM-011");
+      const timeStr = alertItem.time || new Date().toLocaleString("vi-VN");
+      let imgSrc = "";
+      if (alertItem.media && alertItem.media.startsWith("data:image")) {
+        imgSrc = alertItem.media;
+      } else if (alertItem.cloud_img_url) {
+        imgSrc = alertItem.cloud_img_url;
+      } else {
+        imgSrc = `${apiBaseUrl()}/media/${alertItem.id}.jpg`;
       }
+
+      openModal("🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP", `
+        <div style="text-align: center; font-family: inherit; padding: 10px 0;">
+          <div style="font-size: 48px; margin-bottom: 12px; animation: pulse 1s infinite;">🚨</div>
+          <h3 style="color: var(--red); font-size: 18px; font-weight: 800; margin: 0 0 12px;">PHÁT HIỆN TÉ NGÃ</h3>
+          <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện té ngã tại <strong>${esc(camName)}</strong> lúc <strong>${esc(timeStr)}</strong>.</p>
+          ${imgSrc ? `<img src="${imgSrc}" style="width: 100%; border-radius: 8px; border: 1px solid var(--line); aspect-ratio: 16/9; object-fit: cover; margin-bottom: 12px;" onerror="this.style.display='none';">` : ""}
+          <div style="background: #fff5f5; border: 1px solid #fee2e2; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
+            <strong>Thông tin chi tiết:</strong>
+            <ul style="margin: 6px 0 0; padding-left: 18px;">
+              <li>Độ tin cậy AI: <strong>${esc(alertItem.confidence || 90)}%</strong></li>
+              <li>Camera: <strong>${esc(camName)}</strong></li>
+              <li>Trạng thái: <strong style="color:var(--red);">Chưa xử lý</strong></li>
+            </ul>
+          </div>
+        </div>
+      `, `
+        <button class="btn danger" onclick="stopAlarmSound(); closeModal();" style="width: 100%;">Tắt báo động & Đóng</button>
+      `);
+    }
+
+    function triggerStrangerAlert(alertItem) {
+      playStrangerAlertSound();
+      const cam = cameras.find(c => c.id === alertItem.camera);
+      const camName = cam ? cam.name : (alertItem.camera || "CAM-011");
+      const timeStr = alertItem.time || new Date().toLocaleString("vi-VN");
+      let imgSrc = alertItem.cloud_img_url || (alertItem.media && alertItem.media.startsWith("data:image") ? alertItem.media : `${apiBaseUrl()}/media/${alertItem.id}.jpg`);
+
+      openModal("👤 PHÁT HIỆN NGƯỜI LẠ", `
+        <div style="text-align: center; font-family: inherit; padding: 10px 0;">
+          <div style="font-size: 48px; margin-bottom: 12px;">👤</div>
+          <h3 style="color: #4f46e5; font-size: 18px; font-weight: 800; margin: 0 0 12px;">CẢNH BÁO NGƯỜI LẠ</h3>
+          <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện người lạ tại <strong>${esc(camName)}</strong> lúc <strong>${esc(timeStr)}</strong>.</p>
+          ${imgSrc ? `<img src="${imgSrc}" style="width: 100%; border-radius: 8px; border: 1px solid var(--line); aspect-ratio: 16/9; object-fit: cover; margin-bottom: 12px;" onerror="this.style.display='none';">` : ""}
+          <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
+            <strong>Thông tin đối tượng:</strong>
+            <ul style="margin: 6px 0 0; padding-left: 18px;">
+              <li>Khuôn mặt: <strong>Chưa xác thực trong CSDL</strong></li>
+              <li>Độ tin cậy: <strong>${esc(alertItem.confidence || 90)}%</strong></li>
+              <li>Camera: <strong>${esc(camName)}</strong></li>
+            </ul>
+          </div>
+        </div>
+      `, `
+        <button class="btn primary" onclick="stopAlarmSound(); closeModal();" style="width: 100%; background: #4f46e5;">Xác nhận & Đóng</button>
+      `);
     }
 
     // Camera Livestream Control
@@ -1671,6 +1795,17 @@
         if (aRes.ok) {
           const a = await aRes.json();
           if (a && a.alerts && Array.isArray(a.alerts)) {
+            const currentIds = new Set(alerts.map(x => x.id));
+            a.alerts.forEach(backendAlert => {
+              if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý") {
+                if (isStrangerAlert(backendAlert)) {
+                  triggerStrangerAlert(backendAlert);
+                } else {
+                  triggerRealtimeFallAlert(backendAlert);
+                }
+              }
+            });
+
             if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
               alerts = a.alerts;
               saveStore("fg_alerts", alerts);
@@ -1728,7 +1863,21 @@
       
       updateDrawerFooter();
       render("dashboard", false);
+
+      // Periodically sync camera and alerts every 3 seconds
+      setInterval(syncFromBackend, 3000);
     }
+
+    // Auto-resync when returning to tab
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        syncFromBackend();
+        const img = $("testCameraImg");
+        if (img && img.style.display !== "none") {
+          img.src = `${apiBaseUrl()}/api/camera/stream.mjpg?token=${encodeURIComponent(authToken)}&ts=${Date.now()}`;
+        }
+      }
+    });
 
     window.onload = initClientApp;
   </script>

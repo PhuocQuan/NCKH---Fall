@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'api_client.dart';
@@ -156,7 +157,30 @@ class AppStateService {
 
       final remoteAlerts = await ApiClient().getAlerts();
       if (remoteAlerts.isNotEmpty) {
-        alerts = remoteAlerts.map((e) => AlertModel.fromJson(e)).toList();
+        final currentIds = alerts.map((a) => a.id).toSet();
+        final newAlertList = remoteAlerts.map((e) => AlertModel.fromJson(e)).toList();
+
+        // Kiểm tra cảnh báo mới chưa xử lý để phát chuông & rung
+        for (final newAlert in newAlertList) {
+          if (!currentIds.contains(newAlert.id) && newAlert.status == 'Chưa xử lý') {
+            try {
+              HapticFeedback.heavyImpact();
+              SystemSound.play(SystemSoundType.alert);
+            } catch (_) {}
+
+            final isStranger = newAlert.isStranger;
+            notifications.insert(0, AppNotification(
+              id: 'NOTIF-${newAlert.id}',
+              type: isStranger ? 'stranger' : 'fall',
+              title: isStranger ? '👤 Phát hiện người lạ' : '🚨 Cảnh báo té ngã',
+              content: '${isStranger ? "Người lạ" : "Sự cố té ngã"} tại camera ${newAlert.camera} lúc ${newAlert.time}.',
+              time: newAlert.time,
+              read: false,
+            ));
+          }
+        }
+
+        alerts = newAlertList;
         changed = true;
       }
 
@@ -214,7 +238,7 @@ class AppStateService {
 
   void startAutoSync() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _syncTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
       await _checkVersionAndNotify();
     });
     // Run once immediately

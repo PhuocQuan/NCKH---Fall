@@ -4,6 +4,8 @@ __pycache__/
 repo-push-temp/
 data/events.csv
 configs/notifications.json
+configs/notification.json
+configs/notification.default.json
 scratch/
 data/media/
 data/events.db

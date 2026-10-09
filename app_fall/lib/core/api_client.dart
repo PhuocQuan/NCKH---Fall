@@ -207,9 +207,12 @@ class ApiClient {
   }
 
   // MJPEG stream URL
-  String mjpegUrl() {
+  String mjpegUrl([String? camId]) {
     final token = _token ?? '';
     final ts = DateTime.now().millisecondsSinceEpoch;
+    if (camId != null && camId.isNotEmpty) {
+      return '$baseUrl/api/cameras/${Uri.encodeComponent(camId)}/stream.mjpg?token=${Uri.encodeComponent(token)}&ts=$ts';
+    }
     return '$baseUrl/api/camera/stream.mjpg?token=${Uri.encodeComponent(token)}&ts=$ts';
   }
 

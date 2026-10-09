@@ -700,10 +700,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _showSnackbar('Camera "${cam.name}" đang trong thời gian bảo trì.', isError: false);
       return;
     }
-    if (!cam.isOnline) {
-      _showSnackbar('Camera "${cam.name}" đang không hoạt động.', isError: true);
-      return;
-    }
     setState(() {
       _currentTab = 0; // keep on dashboard but show stream modal
       _isViewingCamera = true;
@@ -720,7 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(
         builder: (_) => _LiveStreamScreen(
           camera: cam,
-          streamUrl: ApiClient().mjpegUrl(),
+          streamUrl: ApiClient().mjpegUrl(cam.id),
           isBackendOnline: _isBackendOnline,
         ),
       ),
