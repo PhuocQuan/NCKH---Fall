@@ -180,10 +180,10 @@ def test_camera_connection_arbitrary(rtsp_or_source: str) -> dict[str, Any]:
 
 
 def set_primary_camera(camera_id: str, user: str) -> dict[str, Any]:
-    """Chuyển đổi Camera AI Giám sát Chính."""
+    """Chuyển đổi camera giám sát."""
     from src.camera.multi_camera_manager import multi_camera_manager
     result = multi_camera_manager.set_primary_camera(camera_id)
-    log_action("Quản lý camera", user, f"Chuyển Camera AI chính sang: {camera_id} ({result.get('name')})")
+    log_action("Quản lý camera", user, f"Chuyển camera giám sát sang: {camera_id} ({result.get('name')})")
     return result
 
 

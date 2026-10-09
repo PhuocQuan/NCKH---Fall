@@ -116,7 +116,7 @@ class MultiCameraManager:
             "name": cam_name,
             "source": str(target_source),
             "is_primary": True,
-            "message": f"Đã chuyển camera giám sát AI chính sang: {cam_name} ({camera_id})"
+            "message": f"Đã chuyển camera giám sát sang: {cam_name} ({camera_id})"
         }
 
     def _get_secondary_source(self, camera_id: str) -> VideoSource | None:
@@ -178,7 +178,7 @@ class MultiCameraManager:
         """Lấy 1 khung hình JPEG mới nhất của camera chỉ định."""
         from src.web.shared.pipeline import pipeline
 
-        # Nếu là camera AI chính, lấy từ pipeline toàn cục nếu đang chạy
+        # Nếu là camera đang được chọn, lấy từ pipeline toàn cục nếu đang chạy
         if camera_id == self.primary_camera_id or (pipeline.is_running() and str(getattr(pipeline, "camera_id", "")) == camera_id):
             if pipeline.is_running():
                 jpeg = pipeline.get_jpeg_frame()
@@ -402,7 +402,7 @@ class MultiCameraManager:
             raw_status = c.get("status", "offline")
 
             if is_primary:
-                # Nếu là camera AI chính, kiểm tra trạng thái sống của pipeline
+                # Nếu là camera đang chọn, kiểm tra trạng thái sống của pipeline
                 online = pipeline.is_running()
                 cur_status = "online" if online else raw_status
                 fps = c.get("fps", 25)
