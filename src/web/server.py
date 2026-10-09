@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
     pipeline.stop()
 
 
-app = FastAPI(title="FallGuard AI API", version="1.0.6", lifespan=lifespan)
+app = FastAPI(title="FallGuard AI API", version="1.0.7", lifespan=lifespan)
 
 # Database constraint exception handling
 @app.exception_handler(LibsqlError)
