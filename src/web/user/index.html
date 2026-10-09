@@ -849,105 +849,112 @@ function loadStore(key, fallback) {
       if (ctx && ctx.state === "suspended") ctx.resume();
     }, { once: false });
 
+    // Khi người dùng chuyển tab và quay lại, tự động đồng bộ luồng video để xóa bỏ hoàn toàn độ trễ tích lũy
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        document.querySelectorAll(".backend-stream").forEach(img => {
+          if (img && img.src && img.src.includes("stream.mjpg")) {
+            const base = img.src.split("&ts=")[0].split("?ts=")[0];
+            img.src = base + (base.includes("?") ? "&" : "?") + "ts=" + Date.now();
+          }
+        });
+      }
+    });
+
+    window.resyncCameraStream = function(el) {
+      const img = el.querySelector ? el.querySelector(".backend-stream") : el;
+      if (img && img.src) {
+        const base = img.src.split("&ts=")[0].split("?ts=")[0];
+        img.src = base + (base.includes("?") ? "&" : "?") + "ts=" + Date.now();
+        toast("⚡ Đã đồng bộ luồng video về thời gian thực (0ms delay)!");
+      }
+    };
+
     function playAlarmSound() {
-      const ctx = getAudioContext();
+      if (!window.AudioContext && !window.webkitAudioContext) return;
       stopAlarmSound();
-      if (!ctx) return;
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
       
       let beepCount = 0;
       alarmInterval = setInterval(() => {
-        if (beepCount >= 10) {
+        if (beepCount >= 10) { // beep 10 times (about 10 seconds) then stop
           stopAlarmSound();
           return;
         }
         
         try {
-          const osc = ctx.createOscillator();
-          const gainNode = ctx.createGain();
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          
           osc.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          osc.type = "sawtooth";
-          osc.frequency.setValueAtTime(500, ctx.currentTime);
-          osc.frequency.linearRampToValueAtTime(1350, ctx.currentTime + 0.28);
-          gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.38);
+          gainNode.connect(audioCtx.destination);
+          
+          osc.type = "sine";
+          // Siren sound sweep from 600Hz to 1200Hz
+          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+          osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+          
+          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+          
           osc.start();
-          osc.stop(ctx.currentTime + 0.40);
+          osc.stop(audioCtx.currentTime + 0.5);
         } catch (e) {
           console.error("Lỗi phát âm thanh alarm:", e);
         }
+        
         beepCount++;
-      }, 500);
-
-      if (window.speechSynthesis) {
-        try {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("Khẩn cấp! Cảnh báo phát hiện người bị té ngã!");
-          utterance.lang = "vi-VN";
-          window.speechSynthesis.speak(utterance);
-        } catch (_) {}
-      }
+      }, 600);
     }
 
     function playStrangerAlertSound() {
-      const ctx = getAudioContext();
+      if (!window.AudioContext && !window.webkitAudioContext) return;
       stopAlarmSound();
-      if (!ctx) return;
+      
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
 
       let beepCount = 0;
       alarmInterval = setInterval(() => {
-        if (beepCount >= 6) {
+        if (beepCount >= 6) { // kêu 6 tiếng tút tút tút rồi dừng
           stopAlarmSound();
           return;
         }
 
         try {
-          const now = ctx.currentTime;
-          const osc1 = ctx.createOscillator();
-          const g1 = ctx.createGain();
-          osc1.connect(g1);
-          g1.connect(ctx.destination);
-          osc1.type = "sine";
-          osc1.frequency.setValueAtTime(880, now);
-          g1.gain.setValueAtTime(0.30, now);
-          g1.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-          osc1.start(now);
-          osc1.stop(now + 0.13);
-
-          const osc2 = ctx.createOscillator();
-          const g2 = ctx.createGain();
-          osc2.connect(g2);
-          g2.connect(ctx.destination);
-          osc2.type = "sine";
-          osc2.frequency.setValueAtTime(1320, now + 0.15);
-          g2.gain.setValueAtTime(0.35, now + 0.15);
-          g2.gain.exponentialRampToValueAtTime(0.01, now + 0.30);
-          osc2.start(now + 0.15);
-          osc2.stop(now + 0.31);
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(950, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.30, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.18);
         } catch (e) {
-          console.error("Lỗi âm thanh người lạ:", e);
+          console.error("Lỗi âm thanh tút tút:", e);
         }
 
         beepCount++;
-      }, 650);
-
-      if (window.speechSynthesis) {
-        try {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("Cảnh báo! Phát hiện người lạ xuất hiện trong khu vực giám sát!");
-          utterance.lang = "vi-VN";
-          window.speechSynthesis.speak(utterance);
-        } catch (_) {}
-      }
+      }, 260);
     }
 
     function stopAlarmSound() {
       if (alarmInterval) {
         clearInterval(alarmInterval);
         alarmInterval = null;
-      }
-      if (window.speechSynthesis) {
-        try { window.speechSynthesis.cancel(); } catch (_) {}
       }
     }
 
@@ -3291,23 +3298,6 @@ function loadStore(key, fallback) {
         // Show screen alert toast
         toast(`🚨 CẢNH BÁO TÉ NGÃ: Phát hiện tại camera máy khách ${camName}!`);
       }
-      
-      // Web speech synthesis alert
-      if (window.speechSynthesis) {
-        try {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
-          utterance.lang = "vi-VN";
-          const voices = window.speechSynthesis.getVoices();
-          const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
-          if (viVoice) {
-            utterance.voice = viVoice;
-          }
-          window.speechSynthesis.speak(utterance);
-        } catch (e) {
-          console.error("Speech Synthesis error:", e);
-        }
-      }
     }
 
     async function startLocalWebcam() {
@@ -3759,21 +3749,6 @@ function loadStore(key, fallback) {
                 alertActive = true;
                 playAlarmSound();
                 toast(`🚨 CẢNH BÁO TÉ NGÃ: Phát hiện tại camera máy chủ!`);
-                if (window.speechSynthesis) {
-                  try {
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance("Cảnh báo có té ngã!");
-                    utterance.lang = "vi-VN";
-                    const voices = window.speechSynthesis.getVoices();
-                    const viVoice = voices.find(v => v.lang.toLowerCase().includes("vi") || v.lang.toLowerCase() === "vi-vn");
-                    if (viVoice) {
-                      utterance.voice = viVoice;
-                    }
-                    window.speechSynthesis.speak(utterance);
-                  } catch (e) {
-                    console.error("Speech Synthesis error:", e);
-                  }
-                }
               }
             } else {
               if (alertActive) {

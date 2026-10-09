@@ -380,18 +380,18 @@ class FallDetectionPipeline:
         current_fps = 0.0
 
         encode_params = [
-            int(cv2.IMWRITE_JPEG_QUALITY), 65,
+            int(cv2.IMWRITE_JPEG_QUALITY), 55,
             int(cv2.IMWRITE_JPEG_OPTIMIZE), 0,
         ]
 
         while self._running and self._video:
             try:
                 frame_start = time.perf_counter()
-                ok, frame = self._video.read(timeout=0.08)
+                ok, frame = self._video.read(timeout=0.25)
                 if not ok or frame is None:
                     with self._lock:
                         self._status.last_error = "Dang ket noi camera..."
-                    time.sleep(0.01)
+                    time.sleep(0.005)
                     continue
 
                 # Chuẩn hóa kích thước khung hình stream: Giảm tải CPU khi camera Full HD/2K
