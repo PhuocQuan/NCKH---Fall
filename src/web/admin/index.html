@@ -4729,6 +4729,39 @@ function loadStore(key, fallback) {
         saveAll();
         toast(`Đã cập nhật kênh ${key.toUpperCase()}: ${event.target.checked ? "Bật" : "Tắt"}`);
       }
+
+      if (event.target.id === "tgEnabled") {
+        const enabled = event.target.checked;
+        settings.telegram = enabled;
+        saveAll();
+        const token = ($("tgBotToken")?.value || "").trim();
+        const chatId = ($("tgChatId")?.value || "").trim();
+        const statusBadge = $("tgStatusBadge");
+        if (statusBadge) {
+          const hasToken = token && token !== "YOUR_TELEGRAM_BOT_TOKEN";
+          const hasChat = chatId && chatId !== "YOUR_TELEGRAM_CHAT_ID";
+          if (enabled && hasToken && hasChat) {
+            statusBadge.className = "pill green";
+            statusBadge.textContent = "● Đang hoạt động";
+          } else if (!enabled) {
+            statusBadge.className = "pill gray";
+            statusBadge.textContent = "● Đã tắt";
+          } else {
+            statusBadge.className = "pill orange";
+            statusBadge.textContent = "● Chưa xong cấu hình";
+          }
+        }
+        // Tự động đồng bộ ngay trạng thái kích hoạt lên backend
+        fetch(`${apiBaseUrl()}/api/telegram/config`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ bot_token: token, chat_id: chatId, enabled })
+        }).catch(e => console.error("Auto sync tgEnabled failed:", e));
+        toast(`Đã ${enabled ? "bật" : "tắt"} kích hoạt Telegram Bot!`);
+      }
     });
 
     document.addEventListener("click", async (event) => {
@@ -4949,19 +4982,23 @@ function loadStore(key, fallback) {
         const btn = event.target.closest("[data-action='connect-telegram']");
         const currentToken = ($("tgBotToken")?.value || "").trim();
 
+        if (!currentToken || currentToken === "YOUR_TELEGRAM_BOT_TOKEN") {
+          alert("⚠️ Vui lòng dán chuỗi Telegram Bot Token (được @BotFather cấp) vào ô trước khi bấm 'Tự động lấy Chat ID'!");
+          return;
+        }
+
         btn.disabled = true;
         const originalText = btn.innerHTML;
         btn.textContent = "Đang dò tìm...";
         
         try {
-          const payload = currentToken ? { bot_token: currentToken } : {};
           const res = await fetch(`${apiBaseUrl()}/api/telegram/connect`, {
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
               "Authorization": `Bearer ${authToken}` 
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ bot_token: currentToken })
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
@@ -4971,8 +5008,9 @@ function loadStore(key, fallback) {
             settings.telegram = true;
             saveAll();
             loadTelegramConfigUI();
+            alert(`🎉 Kết nối thành công với tài khoản Telegram: ${data.username}!\nChat ID: ${data.chat_id}\n\nHệ thống đã tự động lưu cấu hình và kích hoạt thông báo.`);
           } else {
-            alert(data.detail || "Không thể kết nối Telegram Bot. Hãy nhắn tin bất kỳ cho Bot trước!");
+            alert(data.detail || "Chưa tìm thấy tin nhắn nào. Bạn hãy mở Bot trên Telegram và bấm 'Start' hoặc gửi 1 tin nhắn bất kỳ cho Bot, sau đó bấm nút này lại nhé!");
           }
         } catch (e) {
           console.error(e);
@@ -4985,11 +5023,44 @@ function loadStore(key, fallback) {
 
       if (event.target.closest("[data-action='test-telegram-config']")) {
         const btn = event.target.closest("[data-action='test-telegram-config']");
+        const token = ($("tgBotToken")?.value || "").trim();
+        const chatId = ($("tgChatId")?.value || "").trim();
+        const enabledSwitch = $("tgEnabled");
+        let enabled = Boolean(enabledSwitch?.checked);
+
+        if (!token || token === "YOUR_TELEGRAM_BOT_TOKEN") {
+          alert("⚠️ Vui lòng nhập Telegram Bot Token được cấp từ @BotFather trước khi gửi thử!");
+          return;
+        }
+        if (!chatId || chatId === "YOUR_TELEGRAM_CHAT_ID") {
+          alert("⚠️ Chưa có Chat ID nhận thông báo!\n\n👉 Cách lấy nhanh trong 10 giây:\n1. Mở app Telegram, tìm con Bot bạn vừa tạo.\n2. Bấm 'Start' hoặc gửi 1 tin nhắn bất kỳ cho Bot (Ví dụ: 'Xin chào').\n3. Quay lại trang này bấm nút '🔍 Tự động lấy Chat ID' rồi mới bấm Gửi tin nhắn thử!");
+          return;
+        }
+
+        // Tự động bật kích hoạt và công tắc giao diện
+        if (!enabled) {
+          if (enabledSwitch) enabledSwitch.checked = true;
+          enabled = true;
+        }
+
         btn.disabled = true;
         const origText = btn.innerHTML;
         btn.textContent = "Đang gửi...";
 
         try {
+          // Luôn tự động đồng bộ và lưu cấu hình mới nhất lên backend trước khi gửi test
+          await fetch(`${apiBaseUrl()}/api/telegram/config`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ bot_token: token, chat_id: chatId, enabled: true })
+          });
+          settings.telegram = true;
+          saveAll();
+          loadTelegramConfigUI();
+
           const res = await fetch(`${apiBaseUrl()}/api/telegram/test`, {
             method: "POST",
             headers: {
@@ -5000,6 +5071,7 @@ function loadStore(key, fallback) {
           const data = await res.json().catch(() => ({}));
           if (res.ok && data.ok) {
             toast(`🎉 ${data.detail || 'Đã gửi tin nhắn cảnh báo thử nghiệm tới Telegram!'}`);
+            alert("🎉 Đã gửi tin nhắn cảnh báo thử nghiệm tới Telegram thành công!\nVui lòng mở ứng dụng Telegram để kiểm tra tin nhắn.");
           } else {
             alert(data.detail || "Không thể gửi tin nhắn thử nghiệm Telegram.");
           }
