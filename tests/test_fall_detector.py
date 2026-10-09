@@ -1,5 +1,6 @@
-from src.config import DetectorConfig
-from src.fall_detector import FallDetector, FallState, Point
+from src.core.config import DetectorConfig
+from src.detection.fall_detector import FallDetector, FallState, Point
+
 
 
 def standing_pose():
@@ -114,3 +115,19 @@ def test_demo_mode_alerts_on_long_lying_without_fall_transition():
     assert result is not None
     assert result.state == FallState.ALERT
     assert event_started is True
+
+
+def test_warning_state_when_standing_up_before_decay():
+    detector = FallDetector(
+        DetectorConfig(min_fall_frames=4, warning_frames=2, assumed_fps=10)
+    )
+    for pose in falling_sequence():
+        detector.update(pose)
+
+    detector.update(lying_pose())
+    assert detector.update(lying_pose()).state in {FallState.FALLEN, FallState.POSSIBLE_FALL}
+
+    # Đứng thẳng hoàn toàn -> Trạng thái trở về NORMAL
+    res = detector.update(standing_pose())
+    assert res.state == FallState.NORMAL
+
