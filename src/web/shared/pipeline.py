@@ -230,6 +230,8 @@ class FallDetectionPipeline:
         with self._frame_cond:
             if self._frame_id == last_frame_id or self._latest_jpeg is None:
                 self._frame_cond.wait(timeout=timeout)
+            if self._frame_id == last_frame_id:
+                return last_frame_id, None
             return self._frame_id, self._latest_jpeg
 
     def is_running(self) -> bool:
@@ -378,7 +380,7 @@ class FallDetectionPipeline:
         current_fps = 0.0
 
         encode_params = [
-            int(cv2.IMWRITE_JPEG_QUALITY), 68,
+            int(cv2.IMWRITE_JPEG_QUALITY), 65,
             int(cv2.IMWRITE_JPEG_OPTIMIZE), 0,
         ]
 

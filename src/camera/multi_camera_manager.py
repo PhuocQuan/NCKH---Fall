@@ -212,8 +212,7 @@ class MultiCameraManager:
 
         if pipeline.is_running() and str(getattr(pipeline, "camera_id", "")) == camera_id:
             fid, jpeg = pipeline.get_next_jpeg_frame(last_frame_id=last_frame_id, timeout=timeout)
-            if jpeg is not None:
-                return fid, jpeg
+            return fid, jpeg
 
         time.sleep(timeout)
         jpeg = self.get_camera_jpeg(camera_id)

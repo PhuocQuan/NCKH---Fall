@@ -4388,7 +4388,13 @@ function loadStore(key, fallback) {
 
             const backendAlerts = data.alerts;
             const hasChanged = alerts.length !== backendAlerts.length ||
-              backendAlerts.some((b, i) => !alerts[i] || alerts[i].id !== b.id || alerts[i].status !== b.status || alerts[i].cloud_img_url !== b.cloud_img_url || alerts[i].confidence !== b.confidence);
+              backendAlerts.some((b, i) => !alerts[i] ||
+                alerts[i].id !== b.id ||
+                alerts[i].status !== b.status ||
+                alerts[i].cloud_img_url !== b.cloud_img_url ||
+                alerts[i].cloud_video_url !== b.cloud_video_url ||
+                alerts[i].media !== b.media ||
+                alerts[i].confidence !== b.confidence);
 
             if (hasChanged) {
               alerts = backendAlerts;
@@ -4989,8 +4995,22 @@ function loadStore(key, fallback) {
       // Alert details handler
       if (event.target.closest("[data-detail-alert]")) {
         const id = event.target.closest("[data-detail-alert]").dataset.detailAlert;
-        const alertItem = alerts.find(a => a.id === id);
+        let alertItem = alerts.find(a => a.id === id);
         if (alertItem) {
+          if (!alertItem.cloud_video_url && isBackendOnline && authToken) {
+            try {
+              const freshRes = await fetch(`${apiBaseUrl()}/api/alerts`, { headers: { Authorization: `Bearer ${authToken}` } });
+              if (freshRes.ok) {
+                const freshData = await freshRes.json();
+                const freshAlert = (freshData.alerts || []).find(a => a.id === id);
+                if (freshAlert && (freshAlert.cloud_video_url || freshAlert.cloud_img_url)) {
+                  alertItem = { ...alertItem, ...freshAlert };
+                  const idx = alerts.findIndex(a => a.id === id);
+                  if (idx >= 0) alerts[idx] = alertItem;
+                }
+              }
+            } catch (_) {}
+          }
           const cam = cameraById(alertItem.camera);
           const owner = users.find(u => (u.assignedCameras || []).includes(alertItem.camera)) || users.find(u => u.name === alertItem.person);
           const isMock = id.startsWith("AL-20260615-");

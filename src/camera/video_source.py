@@ -64,7 +64,7 @@ class VideoSource:
         if is_rtsp:
             # Low-latency settings for FFmpeg RTSP stream decoding using TCP with 3s socket timeout
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                "rtsp_transport;tcp|stimeout;3000000|max_delay;300000|flags;low_delay|fflags;nobuffer|analyzeduration;500000|probesize;500000"
+                "rtsp_transport;tcp|stimeout;3000000|max_delay;100000|flags;low_delay|fflags;nobuffer|analyzeduration;200000|probesize;200000"
             )
 
         capture = None

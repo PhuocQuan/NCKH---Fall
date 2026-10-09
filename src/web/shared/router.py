@@ -233,11 +233,16 @@ def _mjpeg_generator(camera_id: str | None = None):
     try:
         while True:
             try:
-                frame_id, frame = multi_camera_manager.get_next_camera_frame(target_id, last_frame_id=last_frame_id, timeout=0.04)
-                if frame is not None:
-                    last_frame_id = frame_id
-                else:
-                    frame = placeholder
+                frame_id, frame = multi_camera_manager.get_next_camera_frame(target_id, last_frame_id=last_frame_id, timeout=0.06)
+                if frame is None or frame_id == last_frame_id:
+                    if last_frame_id == -1:
+                        yield (
+                            b"--frame\r\n"
+                            b"Content-Type: image/jpeg\r\n\r\n" + placeholder + b"\r\n"
+                        )
+                        time.sleep(0.1)
+                    continue
+                last_frame_id = frame_id
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
