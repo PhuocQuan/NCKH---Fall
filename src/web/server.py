@@ -218,7 +218,8 @@ def main() -> None:
 
     args = parse_args()
     pipeline.config_path = args.config
-    print(f"FallGuard: http://{args.host}:{args.port}/")
+    display_host = "localhost" if args.host == "0.0.0.0" else args.host
+    print(f"FallGuard: http://{display_host}:{args.port}/ (hoặc http://127.0.0.1:{args.port}/)")
     print("Dang nhap: admin / nckh2025")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 

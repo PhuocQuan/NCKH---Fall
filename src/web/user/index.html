@@ -22,6 +22,13 @@
   <link rel="stylesheet" href="../shared/dashboard.css" />
   <style>
     /* Keyframes and Animations */
+    @keyframes vitalHeartBeat {
+      0% { transform: scale(1); }
+      14% { transform: scale(1.25); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.25); }
+      70% { transform: scale(1); }
+    }
     @keyframes pulse {
       0% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
       70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
@@ -951,7 +958,48 @@ function loadStore(key, fallback) {
       }, 260);
     }
 
-    function stopAlarmSound() {
+    
+    // ===== ÂM THANH CẢNH BÁO TING TING KHI NHỊP TIM BẤT THƯỜNG =====
+    let lastVitalsTingTime = 0;
+
+    function playTingTingSound() {
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === "suspended") ctx.resume();
+
+        const now = ctx.currentTime;
+
+        // Tiếng Ting 1 (C6: 1046.5 Hz) - trong trẻo, sắc nét
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(1046, now);
+        gain1.gain.setValueAtTime(0.35, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.36);
+
+        // Tiếng Ting 2 (E6: 1318.5 Hz) - cao hơn, ngân vang
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(1318, now + 0.20);
+        gain2.gain.setValueAtTime(0.38, now + 0.20);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.20);
+        osc2.stop(now + 0.66);
+      } catch (err) {
+        console.warn("Lỗi phát âm thanh ting ting:", err);
+      }
+    }
+    window.playTingTingSound = playTingTingSound;
+
+function stopAlarmSound() {
       if (alarmInterval) {
         clearInterval(alarmInterval);
         alarmInterval = null;
@@ -1413,29 +1461,43 @@ function loadStore(key, fallback) {
                 <div class="person" style="display:none;"></div>
                 <span class="overlay-note" id="liveOverlayNote" style="display:none; z-index: 10;">Fall Detected</span>
                 <span class="state" id="liveStateBadge" style="z-index: 10;">${statusPill(cam.state.toUpperCase())}</span>
+                <!-- Floating Vitals Overlay tren man hinh Cam -->
+                <div id="liveCamVitalsBadge" style="position:absolute; bottom:16px; left:16px; z-index:15; background:rgba(15, 23, 42, 0.85); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.2); border-radius:30px; padding:6px 14px; display:flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(0,0,0,0.35); pointer-events:none;">
+                  <span style="display:inline-block; animation:vitalHeartBeat 1.2s infinite; font-size:16px;">❤️</span>
+                  <span id="camOverlayBpm" style="font-weight:700; font-size:14px; color:#ffffff; letter-spacing:0.3px;">-- BPM</span>
+                  <span id="camOverlayStatus" style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; background:#10b981; color:#fff;">Ổn định</span>
+                </div>
               </div>
             </article>
             
             <div class="card" style="display:flex; flex-direction:column; gap:16px;">
-              <h3 style="margin:0 0 10px">Thông số AI Realtime</h3>
-              <div class="metric-list" id="liveMetricsPanel">
-                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px;">
-                  <span>Trạng thái tư thế</span><strong id="metricState">${statusPill(metrics.status)}</strong>
-                </div>
-                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
-                  <span>Độ tin cậy AI</span><strong id="metricConfidence">${metrics.confidence}</strong>
-                </div>
-                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
-                  <span>Góc nghiêng thân</span><strong id="metricTorso">${metrics.torso}</strong>
-                </div>
-                <div class="metric-row" style="display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; padding-top:8px;">
-                  <span>Thời gian nằm</span><strong id="metricLying">${metrics.lying}</strong>
-                </div>
-                <div class="metric-row" style="display:flex; justify-content:space-between; padding-top:8px;">
-                  <span>Vận tốc hông</span><strong id="metricHip">${metrics.hip}</strong>
-                </div>
+              <!-- Phần lưu trữ DOM ẩn tránh ảnh hưởng hàm polling cũ -->
+              <div id="liveMetricsPanel" style="display:none;">
+                <strong id="metricState"></strong>
+                <strong id="metricConfidence"></strong>
+                <strong id="metricTorso"></strong>
+                <strong id="metricLying"></strong>
+                <strong id="metricHip"></strong>
               </div>
-              
+
+              <!-- Chỉ số sinh tồn bên cạnh camera (Lên làm phần chính) -->
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <h3 style="margin:0; display:flex; align-items:center; gap:8px; font-size:16px;">
+                    <span style="display:inline-block; animation:vitalHeartBeat 1.2s infinite; font-size:16px;">❤️</span>
+                    Chỉ số sinh tồn (MAX30102)
+                  </h3>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                  <button type="button" class="btn line" onclick="playTingTingSound()" title="Bấm nghe thử chuông cảnh báo ting ting" style="padding:2px 8px; font-size:11px; border-radius:6px; cursor:pointer; background:#fff;">🔔 Thử chuông</button>
+                  <span id="vitalSensorPill" class="state" style="font-size:11px; padding:2px 8px; border-radius:10px; background:rgba(16, 185, 129, 0.15); color:#059669; font-weight:600;">Đang nhận</span>
+                </div>
+                </div>
+                <div class="metric-row"><span>Nhịp tim hiện tại</span><strong id="metricHeartRate" style="color:#ef4444; font-size:16px; font-weight:700;">-- BPM</strong></div>
+                <div class="metric-row"><span>Nhịp tim trung bình</span><strong id="metricAvgHeartRate">-- BPM</strong></div>
+                <div class="metric-row"><span>Tình trạng tim</span><strong id="metricVitalsStatus" style="color:#10b981;">Bình thường</strong></div>
+                <div class="metric-row"><span>Cập nhật gần nhất</span><strong id="metricVitalsTime" style="font-size:11px; color:#64748b;">--</strong></div>
+              </div>
+
               <div style="margin-top:10px; padding-top:15px; border-top: 1px solid var(--line);">
                 <h4 style="margin:0 0 8px">Giải thích nhãn trạng thái</h4>
                 <div style="font-size:12px; display:flex; flex-direction:column; gap:6px; color:var(--muted);">
@@ -4932,6 +4994,116 @@ function loadStore(key, fallback) {
       openModal("Hướng dẫn Sideload ứng dụng iOS", guideHtml, `<button class="btn line block" style="width:100%;" onclick="closeModal()">Đã hiểu</button>`);
     };
 
+    
+    // ===== POLLING CHỈ SỐ SINH TỒN THỜI GIAN THỰC (MAX30102 REALTIME) =====
+    let vitalsPollingInterval = null;
+
+    async function pollVitalsData() {
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/vitals/current`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const bpm = data.heart_rate || 0;
+        const avgBpm = data.avg_heart_rate || 0;
+        const isFinger = data.finger_detected;
+        const healthStatus = data.status || "normal";
+
+        let statusText = "Bình thường";
+        let statusBg = "#10b981";
+        let isAbnormal = false;
+
+        const effectiveBpm = avgBpm > 0 ? avgBpm : (bpm > 0 ? Math.round(bpm) : 0);
+
+        if (!isFinger) {
+          statusText = "Chưa đeo";
+          statusBg = "#64748b";
+        } else if (effectiveBpm > 0 && effectiveBpm < 50) {
+          statusText = `⚠️ Nhịp tim chậm (${effectiveBpm} BPM)`;
+          statusBg = "#ef4444";
+          isAbnormal = true;
+        } else if (effectiveBpm > 110) {
+          statusText = `⚠️ Nhịp tim nhanh (${effectiveBpm} BPM)`;
+          statusBg = "#ef4444";
+          isAbnormal = true;
+        } else if (healthStatus === "bradycardia") {
+          statusText = "⚠️ Nhịp tim chậm";
+          statusBg = "#ef4444";
+          isAbnormal = true;
+        } else if (healthStatus === "tachycardia") {
+          statusText = "⚠️ Nhịp tim nhanh";
+          statusBg = "#ef4444";
+          isAbnormal = true;
+        }
+
+        // Kích hoạt chuông Ting Ting cảnh báo (chu kỳ 4 giây một lần nếu vẫn còn bất thường)
+        if (isAbnormal) {
+          const nowMs = Date.now();
+          if (nowMs - lastVitalsTingTime >= 4000) {
+            playTingTingSound();
+            lastVitalsTingTime = nowMs;
+            if (typeof toast === "function") {
+              toast(`⚠️ CẢNH BÁO SINH TỒN: ${statusText}!`);
+            }
+          }
+        }
+
+        const displayBpm = isFinger && bpm > 0 ? `${bpm.toFixed(1)} BPM` : "-- BPM";
+        const displayAvg = isFinger && avgBpm > 0 ? `${avgBpm} BPM` : "-- BPM";
+
+        // 1. Cập nhật trên màn hình Cam (Floating Badge)
+        const overlayBpm = document.getElementById("camOverlayBpm");
+        const overlayStatus = document.getElementById("camOverlayStatus");
+        if (overlayBpm) overlayBpm.textContent = displayBpm;
+        if (overlayStatus) {
+          overlayStatus.textContent = statusText;
+          overlayStatus.style.background = statusBg;
+        }
+        const overlayBadge = document.getElementById("liveCamVitalsBadge");
+        if (overlayBadge) {
+          if (isAbnormal) {
+            overlayBadge.style.borderColor = "#ef4444";
+            overlayBadge.style.boxShadow = "0 0 18px rgba(239, 68, 68, 0.9)";
+            overlayBadge.style.background = "rgba(185, 28, 28, 0.92)";
+          } else {
+            overlayBadge.style.borderColor = "rgba(255, 255, 255, 0.2)";
+            overlayBadge.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.35)";
+            overlayBadge.style.background = "rgba(15, 23, 42, 0.85)";
+          }
+        }
+
+        // 2. Cập nhật bên cạnh Cam (Card Thông số)
+        const hrEl = document.getElementById("metricHeartRate");
+        const avgHrEl = document.getElementById("metricAvgHeartRate");
+        const statusEl = document.getElementById("metricVitalsStatus");
+        const pillEl = document.getElementById("vitalSensorPill");
+        const timeEl = document.getElementById("metricVitalsTime");
+
+        if (hrEl) hrEl.textContent = displayBpm;
+        if (avgHrEl) avgHrEl.textContent = displayAvg;
+        if (statusEl) {
+          statusEl.textContent = statusText;
+          statusEl.style.color = statusBg;
+        }
+        if (pillEl) {
+          pillEl.textContent = isFinger ? "Đang đo" : "Chưa đeo";
+          pillEl.style.background = isFinger ? "rgba(16, 185, 129, 0.15)" : "rgba(100, 116, 139, 0.15)";
+          pillEl.style.color = isFinger ? "#059669" : "#475569";
+        }
+        if (timeEl && data.last_updated) {
+          timeEl.textContent = data.last_updated.split(" ")[1] || data.last_updated;
+        }
+      } catch (e) {}
+    }
+
+    function startVitalsPolling() {
+      if (!vitalsPollingInterval) {
+        pollVitalsData();
+        vitalsPollingInterval = setInterval(pollVitalsData, 1000);
+      }
+    }
+
+    startVitalsPolling();
     initSession();
   </script>
 </body>

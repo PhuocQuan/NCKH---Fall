@@ -503,3 +503,88 @@ def detection_status(user: str = Depends(require_user)) -> dict[str, Any]:
              "Tăng mức cảnh báo" if status["lying_seconds"] >= 10 else "Binh thuong"],
         ],
     }
+
+
+
+# ==============================================================================
+# API QUẢN LÝ CHỈ SỐ SINH TỒN & NHỊP TIM (MAX30102 / ESP32 VITALS)
+# ==============================================================================
+
+class VitalsPayload(BaseModel):
+    """Schema dữ liệu chỉ số sinh tồn do ESP32 gửi lên qua Wi-Fi."""
+    heart_rate: float = 0.0
+    avg_heart_rate: int = 0
+    ir_value: int = 0
+    finger_detected: bool = False
+
+
+# Bộ đệm lưu trữ trạng thái nhịp tim tức thời trong RAM máy chủ
+CURRENT_VITALS_STATE: dict[str, Any] = {
+    "heart_rate": 0.0,
+    "avg_heart_rate": 0,
+    "ir_value": 0,
+    "finger_detected": False,
+    "last_updated": None,
+    "status": "normal",
+    "message": "Chưa có dữ liệu từ cảm biến nhịp tim"
+}
+
+
+@router.post("/api/vitals/update")
+def update_vitals(payload: VitalsPayload) -> dict[str, Any]:
+    """
+    Tiếp nhận gói tin nhịp tim từ vi điều khiển ESP32 gửi qua Wi-Fi HTTP POST.
+    Phân loại trạng thái sinh lý (Bình thường / Nhịp tim chậm / Nhịp tim nhanh).
+    """
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+# Đánh giá trạng thái sinh học (kiểm tra cả nhịp tim tức thời và trung bình)
+    health_status = "normal"
+    msg = "Nhịp tim bình thường"
+    if payload.finger_detected and (payload.avg_heart_rate > 0 or payload.heart_rate > 0):
+        effective_bpm = payload.avg_heart_rate if payload.avg_heart_rate > 0 else int(payload.heart_rate)
+        if effective_bpm < 50:
+            health_status = "bradycardia"
+            msg = f"Cảnh báo: Nhịp tim chậm bất thường ({effective_bpm} BPM)"
+        elif effective_bpm > 110:
+            health_status = "tachycardia"
+            msg = f"Cảnh báo: Nhịp tim nhanh bất thường ({effective_bpm} BPM)"
+    elif not payload.finger_detected:
+        msg = "Chưa phát hiện ngón tay trên cảm biến"
+
+    CURRENT_VITALS_STATE["heart_rate"] = payload.heart_rate
+    CURRENT_VITALS_STATE["avg_heart_rate"] = payload.avg_heart_rate
+    CURRENT_VITALS_STATE["ir_value"] = payload.ir_value
+    CURRENT_VITALS_STATE["finger_detected"] = payload.finger_detected
+    CURRENT_VITALS_STATE["last_updated"] = now_str
+    CURRENT_VITALS_STATE["status"] = health_status
+    CURRENT_VITALS_STATE["message"] = msg
+
+    return {
+        "ok": True,
+        "status": health_status,
+        "message": msg,
+        "recorded_at": now_str,
+        "data": CURRENT_VITALS_STATE
+    }
+
+
+@router.get("/api/vitals/update")
+def get_vitals_update_info() -> dict[str, Any]:
+    """
+    Hỗ trợ kiểm tra API khi mở trực tiếp bằng trình duyệt Web (HTTP GET).
+    """
+    return {
+        "ok": True,
+        "endpoint": "/api/vitals/update",
+        "description": "API tiếp nhận dữ liệu nhịp tim từ ESP32 (Hỗ trợ POST cho thiết bị và GET để kiểm tra trạng thái)",
+        "current_vitals": CURRENT_VITALS_STATE
+    }
+
+
+@router.get("/api/vitals/current")
+def get_current_vitals() -> dict[str, Any]:
+    """
+    Cung cấp dữ liệu nhịp tim tức thời cho Web Dashboard và App Mobile.
+    """
+    return CURRENT_VITALS_STATE
