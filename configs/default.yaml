@@ -1,21 +1,30 @@
 detector:
-  torso_fall_angle_deg: 62
-  torso_upright_angle_deg: 35
-  head_hip_height_ratio: 0.18
-  hip_drop_velocity: 0.035
-  angle_change_velocity_deg: 18
-  min_fall_frames: 7
-  warning_frames: 3
-  alert_after_seconds: 10
+  torso_fall_angle_deg: 58
+  torso_upright_angle_deg: 32
+  head_hip_height_ratio: 0.25
+  hip_drop_velocity: 0.025
+  angle_change_velocity_deg: 14
+  min_fall_frames: 6
+  warning_frames: 2
+  alert_after_seconds: 2.5
   alert_on_long_lying_without_fall: false
-  assumed_fps: 30
-  cooldown_frames: 20
+  assumed_fps: 15
+  cooldown_frames: 30
   profile: default
+  camera_pitch_angle_deg: 0.0
+  enable_scale_normalization: true
+  reference_torso_length: 0.25
+  enable_pre_fall: true
+  pre_fall_sway_threshold: 0.032
+  pre_fall_window_frames: 15
+  pre_fall_min_reversals: 3
+  pre_fall_dizzy_duration_frames: 25
 
 app:
   camera_width: 1280
   camera_height: 720
-  draw_landmarks: true
+  model_complexity: 0
+  draw_landmarks: false
   event_log_path: data/events.csv
 
 ai:
@@ -23,3 +32,33 @@ ai:
   model_path: models/fall_classifier.joblib
   alert_probability: 0.70
   smoothing_frames: 5
+
+face:
+  enabled: true
+  known_faces_dir: data/known_faces
+  similarity_threshold: 0.38
+  score_threshold: 0.58
+  process_every_n_frames: 2
+
+object_detection:
+  enabled: false
+  model_path: models/yolov8n.onnx
+  confidence_threshold: 0.40
+  nms_threshold: 0.45
+  process_every_n_frames: 4
+  bed_overlap_threshold: 0.35
+  target_classes:
+    - chair
+    - couch
+    - bed
+    - wheelchair
+    - bench
+    - dining table
+    - laptop
+
+
+
+
+
+
+
