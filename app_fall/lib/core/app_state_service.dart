@@ -22,6 +22,7 @@ class AppStateService {
   List<AppNotification> notifications = [];
   MonitoredProfile? monitoredProfile;
   UserModel? currentUser;
+  VitalsModel vitals = const VitalsModel();
   bool isBackendOnline = false;
 
   // Default demo data (fallback khi offline)
@@ -133,9 +134,14 @@ class AppStateService {
         final remote = (jsonDecode(data['emergency_contacts_json']) as List)
             .map((e) => EmergencyContact.fromJson(e))
             .toList();
-        if (jsonEncode(remote.map((e) => e.toJson()).toList()) != jsonEncode(emergencyContacts.map((e) => e.toJson()).toList())) {
-          emergencyContacts = remote;
-          changed = true;
+        if (remote.isNotEmpty) {
+          if (jsonEncode(remote.map((e) => e.toJson()).toList()) != jsonEncode(emergencyContacts.map((e) => e.toJson()).toList())) {
+            emergencyContacts = remote;
+            changed = true;
+          }
+        } else if (emergencyContacts.isNotEmpty) {
+          // Nếu backend chưa có liên hệ nhưng mobile đã có, đồng bộ đẩy lên backend
+          pushToBackend();
         }
       }
       if (data['user_notifications_json'] != null) {
@@ -148,6 +154,19 @@ class AppStateService {
         }
       }
 
+      // ─── ĐỒNG BỘ NHỊP TIM & CHỈ SỐ SINH TỒN (MAX30102) ───────────
+      final vitalsData = await ApiClient().getVitals();
+      if (vitalsData != null) {
+        final newVitals = VitalsModel.fromJson(vitalsData);
+        if (newVitals.heartRate != vitals.heartRate ||
+            newVitals.avgHeartRate != vitals.avgHeartRate ||
+            newVitals.fingerDetected != vitals.fingerDetected ||
+            newVitals.status != vitals.status) {
+          vitals = newVitals;
+          changed = true;
+        }
+      }
+
       // Also fetch cameras and alerts from API
       final remoteCameras = await ApiClient().getCameras();
       if (remoteCameras.isNotEmpty) {
@@ -156,7 +175,11 @@ class AppStateService {
       }
 
       final remoteAlerts = await ApiClient().getAlerts();
-      if (remoteAlerts.isNotEmpty) {
+      if (remoteAlerts.isEmpty && alerts.isNotEmpty) {
+        // Đã xóa tất cả cảnh báo trên Web -> Đồng bộ xóa sạch trên Mobile
+        alerts = [];
+        changed = true;
+      } else if (remoteAlerts.isNotEmpty) {
         final currentIds = alerts.map((a) => a.id).toSet();
         final newAlertList = remoteAlerts.map((e) => AlertModel.fromJson(e)).toList();
 

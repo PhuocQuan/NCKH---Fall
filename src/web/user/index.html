@@ -2008,8 +2008,7 @@ function stopAlarmSound() {
           <div class="form-grid">
             <label class="field"><span>Họ và tên</span><input class="control" name="name" required></label>
             <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" type="email" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" type="tel" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" required pattern="0[0-9]{9,10}"></label>
           </div>
         </form>
       `, `
@@ -2020,11 +2019,17 @@ function stopAlarmSound() {
       $("addContactForm").addEventListener("submit", (e) => {
         e.preventDefault();
         const data = Object.fromEntries(new FormData(e.target).entries());
+        const cleanPhone = (data.phone || "").trim();
+        if (!/^0[0-9]{9,10}$/.test(cleanPhone)) {
+          alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+          return;
+        }
+
         emergencyContacts.push({
-          name: data.name,
-          relationship: data.relationship,
-          phone: data.phone,
-          email: data.email
+          name: data.name.trim(),
+          relationship: data.relationship.trim(),
+          phone: cleanPhone,
+          email: ""
         });
         saveAll();
         closeModal();
@@ -2040,7 +2045,6 @@ function stopAlarmSound() {
       
       const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
       const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
-      const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
       
       let displayRelationship = contact.relationship;
       if (isSelf) {
@@ -2054,8 +2058,7 @@ function stopAlarmSound() {
           <div class="form-grid">
             <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(displayName)}" required></label>
             <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(displayRelationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(displayEmail)}" type="email" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" type="tel" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" required pattern="0[0-9]{9,10}"></label>
           </div>
         </form>
       `, `
@@ -2066,11 +2069,17 @@ function stopAlarmSound() {
       $("editContactForm").addEventListener("submit", (e) => {
         e.preventDefault();
         const data = Object.fromEntries(new FormData(e.target).entries());
+        const cleanPhone = (data.phone || "").trim();
+        if (!/^0[0-9]{9,10}$/.test(cleanPhone)) {
+          alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+          return;
+        }
+
         emergencyContacts[idx] = {
-          name: data.name,
-          relationship: data.relationship,
-          phone: data.phone,
-          email: data.email
+          name: data.name.trim(),
+          relationship: data.relationship.trim(),
+          phone: cleanPhone,
+          email: ""
         };
         saveAll();
         closeModal();
@@ -2088,8 +2097,34 @@ function stopAlarmSound() {
       }
     };
     
-    window.sendEmergencyAlertMsg = function(phone) {
-      toast(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+    window.sendEmergencyAlertMsg = async function(phone, name) {
+      toast(`🚨 Đang phát cảnh báo khẩn cấp tới số ${phone}...`);
+      try {
+        if (isBackendOnline && authToken) {
+          const res = await fetch(`${apiBaseUrl()}/api/emergency/send-alert-phone`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              phone: phone,
+              name: name || "Người thân",
+              message: `🚨 KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay.`
+            })
+          });
+          if (res.ok) {
+            toast(`✅ Đã gửi cảnh báo khẩn cấp tới số điện thoại ${phone}!`);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            toast(`⚠️ ${err.detail || "Máy chủ không thể gửi cảnh báo"}`);
+          }
+        } else {
+          toast(`💬 Đã lưu thông báo cảnh báo tới ${phone} (Chế độ offline)!`);
+        }
+      } catch (e) {
+        toast(`⚠️ Lỗi gửi cảnh báo: ${e.message}`);
+      }
     };
 
     window.toggleReadNotification = function(idx) {
@@ -2434,16 +2469,11 @@ function stopAlarmSound() {
                         <span>Số điện thoại:</span>
                         <strong class="contact-info-value">${esc(displayPhone)}</strong>
                       </div>
-                      <div class="contact-info-row">
-                        <span class="contact-info-icon">📧</span>
-                        <span>Email liên hệ:</span>
-                        <strong class="contact-info-value">${esc(displayEmail)}</strong>
-                      </div>
                     </div>
                     
                     <div class="contact-actions">
                       <a href="tel:${esc(displayPhone)}" class="contact-btn-call">📞 Gọi ngay</a>
-                      <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}')"> Gửi cảnh báo</button>
+                      <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}', '${esc(displayName)}')">🚨 Gửi cảnh báo</button>
                     </div>
                   </div>
                 `;
@@ -2595,7 +2625,7 @@ function stopAlarmSound() {
                     </label>
                     <label class="premium-field">
                       <span>📞 Số điện thoại</span>
-                      <input class="premium-control" type="text" name="phone" value="${esc(currentUser.phone || '')}">
+                      <input class="premium-control" type="tel" name="phone" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" pattern="0[0-9]{9,10}" value="${esc(currentUser.phone || '')}">
                     </label>
                   </div>
                   <div class="premium-input-grid">
@@ -3933,35 +3963,54 @@ function stopAlarmSound() {
     async function syncAlertsAndEvents() {
       if (!isBackendOnline || !authToken) return;
       try {
+        // Đồng bộ app state (liên hệ khẩn cấp, hồ sơ người thân) giữa Web và Mobile
+        await syncAppStateFromBackend();
+
         const alertsRes = await fetch(`${apiBaseUrl()}/api/alerts`, {
           headers: { Authorization: `Bearer ${authToken}` }
         });
         if (alertsRes.ok) {
           const data = await alertsRes.json();
-          if (data.alerts && data.alerts.length > 0) {
+          if (Array.isArray(data.alerts)) {
             let changed = false;
-            data.alerts.forEach(backendAlert => {
-              const localIndex = alerts.findIndex(a => a.id === backendAlert.id);
-              if (localIndex < 0) {
-                alerts.unshift(backendAlert);
+
+            // Xử lý đồng bộ khi cảnh báo bị xóa trên Mobile
+            if (data.alerts.length === 0 && alerts.length > 0) {
+              alerts = alerts.filter(a => a.id.startsWith("MOCK-"));
+              changed = true;
+            } else {
+              const backendIds = new Set(data.alerts.map(a => a.id));
+              if (alerts.some(a => !backendIds.has(a.id) && !a.id.startsWith("MOCK-"))) {
+                alerts = alerts.filter(a => backendIds.has(a.id) || a.id.startsWith("MOCK-"));
                 changed = true;
-                
-                if (backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
-                  if (isFallAlert(backendAlert)) {
-                    triggerRealtimeFallAlert(backendAlert);
-                  } else if (isStrangerAlert(backendAlert)) {
-                    playStrangerAlertSound();
-                    toast(`👤 CẢNH BÁO: Phát hiện người lạ (${backendAlert.confidence || 90}%) tại camera ${backendAlert.camera || ''}!`);
+              }
+            }
+
+            if (data.alerts.length > 0) {
+              data.alerts.forEach(backendAlert => {
+                const localIndex = alerts.findIndex(a => a.id === backendAlert.id);
+                if (localIndex < 0) {
+                  alerts.unshift(backendAlert);
+                  changed = true;
+                  
+                  if (backendAlert.status === "Chưa xử lý" && currentUser.role !== "Admin") {
+                    if (isFallAlert(backendAlert)) {
+                      triggerRealtimeFallAlert(backendAlert);
+                    } else if (isStrangerAlert(backendAlert)) {
+                      playStrangerAlertSound();
+                      toast(`👤 CẢNH BÁO: Phát hiện người lạ (${backendAlert.confidence || 90}%) tại camera ${backendAlert.camera || ''}!`);
+                    }
+                  }
+                } else {
+                  const local = alerts[localIndex];
+                  if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status || local.confidence !== backendAlert.confidence) {
+                    alerts[localIndex] = { ...local, ...backendAlert };
+                    changed = true;
                   }
                 }
-              } else {
-                const local = alerts[localIndex];
-                if (local.cloud_img_url !== backendAlert.cloud_img_url || local.cloud_video_url !== backendAlert.cloud_video_url || local.status !== backendAlert.status || local.confidence !== backendAlert.confidence) {
-                  alerts[localIndex] = { ...local, ...backendAlert };
-                  changed = true;
-                }
-              }
-            });
+              });
+            }
+
             if (changed) {
               saveAll();
               updatePendingAlertsCount();
@@ -4814,6 +4863,12 @@ function stopAlarmSound() {
       if (event.target.id === "editUserProfileForm") {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(event.target).entries());
+        const cleanPhone = (data.phone || "").trim();
+        if (cleanPhone && !/^0[0-9]{9,10}$/.test(cleanPhone)) {
+          alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+          return;
+        }
+
         const oldEmail = currentUser.email;
         const newEmail = data.email.trim().toLowerCase();
         

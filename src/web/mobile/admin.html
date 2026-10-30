@@ -1413,7 +1413,7 @@
           <div class="form-grid">
             <label class="field"><span>Email</span><input class="control" name="email" value="${esc(u.email || "")}" required ${isEdit ? 'readonly style="background:#e2e8f0;"' : ''}></label>
             <label class="field"><span>Họ tên</span><input class="control" name="name" value="${esc(u.name || "")}" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(u.phone || "")}"></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" type="tel" name="phone" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" pattern="0[0-9]{9,10}" value="${esc(u.phone || "")}"></label>
             <label class="field"><span>Vai trò</span><select class="control" name="role"><option value="Admin" ${u.role === "Admin" ? "selected" : ""}>Admin</option><option value="Khachhang" ${u.role === "Khachhang" ? "selected" : ""}>Khách hàng</option></select></label>
             <label class="field"><span>Trạng thái</span><select class="control" name="status"><option ${u.status === "Đang hoạt động" ? "selected" : ""}>Đang hoạt động</option><option ${u.status === "Bị khóa" ? "selected" : ""}>Bị khóa</option></select></label>
             <label class="field"><span>Mật khẩu</span><input class="control" type="password" name="password" placeholder="${isEdit ? "Để trống nếu không đổi" : "Mặc định: nckh2025"}"></label>
@@ -1479,6 +1479,12 @@
       
       if (!oldEmail && users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
         alert("Tài khoản với email này đã tồn tại!");
+        return;
+      }
+
+      const rawPhone = (formData.get("phone") || "").trim();
+      if (rawPhone && !/^0[0-9]{9,10}$/.test(rawPhone)) {
+        alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
         return;
       }
 

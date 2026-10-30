@@ -588,3 +588,65 @@ def get_current_vitals() -> dict[str, Any]:
     Cung cấp dữ liệu nhịp tim tức thời cho Web Dashboard và App Mobile.
     """
     return CURRENT_VITALS_STATE
+
+
+class EmergencyPhoneAlertRequest(BaseModel):
+    phone: str
+    name: str | None = None
+    message: str | None = None
+
+
+@router.post("/api/emergency/send-alert-phone")
+def send_emergency_alert_phone(body: EmergencyPhoneAlertRequest, user: str = Depends(require_user)) -> dict[str, Any]:
+    """
+    Kích hoạt phát cảnh báo khẩn cấp tới số điện thoại người thân:
+    - Kiểm tra giới hạn độ dài và định dạng số điện thoại (10-11 chữ số).
+    - Gửi SMS cảnh báo tới số điện thoại chỉ định.
+    - Đồng thời phát thông báo cảnh báo khẩn cấp qua kênh Telegram trung tâm.
+    - Ghi nhận lịch sử vào bảng log hệ thống.
+    """
+    import re
+    from src.web.shared.notifications import send_sms_alert, send_telegram_alert
+
+    clean_phone = body.phone.strip()
+    # Kiểm tra giới hạn số điện thoại: từ 10 đến 11 chữ số, bắt đầu bằng 0 hoặc +84
+    if not re.match(r"^(0|\+84)[0-9]{8,10}$", clean_phone):
+        raise HTTPException(
+            status_code=400,
+            detail="Số điện thoại không hợp lệ (Bắt buộc từ 10-11 chữ số, bắt đầu bằng 0 hoặc +84)."
+        )
+
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    contact_name = body.name or "Người thân"
+    default_msg = f"[FallGuard AI] CANH BAO KHAN CAP: Phat hien su co te nga can tro giup gap cho {contact_name}! Lien he ngay: {clean_phone} luc {now_str}."
+    final_msg = body.message or default_msg
+
+    # 1. Gửi SMS qua Twilio hoặc Mock log
+    sms_res = send_sms_alert(message=final_msg, to_number=clean_phone)
+
+    # 2. Gửi thông báo khẩn cấp lên Telegram Bot
+    tele_msg = (
+        "🚨 <b>KÍCH HOẠT CẢNH BÁO SOS GỌI ĐIỆN THOẠI!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📞 <b>Số điện thoại nhận:</b> <code>{clean_phone}</code>\n"
+        f"👤 <b>Người liên hệ:</b> {contact_name}\n"
+        f"⏰ <b>Thời gian:</b> {now_str}\n"
+        f"💬 <b>Nội dung cảnh báo:</b> {final_msg}\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+    try:
+        send_telegram_alert(tele_msg, parse_mode="HTML")
+    except Exception as tele_err:
+        print(f"[Alert SOS Phone] Lỗi gửi Telegram kèm: {tele_err}")
+
+    # 3. Ghi log kiểm toán hệ thống
+    service.log_action("Cảnh báo SOS điện thoại", user, f"Đã gửi cảnh báo khẩn cấp tới số {clean_phone} ({contact_name})")
+
+    return {
+        "ok": True,
+        "detail": f"Đã kích hoạt gửi cảnh báo khẩn cấp tới số điện thoại {clean_phone} thành công!",
+        "phone": clean_phone,
+        "contact_name": contact_name,
+        "sms_result": sms_res,
+        "timestamp": now_str
+    }

@@ -188,6 +188,51 @@ class AlertModel {
   bool get isFall => !isStranger;
 }
 
+// Lớp mô hình chỉ số sinh tồn và nhịp tim từ cảm biến MAX30102
+class VitalsModel {
+  final double heartRate;
+  final int avgHeartRate;
+  final int irValue;
+  final bool fingerDetected;
+  final String? lastUpdated;
+  final String status;
+  final String message;
+
+  const VitalsModel({
+    this.heartRate = 0.0,
+    this.avgHeartRate = 0,
+    this.irValue = 0,
+    this.fingerDetected = false,
+    this.lastUpdated,
+    this.status = 'normal',
+    this.message = 'Chưa có dữ liệu từ cảm biến',
+  });
+
+  factory VitalsModel.fromJson(Map<String, dynamic> json) => VitalsModel(
+        heartRate: (json['heart_rate'] as num?)?.toDouble() ?? 0.0,
+        avgHeartRate: (json['avg_heart_rate'] as num?)?.toInt() ?? 0,
+        irValue: (json['ir_value'] as num?)?.toInt() ?? 0,
+        fingerDetected: json['finger_detected'] == true,
+        lastUpdated: json['last_updated']?.toString(),
+        status: json['status']?.toString() ?? 'normal',
+        message: json['message']?.toString() ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'heart_rate': heartRate,
+        'avg_heart_rate': avgHeartRate,
+        'ir_value': irValue,
+        'finger_detected': fingerDetected,
+        'last_updated': lastUpdated,
+        'status': status,
+        'message': message,
+      };
+
+  bool get hasValidReading => fingerDetected && (heartRate > 0 || avgHeartRate > 0);
+  
+  double get effectiveBpm => avgHeartRate > 0 ? avgHeartRate.toDouble() : heartRate;
+}
+
 class EmergencyContact {
   final String name;
   final String relationship;
@@ -198,7 +243,7 @@ class EmergencyContact {
     required this.name,
     required this.relationship,
     required this.phone,
-    required this.email,
+    this.email = '',
   });
 
   factory EmergencyContact.fromJson(Map<String, dynamic> json) => EmergencyContact(

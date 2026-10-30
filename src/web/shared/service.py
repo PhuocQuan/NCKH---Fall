@@ -207,20 +207,30 @@ def delete_multiple_alerts(ids: list[str] | None, delete_all: bool, user: str, m
 
 
 def get_app_state(user: str) -> dict[str, str]:
-    """API Logic: Gộp cài đặt chung của Hệ thống (Admin) và cài đặt riêng của User."""
+    """API Logic: Gộp cài đặt chung của Hệ thống (Admin) và cài đặt riêng của User, đảm bảo đồng bộ hoàn hảo giữa Web và Mobile."""
     global_state = repo.get_app_state_db()
     user_state = repo.get_user_app_state_db(user)
+
+    # Ưu tiên dữ liệu liên hệ khẩn cấp và hồ sơ người thân từ user; nếu trống, tự động fallback sang global_state
+    contacts = user_state["emergency_contacts_json"]
+    if (not contacts or contacts == "[]") and global_state["emergency_contacts_json"] and global_state["emergency_contacts_json"] != "[]":
+        contacts = global_state["emergency_contacts_json"]
+
+    profile = user_state["monitored_profile_json"]
+    if (not profile or profile == "{}" or profile == "null") and global_state["monitored_profile_json"] and global_state["monitored_profile_json"] not in ["{}", "null"]:
+        profile = global_state["monitored_profile_json"]
+
     return {
         "api_keys_json": global_state["api_keys_json"],
         "settings_json": global_state["settings_json"],
-        "monitored_profile_json": user_state["monitored_profile_json"],
-        "emergency_contacts_json": user_state["emergency_contacts_json"],
+        "monitored_profile_json": profile,
+        "emergency_contacts_json": contacts,
         "user_notifications_json": user_state["user_notifications_json"]
     }
 
 
 def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
-    """API Logic: Lưu cấu hình. Phân tách key nào thuộc Admin, key nào thuộc User để update vào bảng tương ứng."""
+    """API Logic: Lưu cấu hình đồng bộ giữa người dùng và toàn hệ thống (Web và Mobile)."""
     global_updates = []
     global_params = []
     user_updates = []
@@ -237,6 +247,10 @@ def update_app_state(body_dict: dict[str, str | None], user: str) -> None:
         if val is not None:
             user_updates.append(f"{key} = ?")
             user_params.append(val)
+            # Đồng bộ liên hệ khẩn cấp và hồ sơ người thân vào cả bảng global để Web và Mobile cùng nhận được dữ liệu
+            if key in ["monitored_profile_json", "emergency_contacts_json"]:
+                global_updates.append(f"{key} = ?")
+                global_params.append(val)
             
     if global_updates:
         global_params.append("global")

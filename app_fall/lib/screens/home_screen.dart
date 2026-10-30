@@ -638,6 +638,8 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _pageHeader('Trang chủ', 'Trạng thái các thiết bị bảo vệ người thân'),
+          _vitalsCard(),
+          const SizedBox(height: 16),
           _card(
             title: 'Camera trực tiếp',
             child: cams.isEmpty
@@ -645,6 +647,149 @@ class _HomeScreenState extends State<HomeScreen> {
                 : Column(
                     children: cams.map((c) => _cameraDashCard(c)).toList(),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Thẻ hiển thị chỉ số sinh tồn và nhịp tim người thân từ cảm biến MAX30102
+  Widget _vitalsCard() {
+    final vitals = _state.vitals;
+    final hasReading = vitals.hasValidReading;
+    final bpmText = hasReading
+        ? (vitals.heartRate > 0 ? vitals.heartRate.toStringAsFixed(1) : '${vitals.avgHeartRate}')
+        : '--';
+    final avgText = (vitals.fingerDetected && vitals.avgHeartRate > 0)
+        ? '${vitals.avgHeartRate} BPM'
+        : '-- BPM';
+
+    Color statusColor = kGreen;
+    String statusLabel = 'Bình thường';
+    if (!vitals.fingerDetected) {
+      statusColor = kMuted;
+      statusLabel = 'Chưa đặt ngón tay';
+    } else if (vitals.status == 'bradycardia' || (vitals.effectiveBpm > 0 && vitals.effectiveBpm < 50)) {
+      statusColor = kAmber;
+      statusLabel = 'Nhịp tim chậm';
+    } else if (vitals.status == 'tachycardia' || vitals.effectiveBpm > 110) {
+      statusColor = kRed;
+      statusLabel = 'Nhịp tim nhanh';
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kLine),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('❤️', style: TextStyle(fontSize: 18)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Chỉ số sinh tồn (MAX30102)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: kInk)),
+                    Text('Theo dõi nhịp tim người thân thời gian thực', style: TextStyle(fontSize: 11, color: kMuted)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: statusColor.withAlpha(80)),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF1F5F9)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Nhịp tim hiện tại', style: TextStyle(fontSize: 11, color: kMuted, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            bpmText,
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFFEF4444)),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text('BPM', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kMuted)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 40, color: kLine),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Trung bình', style: TextStyle(fontSize: 11, color: kMuted, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(
+                        avgText,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kInk),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  vitals.message.isNotEmpty ? vitals.message : 'Trạng thái cảm biến bình thường',
+                  style: const TextStyle(fontSize: 11, color: kMuted),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (vitals.lastUpdated != null && vitals.lastUpdated!.isNotEmpty)
+                Text(
+                  'Cập nhật: ${vitals.lastUpdated}',
+                  style: const TextStyle(fontSize: 10, color: kMuted),
+                ),
+            ],
           ),
         ],
       ),
@@ -1323,7 +1468,30 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: GestureDetector(
-                  onTap: () => _showSnackbar('💬 Đã gửi SMS cảnh báo khẩn cấp tới ${contact.phone}!'),
+                  onTap: () async {
+                    // 1. Gửi lệnh cảnh báo tới máy chủ để phát SMS và Telegram log
+                    try {
+                      _showSnackbar('🚨 Đang phát cảnh báo tới số ${contact.phone}...');
+                      await ApiClient().sendEmergencyPhoneAlert(contact.phone, contact.name);
+                      _showSnackbar('✅ Đã gửi cảnh báo khẩn cấp tới ${contact.phone}!');
+                    } catch (e) {
+                      _showSnackbar('Lưu ý gửi qua server: $e', isError: true);
+                    }
+
+                    // 2. Mở ứng dụng SMS trên thiết bị với tin nhắn khẩn cấp soạn sẵn
+                    final smsUri = Uri(
+                      scheme: 'sms',
+                      path: contact.phone,
+                      queryParameters: <String, String>{
+                        'body': '🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay.',
+                      },
+                    );
+                    try {
+                      if (await canLaunchUrl(smsUri)) {
+                        await launchUrl(smsUri);
+                      }
+                    } catch (_) {}
+                  },
                   child: Container(
                     height: 36,
                     decoration: BoxDecoration(
@@ -1493,7 +1661,52 @@ class _LiveStreamScreen extends StatelessWidget {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: MjpegView(streamUrl: streamUrl, isBackendOnline: isBackendOnline),
+                  child: Stack(
+                    children: [
+                      MjpegView(streamUrl: streamUrl, isBackendOnline: isBackendOnline),
+                      // Floating Vitals Overlay badge (Tương tự hiển thị camOverlayBpm trên Web)
+                      Positioned(
+                        bottom: 12,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xCC0F172A),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white24),
+                            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('❤️', style: TextStyle(fontSize: 14)),
+                              const SizedBox(width: 6),
+                              Text(
+                                AppStateService().vitals.hasValidReading
+                                    ? '${AppStateService().vitals.heartRate > 0 ? AppStateService().vitals.heartRate.toStringAsFixed(1) : AppStateService().vitals.avgHeartRate} BPM'
+                                    : '-- BPM',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppStateService().vitals.status == 'normal'
+                                      ? const Color(0xFF10B981)
+                                      : (AppStateService().vitals.status == 'tachycardia' ? kRed : kAmber),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  AppStateService().vitals.fingerDetected ? 'Ổn định' : 'Chưa đặt tay',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1776,7 +1989,6 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
   late final TextEditingController _name;
   String? _relationship;
   late final TextEditingController _phone;
-  late final TextEditingController _email;
   
   final List<String> _relationshipOptions = [
     'Con trai', 'Con gái', 'Vợ', 'Chồng', 'Bố', 'Mẹ', 'Anh/Chị/Em', 'Họ hàng', 'Bác sĩ', 'Y tá', 'Bạn bè', 'Khác'
@@ -1788,17 +2000,17 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
     final c = widget.initial;
     _name = TextEditingController(text: c?.name ?? '');
     _phone = TextEditingController(text: c?.phone ?? '');
-    _email = TextEditingController(text: c?.email ?? '');
     
     _relationship = c?.relationship;
     if (_relationship != null && _relationship!.isNotEmpty && !_relationshipOptions.contains(_relationship)) {
-      _relationshipOptions.add(_relationship!); // Keep existing values
+      _relationshipOptions.add(_relationship!); // Giữ giá trị tùy biến hiện có
     }
   }
 
   @override
   void dispose() {
-    _name.dispose(); _phone.dispose(); _email.dispose();
+    _name.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -1859,8 +2071,26 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
                   ],
                 ),
               ),
-              _formField('Số điện thoại', _phone, keyboardType: TextInputType.phone, required: true),
-              _formField('Email', _email, keyboardType: TextInputType.emailAddress, required: true),
+              _formField(
+                'Số điện thoại',
+                _phone,
+                keyboardType: TextInputType.phone,
+                required: true,
+                maxLength: 11,
+                hint: 'Ví dụ: 0987654321 (10-11 số)',
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(11),
+                ],
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Bắt buộc nhập số điện thoại';
+                  final clean = v.trim();
+                  if (!RegExp(r'^0[0-9]{9,10}$').hasMatch(clean)) {
+                    return 'Số điện thoại không hợp lệ (cần 10-11 số, bắt đầu bằng 0)';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -1879,7 +2109,7 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
                           name: _name.text.trim(),
                           relationship: _relationship ?? '',
                           phone: _phone.text.trim(),
-                          email: _email.text.trim(),
+                          email: '',
                         );
                         widget.onSave(contact);
                         Navigator.pop(context);
@@ -1897,7 +2127,16 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
     );
   }
 
-  Widget _formField(String label, TextEditingController ctrl, {String? hint, TextInputType? keyboardType, bool required = false}) {
+  Widget _formField(
+    String label,
+    TextEditingController ctrl, {
+    String? hint,
+    TextInputType? keyboardType,
+    bool required = false,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1908,8 +2147,11 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
           TextFormField(
             controller: ctrl,
             keyboardType: keyboardType,
+            maxLength: maxLength,
+            inputFormatters: inputFormatters,
             decoration: InputDecoration(
               hintText: hint,
+              counterText: '',
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -1917,7 +2159,7 @@ class _ContactFormSheetState extends State<_ContactFormSheet> {
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kLine)),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kBlue, width: 2)),
             ),
-            validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Bắt buộc' : null : null,
+            validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'Bắt buộc' : null : null),
           ),
         ],
       ),
@@ -1990,7 +2232,7 @@ class _UserProfileFormState extends State<_UserProfileForm> {
       child: Column(
         children: [
           _field('Họ và tên', _name, required: true),
-          _field('Số điện thoại', _phone, keyboardType: TextInputType.phone),
+          _field('Số điện thoại', _phone, keyboardType: TextInputType.phone, isPhone: true),
           _field('Email tài khoản', _email, keyboardType: TextInputType.emailAddress, required: true, isEmail: true),
           const SizedBox(height: 6),
           Row(
@@ -2108,7 +2350,7 @@ class _UserProfileFormState extends State<_UserProfileForm> {
     }
   }
 
-  Widget _field(String label, TextEditingController ctrl, {TextInputType? keyboardType, bool required = false, bool isEmail = false}) {
+  Widget _field(String label, TextEditingController ctrl, {TextInputType? keyboardType, bool required = false, bool isEmail = false, bool isPhone = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -2119,12 +2361,22 @@ class _UserProfileFormState extends State<_UserProfileForm> {
           TextFormField(
             controller: ctrl,
             keyboardType: keyboardType,
-            inputFormatters: isEmail ? [
-              TextInputFormatter.withFunction((oldValue, newValue) {
-                return TextEditingValue(text: newValue.text.toLowerCase(), selection: newValue.selection);
-              })
-            ] : null,
+            maxLength: isPhone ? 11 : null,
+            inputFormatters: isEmail
+                ? [
+                    TextInputFormatter.withFunction((oldValue, newValue) {
+                      return TextEditingValue(text: newValue.text.toLowerCase(), selection: newValue.selection);
+                    })
+                  ]
+                : (isPhone
+                    ? [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(11),
+                      ]
+                    : null),
             decoration: InputDecoration(
+              counterText: '',
+              hintText: isPhone ? 'Ví dụ: 0987654321 (10-11 số)' : null,
               filled: true,
               fillColor: const Color(0xFFF8FAFC),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -2132,7 +2384,15 @@ class _UserProfileFormState extends State<_UserProfileForm> {
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kLine)),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: kBlue, width: 2)),
             ),
-            validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Bắt buộc' : null : null,
+            validator: (v) {
+              if (required && (v == null || v.trim().isEmpty)) return 'Bắt buộc';
+              if (isPhone && v != null && v.trim().isNotEmpty) {
+                if (!RegExp(r'^0[0-9]{9,10}$').hasMatch(v.trim())) {
+                  return 'Số điện thoại phải từ 10-11 chữ số (bắt đầu bằng 0)';
+                }
+              }
+              return null;
+            },
           ),
         ],
       ),

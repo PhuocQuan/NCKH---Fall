@@ -322,19 +322,35 @@ def send_email_alert(subject: str, message: str, image_path: str | None = None) 
         print(f"[Notification] Lỗi gửi Email: {e}")
 
 
-def send_sms_alert(message: str) -> None:
+def send_sms_alert(message: str, to_number: str | None = None) -> dict[str, Any]:
+    """
+    Gửi tin nhắn cảnh báo SMS khẩn cấp tới số điện thoại người thân:
+    - Nếu có to_number truyền vào, gửi trực tiếp tới số đó.
+    - Hỗ trợ định dạng số điện thoại Việt Nam (09xxx -> +849xxx).
+    - Tự động fallback sang chế độ mô phỏng (Mock log) nếu chưa cấu hình tài khoản Twilio.
+    """
     config = load_notif_config().get("sms", {})
-    if not config.get("enabled"):
-        return
+    target_phone = to_number or config.get("to_number", "+84901234567")
+    
+    # Chuẩn hóa số điện thoại: đổi 0xxx thành +84xxx cho SMS quốc tế
+    formatted_phone = target_phone.strip()
+    if formatted_phone.startswith("0"):
+        formatted_phone = "+84" + formatted_phone[1:]
 
-    sid = config.get("twilio_sid")
-    token = config.get("twilio_token")
-    from_num = config.get("from_number")
-    to_num = config.get("to_number")
+    sid = config.get("twilio_sid", "YOUR_TWILIO_ACCOUNT_SID")
+    token = config.get("twilio_token", "YOUR_TWILIO_AUTH_TOKEN")
+    from_num = config.get("from_number", "+1234567890")
 
-    if sid == "YOUR_TWILIO_ACCOUNT_SID":
-        print(f"[Notification SMS Mock]: {message}")
-        return
+    # Trường hợp mô phỏng hoặc chưa kích hoạt Twilio
+    if sid == "YOUR_TWILIO_ACCOUNT_SID" or not config.get("enabled", False):
+        print(f"[Notification SMS Mock -> {formatted_phone}]: {message}")
+        return {
+            "ok": True,
+            "mode": "mock",
+            "to": formatted_phone,
+            "message": message,
+            "detail": f"Đã ghi nhận SMS cảnh báo tới số {formatted_phone} (Chế độ mô phỏng)"
+        }
 
     try:
         url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
@@ -344,15 +360,27 @@ def send_sms_alert(message: str) -> None:
         
         data = urllib.parse.urlencode({
             "From": from_num,
-            "To": to_num,
+            "To": formatted_phone,
             "Body": message
         }).encode("utf-8")
         
         req = urllib.request.Request(url, data=data)
         opener.open(req)
-        print("[Notification] SMS Twilio sent successfully!")
+        print(f"[Notification] SMS Twilio gửi thành công tới {formatted_phone}!")
+        return {
+            "ok": True,
+            "mode": "live",
+            "to": formatted_phone,
+            "detail": f"Đã gửi SMS Twilio thành công tới {formatted_phone}"
+        }
     except Exception as e:
-        print(f"[Notification] Lỗi gửi SMS Twilio: {e}")
+        err_msg = f"Lỗi gửi SMS Twilio tới {formatted_phone}: {e}"
+        print(f"[Notification] {err_msg}")
+        return {
+            "ok": False,
+            "to": formatted_phone,
+            "detail": err_msg
+        }
 
 
 def format_alert_html(

@@ -183,6 +183,42 @@ class ApiClient {
     } catch (_) {}
   }
 
+  /// Lấy chỉ số sinh tồn và nhịp tim tức thời (GET /api/vitals/current)
+  Future<Map<String, dynamic>?> getVitals() async {
+    try {
+      final res = await http.get(_uri('/api/vitals/current'), headers: _headers).timeout(const Duration(seconds: 4));
+      _check401(res);
+      if (res.statusCode == 200) {
+        return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Kích hoạt gửi tin nhắn cảnh báo khẩn cấp tới số điện thoại (POST /api/emergency/send-alert-phone)
+  Future<Map<String, dynamic>> sendEmergencyPhoneAlert(String phone, String name) async {
+    try {
+      final res = await http.post(
+        _uri('/api/emergency/send-alert-phone'),
+        headers: _headers,
+        body: jsonEncode({
+          'phone': phone,
+          'name': name,
+          'message': '🚨 KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay lập tức.',
+        }),
+      ).timeout(const Duration(seconds: 10));
+      _check401(res);
+      if (res.statusCode == 200) {
+        return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      }
+      final body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      throw ApiException(body['detail'] ?? 'Lỗi khi gửi cảnh báo tới số điện thoại.');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException('Không thể kết nối máy chủ gửi cảnh báo: $e');
+    }
+  }
+
   // POST /api/control/start
   Future<void> startCamera(String source, String cameraId) async {
     try {

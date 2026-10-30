@@ -168,6 +168,39 @@
     let isBackendOnline = false;
     let currentView = "dashboard";
     let selectedCameraId = "";
+
+    // Trạng thái nhịp tim và chỉ số sinh tồn MAX30102
+    let vitalsState = {
+      heart_rate: 0.0,
+      avg_heart_rate: 0,
+      finger_detected: false,
+      status: "normal",
+      message: "Chưa có dữ liệu từ cảm biến nhịp tim",
+      last_updated: null
+    };
+
+    async function pollVitals() {
+      if (!isBackendOnline) return;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/api/vitals/current`);
+        if (res.ok) {
+          vitalsState = await res.json();
+          const hrEl = $("mobileHeartRate");
+          const avgEl = $("mobileAvgHeartRate");
+          const badgeEl = $("mobileVitalsBadge");
+          const msgEl = $("mobileVitalsMsg");
+          const timeEl = $("mobileVitalsTime");
+          if (hrEl) hrEl.innerHTML = (vitalsState.finger_detected && vitalsState.heart_rate > 0 ? vitalsState.heart_rate.toFixed(1) : '--') + ' <span style="font-size:12px; color:var(--muted);">BPM</span>';
+          if (avgEl) avgEl.textContent = (vitalsState.finger_detected && vitalsState.avg_heart_rate > 0 ? vitalsState.avg_heart_rate + ' BPM' : '-- BPM');
+          if (badgeEl) {
+            badgeEl.className = `pill ${vitalsState.finger_detected ? 'green' : 'gray'} small`;
+            badgeEl.textContent = vitalsState.finger_detected ? 'Đang nhận' : 'Chưa đặt tay';
+          }
+          if (msgEl) msgEl.textContent = vitalsState.message || "Bình thường";
+          if (timeEl) timeEl.textContent = vitalsState.last_updated ? `Cập nhật: ${vitalsState.last_updated}` : "";
+        }
+      } catch (e) {}
+    }
     
     // Live stream control
     let liveViewLevel = "locations"; // "locations", "cameras", "stream"
@@ -777,6 +810,33 @@
         const visCams = getVisibleCameras();
 
         return `
+          ${card("Chỉ số sinh tồn (MAX30102)", `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-size:12px; color:var(--muted);">Nhịp tim người thân thời gian thực</span>
+              <span id="mobileVitalsBadge" class="pill ${vitalsState.finger_detected ? 'green' : 'gray'} small">
+                ${vitalsState.finger_detected ? 'Đang nhận' : 'Chưa đặt tay'}
+              </span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:var(--bg); padding:12px; border-radius:10px;">
+              <div>
+                <div style="font-size:11px; color:var(--muted); font-weight:600;">Nhịp tim tức thời</div>
+                <div style="font-size:22px; font-weight:900; color:var(--red);" id="mobileHeartRate">
+                  ${vitalsState.finger_detected && vitalsState.heart_rate > 0 ? vitalsState.heart_rate.toFixed(1) : '--'} <span style="font-size:12px; color:var(--muted);">BPM</span>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:11px; color:var(--muted); font-weight:600;">Trung bình</div>
+                <div style="font-size:18px; font-weight:800; color:var(--ink);" id="mobileAvgHeartRate">
+                  ${vitalsState.finger_detected && vitalsState.avg_heart_rate > 0 ? vitalsState.avg_heart_rate + ' BPM' : '-- BPM'}
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:10px; font-size:11px; color:var(--muted); display:flex; justify-content:space-between;">
+              <span id="mobileVitalsMsg">${esc(vitalsState.message || "Bình thường")}</span>
+              <span id="mobileVitalsTime">${vitalsState.last_updated ? 'Cập nhật: ' + esc(vitalsState.last_updated) : ""}</span>
+            </div>
+          `)}
+
           ${card("Camera trực tiếp", `
             <div class="mobile-list">
               ${visCams.map(c => `
@@ -955,7 +1015,7 @@
               </label>
               <label class="field" style="margin-bottom:10px;">
                 <span>Số điện thoại</span>
-                <input class="control" type="text" name="phone" value="${esc(phone)}">
+                <input class="control" type="tel" name="phone" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" pattern="0[0-9]{9,10}" value="${esc(phone)}">
               </label>
               <label class="field" style="margin-bottom:14px;">
                 <span>Email tài khoản</span>
@@ -998,11 +1058,10 @@
                   </div>
                   <div style="font-size:12px; color:var(--muted);">
                     <div>SĐT: <strong>${esc(displayPhone)}</strong></div>
-                    <div>Email: <strong>${esc(displayEmail)}</strong></div>
                   </div>
                   <div class="contact-actions" style="border-top: 1px solid var(--line); padding-top: 12px; display: flex; gap: 8px;">
                     <a href="tel:${esc(displayPhone)}" class="contact-btn-call" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; text-decoration: none;">📞 Gọi ngay</a>
-                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;"> Gửi cảnh báo</button>
+                    <button class="contact-btn-alert" onclick="sendEmergencyAlertMsg('${esc(displayPhone)}', '${esc(displayName)}')" style="flex: 1; height: 36px; border-radius: 8px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #fff; border: none; cursor: pointer;">🚨 Gửi cảnh báo</button>
                   </div>
                 </div>
               `}).join("")}
@@ -1093,8 +1152,7 @@
           <div class="form-grid">
             <label class="field"><span>Họ và tên</span><input class="control" name="name" required></label>
             <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" type="email" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" type="tel" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" required pattern="0[0-9]{9,10}"></label>
           </div>
         </form>
       `, `
@@ -1111,7 +1169,6 @@
       
       const displayName = isSelf ? (currentUser.name || contact.name) : contact.name;
       const displayPhone = isSelf ? (currentUser.phone || contact.phone) : contact.phone;
-      const displayEmail = isSelf ? (currentUser.email || contact.email) : contact.email;
       
       let displayRelationship = contact.relationship;
       if (isSelf) {
@@ -1125,8 +1182,7 @@
           <div class="form-grid">
             <label class="field"><span>Họ và tên</span><input class="control" name="name" value="${esc(displayName)}" required></label>
             <label class="field"><span>Mối quan hệ</span><input class="control" name="relationship" value="${esc(displayRelationship)}" placeholder="Ví dụ: Con gái, Bác sĩ" required></label>
-            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" required></label>
-            <label class="field"><span>Email</span><input class="control" name="email" value="${esc(displayEmail)}" type="email" required></label>
+            <label class="field"><span>Số điện thoại</span><input class="control" name="phone" value="${esc(displayPhone)}" type="tel" maxlength="11" placeholder="Ví dụ: 0987654321 (10-11 số)" required pattern="0[0-9]{9,10}"></label>
           </div>
         </form>
       `, `
@@ -1156,11 +1212,17 @@
       event.preventDefault();
       const form = event.target;
       const data = Object.fromEntries(new FormData(form).entries());
+      const cleanPhone = (data.phone || "").trim();
+      if (!/^0[0-9]{9,10}$/.test(cleanPhone)) {
+        alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+        return;
+      }
+
       emergencyContacts.push({
-        name: data.name,
-        relationship: data.relationship,
-        phone: data.phone,
-        email: data.email
+        name: data.name.trim(),
+        relationship: data.relationship.trim(),
+        phone: cleanPhone,
+        email: ""
       });
       saveAll();
       closeModal();
@@ -1171,11 +1233,17 @@
       event.preventDefault();
       const form = event.target;
       const data = Object.fromEntries(new FormData(form).entries());
+      const cleanPhone = (data.phone || "").trim();
+      if (!/^0[0-9]{9,10}$/.test(cleanPhone)) {
+        alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+        return;
+      }
+
       emergencyContacts[index] = {
-        name: data.name,
-        relationship: data.relationship,
-        phone: data.phone,
-        email: data.email
+        name: data.name.trim(),
+        relationship: data.relationship.trim(),
+        phone: cleanPhone,
+        email: ""
       };
       saveAll();
       closeModal();
@@ -1187,6 +1255,11 @@
       event.preventDefault();
       const form = event.target;
       const data = Object.fromEntries(new FormData(form).entries());
+      const cleanPhone = (data.phone || "").trim();
+      if (cleanPhone && !/^0[0-9]{9,10}$/.test(cleanPhone)) {
+        alert("Số điện thoại không hợp lệ! Vui lòng nhập từ 10-11 chữ số, bắt đầu bằng số 0.");
+        return;
+      }
       
       const oldEmail = currentUser.email;
       const newEmail = data.email.trim().toLowerCase();
@@ -1353,19 +1426,30 @@
       }
     }
 
-    function sendEmergencyAlertMsg(phone) {
-      alert(`💬 Đã gửi SMS cảnh báo té ngã khẩn cấp tới số ${phone}!`);
+    async function sendEmergencyAlertMsg(phone, name) {
+      alert(`🚨 Đang phát cảnh báo khẩn cấp tới số điện thoại ${phone}!`);
       if (isBackendOnline && authToken) {
-        fetch(`${apiBaseUrl()}/api/camera/test-snapshot`, {
-          method: "POST",
-          headers: { 
-            "Authorization": `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ camera_id: "SOS-" + phone.replace(/\s+/g, '') })
-        }).catch(() => {});
+        try {
+          await fetch(`${apiBaseUrl()}/api/emergency/send-alert-phone`, {
+            method: "POST",
+            headers: { 
+              "Authorization": `Bearer ${authToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              phone: phone,
+              name: name || "Người thân",
+              message: "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay."
+            })
+          });
+        } catch (e) {
+          console.error("Lỗi gửi cảnh báo qua server:", e);
+        }
       }
-    };
+      try {
+        window.location.href = `sms:${phone}?body=${encodeURIComponent("🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay.")}`;
+      } catch (e) {}
+    }
 
     function viewAlertMediaModal(id) {
       const a = alerts.find(x => x.id === id);
@@ -1794,27 +1878,34 @@
         }
         if (aRes.ok) {
           const a = await aRes.json();
-          if (a && a.alerts && Array.isArray(a.alerts)) {
-            const currentIds = new Set(alerts.map(x => x.id));
-            a.alerts.forEach(backendAlert => {
-              if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý") {
-                if (isStrangerAlert(backendAlert)) {
-                  triggerStrangerAlert(backendAlert);
-                } else {
-                  triggerRealtimeFallAlert(backendAlert);
-                }
-              }
-            });
-
-            if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
-              alerts = a.alerts;
+          if (a && Array.isArray(a.alerts)) {
+            if (a.alerts.length === 0 && alerts.length > 0) {
+              alerts = [];
               saveStore("fg_alerts", alerts);
               changed = true;
+            } else if (a.alerts.length > 0) {
+              const currentIds = new Set(alerts.map(x => x.id));
+              a.alerts.forEach(backendAlert => {
+                if (!currentIds.has(backendAlert.id) && backendAlert.status === "Chưa xử lý") {
+                  if (isStrangerAlert(backendAlert)) {
+                    triggerStrangerAlert(backendAlert);
+                  } else {
+                    triggerRealtimeFallAlert(backendAlert);
+                  }
+                }
+              });
+
+              if (JSON.stringify(a.alerts) !== JSON.stringify(alerts)) {
+                alerts = a.alerts;
+                saveStore("fg_alerts", alerts);
+                changed = true;
+              }
             }
           }
         }
         
         await syncAppStateFromBackend();
+        await pollVitals();
         
         if (changed) {
           render(currentView, false);
