@@ -61,7 +61,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initState() async {
     await _checkBackend();
-    if (_isBackendOnline) await _state.syncFromBackend();
+    if (_isBackendOnline) {
+      await _state.syncFromBackend();
+      // Tự động kích hoạt pipeline stream AI cho các camera được phân quyền ngay khi vào app
+      for (final cam in _state.getVisibleCameras()) {
+        if (!cam.isMaintenance) {
+          ApiClient().startCamera(cam.rtsp.isNotEmpty ? cam.rtsp : '0', cam.id);
+        }
+      }
+    }
     _state.startAutoSync();
     _statusTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       final online = await AuthService().checkBackendOnline();
@@ -797,46 +805,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _cameraDashCard(CameraModel cam) {
-    return GestureDetector(
-      onTap: () => _openCameraStream(cam),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: kLine),
-          boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 10, offset: const Offset(0, 4))],
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(cam.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: kInk)),
-                ),
-                StatusPill.fromStatus(cam.status, small: true),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Nhãn AI: ${cam.state.toUpperCase()}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cam.isFallen ? kRed : kMuted,
-                    fontWeight: cam.isFallen ? FontWeight.w700 : FontWeight.w400,
-                  ),
-                ),
-                const Text('Nhấn để xem live →', style: TextStyle(fontSize: 11, color: kBlue, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ],
-        ),
-      ),
+    // Trực tiếp phát video live trên trang chủ mà không cần nhấn vào trang riêng
+    return _LiveCameraCard(
+      key: ValueKey('dash_cam_${cam.id}'),
+      camera: cam,
+      isBackendOnline: _isBackendOnline,
+      onFullscreen: () => _openCameraStream(cam),
     );
   }
 
@@ -1619,6 +1593,288 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ) ??
         false;
+  }
+}
+
+// ─── LIVE CAMERA TRỰC TIẾP TRÊN TRANG CHỦ ───────────────────────────────────
+
+class _LiveCameraCard extends StatefulWidget {
+  final CameraModel camera;
+  final bool isBackendOnline;
+  final VoidCallback onFullscreen;
+
+  const _LiveCameraCard({
+    super.key,
+    required this.camera,
+    required this.isBackendOnline,
+    required this.onFullscreen,
+  });
+
+  @override
+  State<_LiveCameraCard> createState() => _LiveCameraCardState();
+}
+
+class _LiveCameraCardState extends State<_LiveCameraCard> {
+  @override
+  void initState() {
+    super.initState();
+    // Tự động kích hoạt luồng camera trên AI Server ngay khi hiển thị lên màn hình
+    _startStreamPipeline();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveCameraCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Khi đổi camera ID, URL RTSP hoặc khi Server vừa kết nối lại thành công
+    if (oldWidget.camera.id != widget.camera.id ||
+        oldWidget.camera.rtsp != widget.camera.rtsp ||
+        (!oldWidget.isBackendOnline && widget.isBackendOnline)) {
+      _startStreamPipeline();
+    }
+  }
+
+  void _startStreamPipeline() {
+    // Gọi API khởi động pipeline xử lý AI và stream MJPEG trên backend
+    if (widget.isBackendOnline && !widget.camera.isMaintenance) {
+      ApiClient().startCamera(
+        widget.camera.rtsp.isNotEmpty ? widget.camera.rtsp : '0',
+        widget.camera.id,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cam = widget.camera;
+    final isFallen = cam.isFallen;
+    final vitals = AppStateService().vitals;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isFallen ? kRed.withAlpha(140) : kLine,
+          width: isFallen ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isFallen ? kRed.withAlpha(20) : Colors.black.withAlpha(8),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tiêu đề Camera, nhãn LIVE và trạng thái kết nối
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.videocam_rounded, size: 18, color: kBlue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          cam.name,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: kInk),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.isBackendOnline && !cam.isMaintenance) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: kRed,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.circle, color: Colors.white, size: 6),
+                            SizedBox(width: 4),
+                            Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    StatusPill.fromStatus(cam.status, small: true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Màn hình xem live stream camera trực tiếp không cần bấm vào để mở
+          GestureDetector(
+            onTap: widget.onFullscreen,
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  cam.isMaintenance
+                      ? Container(
+                          color: const Color(0xFF0F172A),
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.build_circle_outlined, color: kAmber, size: 36),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Camera đang bảo trì',
+                                  style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : MjpegView(
+                          key: ValueKey('dash_mjpeg_${cam.id}'),
+                          streamUrl: ApiClient().mjpegUrl(cam.id),
+                          isBackendOnline: widget.isBackendOnline,
+                        ),
+
+                  // Huy hiệu nhịp tim MAX30102 đè trực tiếp lên góc dưới video
+                  Positioned(
+                    bottom: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC0F172A),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white24),
+                        boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('❤️', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 5),
+                          Text(
+                            vitals.hasValidReading
+                                ? '${vitals.heartRate > 0 ? vitals.heartRate.toStringAsFixed(1) : vitals.avgHeartRate} BPM'
+                                : '-- BPM',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: vitals.status == 'normal'
+                                  ? const Color(0xFF10B981)
+                                  : (vitals.status == 'tachycardia' ? kRed : kAmber),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              vitals.fingerDetected ? 'Ổn định' : 'Chưa đặt tay',
+                              style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Nút phóng to toàn màn hình ở góc phải dưới video
+                  Positioned(
+                    bottom: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC0F172A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Thanh thông tin bên dưới: Nhãn phát hiện AI và liên kết phóng to toàn màn hình
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Nhãn AI: ',
+                      style: TextStyle(fontSize: 12, color: kMuted, fontWeight: FontWeight.w500),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isFallen ? kRed.withAlpha(25) : kGreen.withAlpha(25),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isFallen ? kRed.withAlpha(120) : kGreen.withAlpha(120),
+                        ),
+                      ),
+                      child: Text(
+                        cam.state.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: isFallen ? kRed : const Color(0xFF16A34A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: widget.onFullscreen,
+                  child: const Row(
+                    children: [
+                      Text(
+                        'Phóng to',
+                        style: TextStyle(fontSize: 12, color: kBlue, fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.open_in_new, size: 14, color: kBlue),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

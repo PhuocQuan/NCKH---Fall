@@ -839,18 +839,52 @@
 
           ${card("Camera trực tiếp", `
             <div class="mobile-list">
-              ${visCams.map(c => `
-                <div class="mobile-list-card" onclick="selectCameraMobile('${c.id}')">
-                  <div class="mobile-list-card-row">
-                    <strong style="color:var(--ink); font-size:13px;">${esc(c.name)}</strong>
-                    <span>${statusPill(c.status)}</span>
+              ${visCams.map(c => {
+                const isOnline = c.status === "online";
+                const isFallen = c.state === "fallen" || aiFallTestOn;
+                return `
+                <div class="mobile-list-card" style="padding:0; overflow:hidden; margin-bottom:12px; border:1px solid ${isFallen ? 'var(--red)' : 'var(--line)'};">
+                  <div style="padding:10px 14px; display:flex; justify-content:space-between; align-items:center; background:#fff;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="color:var(--blue);">📹</span>
+                      <strong style="color:var(--ink); font-size:13px;">${esc(c.name)}</strong>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      ${isOnline ? '<span class="pill red small" style="font-weight:900; letter-spacing:0.5px;">LIVE</span>' : ''}
+                      <span>${statusPill(c.status)}</span>
+                    </div>
                   </div>
-                  <div style="font-size:11px; color:var(--muted); display:flex; justify-content:space-between; align-items:center;">
-                    <span>Nhãn AI: <strong>${c.state.toUpperCase()}</strong></span>
-                    <span style="color:var(--blue); font-weight:bold;">Nhấn để xem live →</span>
+                  <div style="position:relative; aspect-ratio:16/9; background:#0f172a; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer;" onclick="selectCameraMobile('${c.id}')">
+                    ${isOnline ? `
+                      <img class="real-camera-video backend-stream dashboard-camera-video" alt="${esc(c.name)} stream" style="width:100%; height:100%; object-fit:cover; display:block;" src="${aiStreamUrl()}" onerror="setTimeout(() => { if (this.isConnected) this.src = aiStreamUrl(); }, 2000);">
+                    ` : `
+                      <div style="text-align:center; color:#94a3b8; font-size:12px;">
+                        <div style="font-size:28px; margin-bottom:4px;">📷</div>
+                        <div>Camera ngoại tuyến</div>
+                      </div>
+                    `}
+                    <!-- Floating vitals overlay -->
+                    <div style="position:absolute; bottom:8px; left:8px; background:rgba(15,23,42,0.85); backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:4px 10px; display:flex; align-items:center; gap:6px; font-size:11px; color:#fff; pointer-events:none;">
+                      <span>❤️</span>
+                      <span style="font-weight:800;">${vitalsState.finger_detected && vitalsState.heart_rate > 0 ? vitalsState.heart_rate.toFixed(1) : '--'} BPM</span>
+                      <span class="pill ${vitalsState.finger_detected ? 'green' : 'gray'} small" style="font-size:9px; padding:1px 6px;">
+                        ${vitalsState.finger_detected ? 'Ổn định' : 'Chưa đặt tay'}
+                      </span>
+                    </div>
+                    <div style="position:absolute; bottom:8px; right:8px; background:rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:3px 6px; font-size:10px; color:#fff;">
+                      Phóng to ⤢
+                    </div>
+                  </div>
+                  <div style="padding:10px 14px; font-size:11px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; background:#fff;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span>Nhãn AI:</span>
+                      <span class="pill ${isFallen ? 'red' : 'green'} small" style="font-weight:700;">${c.state.toUpperCase()}</span>
+                    </div>
+                    <span style="color:var(--blue); font-weight:bold; cursor:pointer;" onclick="selectCameraMobile('${c.id}')">Phóng to xem chi tiết →</span>
                   </div>
                 </div>
-              `).join("")}
+                `;
+              }).join("")}
               ${visCams.length === 0 ? `<div style="text-align:center; padding:20px; color:var(--muted);">Bạn chưa được cấp quyền xem camera nào.</div>` : ""}
             </div>
           `)}
