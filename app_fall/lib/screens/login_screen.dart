@@ -43,19 +43,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _normalizeUsername(String input) {
-    String lower = input.trim().toLowerCase();
-    if (lower.endsWith('@nckh')) {
-      lower = '$lower.vn';
+    String text = input.trim().toLowerCase();
+    if (text.isEmpty) return '';
+    if (text.endsWith('@')) {
+      return '${text}gmail.com';
     }
-    if (lower.contains('@')) return lower;
-    switch (lower) {
-      case 'admin': return 'admin@nckh.vn';
-      case 'bao': case 'manager': return 'bao@nckh.vn';
-      case 'nurse': return 'nurse@nckh.vn';
-      case 'family': return 'family@nckh.vn';
-      case 'guest': return 'guest@nckh.vn';
-      default: return '$lower@nckh.vn';
+    if (text.endsWith('@gmail')) {
+      return '$text.com';
     }
+    if (text.contains('@')) {
+      return text;
+    }
+    // Tự động điền @gmail.com phía sau khi người dùng chỉ nhập tên
+    return '$text@gmail.com';
   }
 
   Future<void> _handleLogin() async {
@@ -181,15 +181,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Email field
-                        _buildLabel('Email đăng nhập'),
+                        // Username field
+                        _buildLabel('Tên đăng nhập'),
                         const SizedBox(height: 6),
                         _buildTextField(
                           controller: _usernameCtrl,
-                          hint: 'Ví dụ: admin@nckh.vn',
+                          hint: 'Nhập tên tài khoản (vd: nurse)',
                           keyboardType: TextInputType.emailAddress,
                           isEmail: true,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập email' : null,
+                          suffixText: _usernameCtrl.text.trim().isEmpty || _usernameCtrl.text.contains('@')
+                              ? null
+                              : '@gmail.com',
+                          onChanged: (_) => setState(() {}),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tên tài khoản' : null,
                         ),
                         const SizedBox(height: 16),
 
@@ -433,10 +437,13 @@ class _LoginScreenState extends State<LoginScreen> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     bool isEmail = false,
+    String? suffixText,
+    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       inputFormatters: isEmail ? [
         TextInputFormatter.withFunction((oldValue, newValue) {
           return TextEditingValue(text: newValue.text.toLowerCase(), selection: newValue.selection);
@@ -449,6 +456,12 @@ class _LoginScreenState extends State<LoginScreen> {
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        suffixText: suffixText,
+        suffixStyle: const TextStyle(
+          color: Color(0xFF64748b),
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),

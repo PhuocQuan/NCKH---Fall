@@ -32,8 +32,11 @@
       </div>
       
       <label class="field">
-        <span>Email đăng nhập</span>
-        <input class="control" id="loginUsername" type="text" placeholder="Ví dụ: admin@nckh.vn" required />
+        <span>Tên đăng nhập</span>
+        <div style="position: relative; display: flex; align-items: center; width: 100%;">
+          <input class="control" id="loginUsername" type="text" placeholder="Ví dụ: nurse" required style="width: 100%; padding-right: 95px;" oninput="document.getElementById('emailSuffix').style.display = (this.value.includes('@') || !this.value.trim()) ? 'none' : 'block';" />
+          <span id="emailSuffix" style="display: none; position: absolute; right: 12px; color: #64748b; font-size: 13px; pointer-events: none; font-weight: 500;">@gmail.com</span>
+        </div>
       </label>
       
       <label class="field">
@@ -100,12 +103,9 @@
       
       const lowerUser = usernameInput.toLowerCase();
       if (!lowerUser.includes("@")) {
-        if (lowerUser === "admin") usernameInput = "admin@nckh.vn";
-        else if (lowerUser === "manager" || lowerUser === "bao") usernameInput = "bao@nckh.vn";
-        else if (lowerUser === "nurse") usernameInput = "nurse@nckh.vn";
-        else if (lowerUser === "family") usernameInput = "family@nckh.vn";
-        else if (lowerUser === "guest") usernameInput = "guest@nckh.vn";
-        else usernameInput = usernameInput + "@nckh.vn";
+        usernameInput = usernameInput + "@gmail.com";
+      } else if (lowerUser.endsWith("@gmail")) {
+        usernameInput = usernameInput + ".com";
       }
       
       await checkBackendStatus();
@@ -144,7 +144,11 @@
         }
       }
       
-      const foundUser = users.find(u => u.email.toLowerCase() === usernameInput.toLowerCase());
+      const baseName = lowerUser.includes("@") ? lowerUser.split("@")[0] : lowerUser;
+      const foundUser = users.find(u => {
+        const uEmail = (u.email || "").toLowerCase();
+        return uEmail === usernameInput.toLowerCase() || uEmail.split("@")[0] === baseName;
+      });
       if (!foundUser) {
         alert("Tài khoản không tồn tại trên hệ thống.");
         return;
