@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.feature_extractor import FEATURE_NAMES, LandmarkFeatureBuffer
+from src.detection.feature_extractor import FEATURE_NAMES, LandmarkFeatureBuffer
 from tests.test_fall_detector import lying_pose, standing_pose
 
 
