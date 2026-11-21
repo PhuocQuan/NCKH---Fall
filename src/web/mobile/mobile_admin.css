@@ -477,7 +477,7 @@ body {
   font-weight: 700;
   font-size: 15px;
   flex-shrink: 0;
-  box-shadow: 0 0 10px rgba(79, 70, 229, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .menu-drawer-user-detail {

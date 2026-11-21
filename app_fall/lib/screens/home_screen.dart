@@ -101,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _state.notifications.removeWhere((n) => n.type == 'update');
           _state.notifications.insert(0, AppNotification(
              id: 'UPDATE_$latestTagName',
-             title: '🌟 Cập nhật ứng dụng',
+             title: 'Cập nhật ứng dụng',
              content: 'Đã có phiên bản FallGuard mới ($latestTagName). Vui lòng tải và cài đặt để trải nghiệm tính năng mới nhất!',
              time: DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
              read: false,
@@ -142,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Text('🌟', style: TextStyle(fontSize: 24)),
+            Icon(Icons.system_update_rounded, color: kBlue, size: 22),
             SizedBox(width: 8),
             Text('Cập nhật ứng dụng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
@@ -346,12 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ShaderMask(
-                    shaderCallback: (b) => const LinearGradient(
-                      colors: [Colors.white, Color(0xFFCBD5E1)],
-                    ).createShader(b),
-                    child: const Text('FallGuard AI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
-                  ),
+                  const Text('FallGuard AI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
                   GestureDetector(
                     onTap: () => Navigator.of(context).pop(),
                     child: const Icon(Icons.close, color: Color(0xFF94a3b8), size: 22),
@@ -370,12 +365,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _drawerGroupTitle('TỔNG QUAN'),
-                  _drawerItem('🏠 Trang chủ', 0, () { Navigator.pop(context); _switchTab(0); }),
+                  _drawerItem('Trang chủ', 0, () { Navigator.pop(context); _switchTab(0); }, icon: Icons.dashboard_outlined),
                   const SizedBox(height: 20),
 
                   _drawerGroupTitle('GIÁM SÁT'),
                   _drawerItem(
-                    '🚨 Cảnh báo té ngã',
+                    'Cảnh báo té ngã',
                     1,
                     () {
                       Navigator.pop(context);
@@ -385,12 +380,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         _currentTab = 1;
                       });
                     },
+                    icon: Icons.warning_amber_rounded,
                     badgeCount: _state.getVisibleAlerts().where((a) => a.isFall && a.status == 'Chưa xử lý').length,
                     badgeColor: kRed,
                     isActive: _currentTab == 1 && _alertFilter == 1,
                   ),
                   _drawerItem(
-                    '👤 Cảnh báo người lạ',
+                    'Cảnh báo người lạ',
                     1,
                     () {
                       Navigator.pop(context);
@@ -400,6 +396,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _currentTab = 1;
                       });
                     },
+                    icon: Icons.person_outline_rounded,
                     badgeCount: _state.getVisibleAlerts().where((a) => a.isStranger && a.status == 'Chưa xử lý').length,
                     badgeColor: kAmber,
                     isActive: _currentTab == 1 && _alertFilter == 2,
@@ -408,14 +405,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   _drawerGroupTitle('CÁ NHÂN & LIÊN HỆ'),
                   _drawerItem(
-                    '🔔 Thông báo',
+                    'Thông báo',
                     2,
                     () { Navigator.pop(context); _switchTab(2); },
+                    icon: Icons.notifications_none_rounded,
                     badgeCount: _state.notifications.where((n) => !n.read).length,
                     badgeColor: kBlue,
                     isActive: _currentTab == 2,
                   ),
-                  _drawerItem('⚙️ Thông tin cá nhân', 3, () { Navigator.pop(context); _switchTab(3); }),
+                  _drawerItem('Thông tin cá nhân', 3, () { Navigator.pop(context); _switchTab(3); }, icon: Icons.person_outline),
                 ],
               ),
             ),
@@ -480,6 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String label,
     int tabIndex,
     VoidCallback onTap, {
+    IconData? icon,
     int? badgeCount,
     Color? badgeColor,
     bool? isActive,
@@ -497,6 +496,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: active ? const Color(0xFF818CF8) : const Color(0xFF94a3b8)),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Text(
                 label,
@@ -706,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: const Color(0xFFFEE2E2),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Text('❤️', style: TextStyle(fontSize: 18)),
+                child: const Icon(Icons.monitor_heart_outlined, color: Color(0xFFDC2626), size: 20),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -884,9 +887,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _alertFilterChip('Tất cả (${allVisibleAlerts.length})', 0, setSt),
                     const SizedBox(width: 8),
-                    _alertFilterChip('🚨 Té ngã ($fallCount)', 1, setSt, color: kRed),
+                    _alertFilterChip('Té ngã ($fallCount)', 1, setSt, color: kRed),
                     const SizedBox(width: 8),
-                    _alertFilterChip('👤 Người lạ ($strangerCount)', 2, setSt, color: const Color(0xFFD97706)),
+                    _alertFilterChip('Người lạ ($strangerCount)', 2, setSt, color: const Color(0xFFD97706)),
                   ],
                 ),
               ),
@@ -1035,7 +1038,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _alertCard(AlertModel alert, bool isSelected, VoidCallback onToggle) {
     final isStranger = alert.isStranger;
-    final title = isStranger ? '👤 Phát hiện người lạ' : '🚨 Cảnh báo té ngã';
+    final title = isStranger ? 'Phát hiện người lạ' : 'Cảnh báo té ngã';
     final titleColor = isStranger ? const Color(0xFFD97706) : kRed;
     final pillBg = isStranger ? const Color(0xFFFEF3C7) : const Color(0xFFFEE2E2);
     final pillBorder = isStranger ? const Color(0xFFFDE68A) : const Color(0xFFFECACA);
@@ -1217,12 +1220,12 @@ class _HomeScreenState extends State<HomeScreen> {
       'update' => kGreen,
       _ => kBlue,
     };
-    final icon = switch (notif.type) {
-      'fall' => '🚨',
-      'disconnect' => '⚠️',
-      'stranger' => '👤',
-      'update' => '🌟',
-      _ => '🔧',
+    final IconData icon = switch (notif.type) {
+      'fall' => Icons.warning_amber_rounded,
+      'disconnect' => Icons.cloud_off_rounded,
+      'stranger' => Icons.person_outline_rounded,
+      'update' => Icons.system_update_rounded,
+      _ => Icons.build_outlined,
     };
 
     return Container(
@@ -1239,7 +1242,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(icon, style: const TextStyle(fontSize: 20)),
+              Icon(icon, color: borderColor, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1430,11 +1433,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     height: 36,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFF10b981), Color(0xFF059669)]),
+                      color: const Color(0xFF059669),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Center(
-                      child: Text('📞 Gọi ngay', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.call, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('Gọi ngay', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
                     ),
                   ),
                 ),
@@ -1445,9 +1453,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () async {
                     // 1. Gửi lệnh cảnh báo tới máy chủ để phát SMS và Telegram log
                     try {
-                      _showSnackbar('🚨 Đang phát cảnh báo tới số ${contact.phone}...');
+                      _showSnackbar('Đang phát cảnh báo tới số ${contact.phone}...');
                       await ApiClient().sendEmergencyPhoneAlert(contact.phone, contact.name);
-                      _showSnackbar('✅ Đã gửi cảnh báo khẩn cấp tới ${contact.phone}!');
+                      _showSnackbar('Đã gửi cảnh báo khẩn cấp tới ${contact.phone}!');
                     } catch (e) {
                       _showSnackbar('Lưu ý gửi qua server: $e', isError: true);
                     }
@@ -1457,7 +1465,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       scheme: 'sms',
                       path: contact.phone,
                       queryParameters: <String, String>{
-                        'body': '🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay.',
+                        'body': 'CẢNH BÁO TÉ NGÃ KHẨN CẤP: Hệ thống FallGuard AI phát hiện người thân cần hỗ trợ khẩn cấp! Vui lòng liên hệ lại ngay.',
                       },
                     );
                     try {
@@ -1469,11 +1477,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     height: 36,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFDC2626)]),
+                      color: const Color(0xFFDC2626),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Center(
-                      child: Text('🚨 Gửi cảnh báo', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.notifications_active_outlined, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('Gửi cảnh báo', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
                     ),
                   ),
                 ),
@@ -1774,7 +1787,7 @@ class _LiveCameraCardState extends State<_LiveCameraCard> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('❤️', style: TextStyle(fontSize: 13)),
+                          const Icon(Icons.favorite_rounded, color: Color(0xFFF43F5E), size: 14),
                           const SizedBox(width: 5),
                           Text(
                             vitals.hasValidReading
@@ -1935,7 +1948,7 @@ class _LiveStreamScreen extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('❤️', style: TextStyle(fontSize: 14)),
+                              const Icon(Icons.favorite_rounded, color: Color(0xFFF43F5E), size: 14),
                               const SizedBox(width: 6),
                               Text(
                                 AppStateService().vitals.hasValidReading
@@ -2015,7 +2028,7 @@ class _AlertDetailSheet extends StatelessWidget {
     final imgSrc = alert.cloudImgUrl ?? '$apiBaseUrl/media/${alert.id}.jpg';
     final videoSrc = alert.cloudVideoUrl ?? '$apiBaseUrl/media/${alert.id}.mp4';
     final isStranger = alert.isStranger;
-    final title = isStranger ? '👤 Chi tiết người lạ xuất hiện' : '🚨 Chi tiết sự cố té ngã';
+    final title = isStranger ? 'Chi tiết người lạ xuất hiện' : 'Chi tiết sự cố té ngã';
     final titleColor = isStranger ? const Color(0xFFD97706) : kRed;
 
     return DraggableScrollableSheet(
@@ -2081,7 +2094,14 @@ class _AlertDetailSheet extends StatelessWidget {
                                 color: Colors.black.withAlpha(150),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text('☁️ Cloudinary', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.cloud_done_rounded, color: Colors.white, size: 12),
+                                  SizedBox(width: 4),
+                                  Text('Cloudinary', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                                ],
+                              ),
                             ),
                           ),
                       ],
@@ -2107,7 +2127,13 @@ class _AlertDetailSheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('☁️ Video Cloudinary', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 12)),
+                            const Row(
+                              children: [
+                                Icon(Icons.cloud_done_rounded, color: kGreen, size: 14),
+                                SizedBox(width: 4),
+                                Text('Video Cloudinary', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 12)),
+                              ],
+                            ),
                             const SizedBox(height: 8),
                             _VideoPlayerWidget(url: videoSrc),
                             const SizedBox(height: 8),

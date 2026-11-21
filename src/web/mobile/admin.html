@@ -22,13 +22,17 @@
   <section class="app" id="app">
     <header class="header">
       <div style="display: flex; align-items: center; gap: 8px;">
-        <button class="hamburger-btn" onclick="openMenuDrawer()">☰</button>
+        <button class="hamburger-btn" onclick="openMenuDrawer()" aria-label="Menu" style="background:none; border:none; padding:4px; display:inline-flex; align-items:center; cursor:pointer; color:var(--ink);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <span style="font-weight: 850; font-size: 18px; color: var(--blue);">FG Admin</span>
         <span class="pill blue small" id="backendStatusPill" style="font-size: 10px; padding: 2px 6px;">AI Backend</span>
       </div>
       <div class="user">
         <span id="headerUserName" style="font-size: 12px; font-weight: 600;">Admin</span>
-        <button onclick="performLogout()" style="background: none; border: none; font-size: 16px; padding: 4px; cursor: pointer;" title="Đăng xuất">🚪</button>
+        <button onclick="performLogout()" style="background: none; border: none; padding: 4px; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center;" title="Đăng xuất">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </header>
 
@@ -354,9 +358,11 @@
 
     function triggerRealtimeFallAlert(alertItem) {
       playAlarmSound();
-      openModal("🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP", `
+      openModal("CẢNH BÁO TÉ NGÃ KHẨN CẤP", `
         <div style="text-align: center; font-family: inherit; padding: 10px 0;">
-          <div style="font-size: 48px; margin-bottom: 12px; animation: pulse 1s infinite;">🚨</div>
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #fee2e2; color: var(--red); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
           <h3 style="color: var(--red); font-size: 18px; font-weight: 800; margin: 0 0 12px;">PHÁT HIỆN TÉ NGÃ</h3>
           <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện té ngã tại <strong>${esc(alertItem.camera || 'CAM-011')}</strong> lúc <strong>${esc(alertItem.time || '')}</strong>.</p>
           <div style="background: #fff5f5; border: 1px solid #fee2e2; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
@@ -375,12 +381,14 @@
 
     function triggerStrangerAlert(alertItem) {
       playStrangerAlertSound();
-      openModal("👤 PHÁT HIỆN NGƯỜI LẠ", `
+      openModal("PHÁT HIỆN NGƯỜI LẠ", `
         <div style="text-align: center; font-family: inherit; padding: 10px 0;">
-          <div style="font-size: 48px; margin-bottom: 12px;">👤</div>
-          <h3 style="color: #4f46e5; font-size: 18px; font-weight: 800; margin: 0 0 12px;">CẢNH BÁO NGƯỜI LẠ</h3>
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #fef3c7; color: #d97706; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <h3 style="color: #d97706; font-size: 18px; font-weight: 800; margin: 0 0 12px;">CẢNH BÁO NGƯỜI LẠ</h3>
           <p style="font-size: 13px; color: var(--gray-700); margin: 0 0 16px;">Phát hiện người lạ tại <strong>${esc(alertItem.camera || 'CAM-011')}</strong> lúc <strong>${esc(alertItem.time || '')}</strong>.</p>
-          <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
+          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; font-size: 13px; text-align: left; margin-bottom: 16px;">
             <strong>Thông tin an ninh:</strong>
             <ul style="margin: 6px 0 0; padding-left: 18px;">
               <li>Mã cảnh báo: <strong>${esc(alertItem.id)}</strong></li>
@@ -988,10 +996,10 @@
               Tất cả (${totalCount})
             </button>
             <button class="btn small ${adminAlertTab === 'fall' ? 'primary' : 'line'}" onclick="switchAdminAlertTab('fall')" style="border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; ${adminAlertTab === 'fall' ? 'background: var(--red); border-color: var(--red);' : ''}">
-              🚨 Té ngã (${fallCount})
+              Té ngã (${fallCount})
             </button>
             <button class="btn small ${adminAlertTab === 'stranger' ? 'primary' : 'line'}" onclick="switchAdminAlertTab('stranger')" style="border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; ${adminAlertTab === 'stranger' ? 'background: #4f46e5; border-color: #4f46e5;' : ''}">
-              👤 Người lạ (${strangerCount})
+              Người lạ (${strangerCount})
             </button>
           </div>
 
@@ -1008,7 +1016,7 @@
           <div class="mobile-list">
             ${filteredAlerts.map(a => {
               const stranger = isStrangerAlert(a);
-              const cardTitle = stranger ? `👤 Người lạ! (${esc(a.id)})` : `⚠️ Té ngã! (${esc(a.id)})`;
+              const cardTitle = stranger ? `Người lạ (${esc(a.id)})` : `Té ngã (${esc(a.id)})`;
               const titleColor = stranger ? "#4f46e5" : "var(--red)";
               return `
                 <div class="mobile-list-card" onclick="viewAlertMediaModal('${esc(a.id)}')" style="${stranger ? 'border-left: 4px solid #4f46e5;' : 'border-left: 4px solid var(--red);'}">
@@ -1045,31 +1053,31 @@
           return `
             <div class="mobile-list">
               <div class="mobile-list-card" onclick="settingsSubView='system'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>⚙️ Cài đặt hệ thống</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Cài đặt hệ thống</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Cấu hình ngưỡng phát hiện té ngã, dữ liệu cá nhân</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='notifications'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>🔔 Thông báo</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Thông báo</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Thiết lập các kênh nhận thông báo tự động (Email, Telegram, SMS...)</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='users'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>👥 Quản lý tài khoản</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Quản lý tài khoản</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Thêm, sửa đổi tài khoản người dùng, phân quyền camera</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='cameras'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>📷 Quản lý Camera</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Quản lý Camera</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Thiết lập mã camera, địa chỉ IP mạng nội bộ và link RTSP</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='api'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>🔑 Quản lý API Key</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Quản lý API Key</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Cấp khóa API kết nối các dịch vụ ngoài</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='media'; mediaViewLevel='locations'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>📁 Hình ảnh & video</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Hình ảnh & video</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Xem hình ảnh và video sự kiện té ngã theo khu vực</div>
               </div>
               <div class="mobile-list-card" onclick="settingsSubView='logs'; render('settings', false);">
-                <div class="mobile-list-card-row"><strong>📜 Nhật ký hệ thống</strong><span>❯</span></div>
+                <div class="mobile-list-card-row"><strong>Nhật ký hệ thống</strong><span>❯</span></div>
                 <div class="hint" style="font-size:11px;">Theo dõi lịch sử truy cập và nhật ký của các thành viên</div>
               </div>
             </div>
@@ -1735,7 +1743,7 @@
           mediaHtml = `
             <video src="${videoSrc}" controls autoplay playsinline style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; background:#000;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';"></video>
             <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
-              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <div style="margin-bottom:8px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>
               <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Video không khả dụng</p>
               <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
             </div>
@@ -1746,7 +1754,7 @@
           mediaHtml = `
             <div style="background:#1e293b; border-radius:8px; overflow:hidden; aspect-ratio:16/9; display:flex; justify-content:center; align-items:center;">
               <div style="color:#fff; text-align:center; padding: 20px;">
-                <div style="font-size:48px; margin-bottom:10px;">📷</div>
+                <div style="margin-bottom:10px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
                 <div style="font-size:14px; font-weight:bold;">Ảnh chụp sự kiện lúc phát hiện té ngã</div>
                 <div class="hint" style="color:#94a3b8; margin-top:5px; font-size:11px;">Đã lưu trữ đám mây (Bản ghi mô phỏng)</div>
               </div>
@@ -1756,7 +1764,7 @@
           mediaHtml = `
             <img src="${imgSrc}" alt="Snapshot" style="width:100%; border-radius:8px; border:1px solid var(--line); aspect-ratio:16/9; object-fit:cover;" onerror="this.style.display='none'; document.getElementById('mediaDeleteNote-${id}').style.display='block';">
             <div id="mediaDeleteNote-${id}" style="display:none; padding:30px 10px; text-align:center; background:#f8fafc; border-radius:8px; border:1px solid var(--line);">
-              <div style="font-size:32px; margin-bottom:8px;">🗑️</div>
+              <div style="margin-bottom:8px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>
               <p style="font-weight:600; margin:0 0 4px; color:var(--red); font-size:13px;">Hình ảnh không khả dụng</p>
               <p class="hint" style="margin:0; font-size:11px;">Nội dung này đã bị xóa trên Cloudinary.</p>
             </div>
